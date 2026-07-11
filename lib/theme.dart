@@ -30,10 +30,9 @@ class AppTheme {
     // "Plus Jakarta Sans" (the design's typeface) via google_fonts. Applying
     // it to the theme's textTheme means inline TextStyles that don't override
     // fontFamily inherit it through DefaultTextStyle.
-    final textTheme = GoogleFonts.plusJakartaSansTextTheme(base.textTheme).apply(
-      bodyColor: AppColors.white,
-      displayColor: AppColors.white,
-    );
+    final textTheme = GoogleFonts.plusJakartaSansTextTheme(
+      base.textTheme,
+    ).apply(bodyColor: AppColors.white, displayColor: AppColors.white);
     return base.copyWith(
       scaffoldBackgroundColor: AppColors.homeBackground,
       colorScheme: base.colorScheme.copyWith(

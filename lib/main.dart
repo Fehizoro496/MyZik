@@ -4,6 +4,8 @@ import 'player_controller.dart';
 import 'screens/home_screen.dart';
 import 'screens/my_music_screen.dart';
 import 'screens/now_playing_screen.dart';
+import 'screens/saved_screen.dart';
+import 'screens/settings_screen.dart';
 import 'theme.dart';
 
 void main() {
@@ -51,6 +53,10 @@ class _PlayerShellState extends State<PlayerShell> {
         return NowPlayingScreen(controller: _controller);
       case AppScreen.myMusic:
         return MyMusicScreen(controller: _controller);
+      case AppScreen.saved:
+        return SavedScreen(controller: _controller);
+      case AppScreen.settings:
+        return SettingsScreen(controller: _controller);
     }
   }
 
@@ -63,10 +69,8 @@ class _PlayerShellState extends State<PlayerShell> {
           duration: const Duration(milliseconds: 320),
           switchInCurve: Curves.easeOutCubic,
           switchOutCurve: Curves.easeInCubic,
-          transitionBuilder: (child, animation) => FadeTransition(
-            opacity: animation,
-            child: child,
-          ),
+          transitionBuilder: (child, animation) =>
+              FadeTransition(opacity: animation, child: child),
           child: KeyedSubtree(
             key: ValueKey(_controller.screen),
             child: _screenFor(_controller.screen),
@@ -79,7 +83,8 @@ class _PlayerShellState extends State<PlayerShell> {
       backgroundColor: Colors.black,
       body: LayoutBuilder(
         builder: (context, constraints) {
-          final wide = constraints.maxWidth > 500 || constraints.maxHeight > 900;
+          final wide =
+              constraints.maxWidth > 500 || constraints.maxHeight > 900;
           if (!wide) return app;
           // Phone-frame presentation for desktop / web.
           return Container(
@@ -98,9 +103,9 @@ class _PlayerShellState extends State<PlayerShell> {
                 height: 844,
                 child: MediaQuery(
                   // Give the framed app a realistic notch inset.
-                  data: MediaQuery.of(context).copyWith(
-                    padding: const EdgeInsets.only(top: 0, bottom: 0),
-                  ),
+                  data: MediaQuery.of(
+                    context,
+                  ).copyWith(padding: const EdgeInsets.only(top: 0, bottom: 0)),
                   child: app,
                 ),
               ),
