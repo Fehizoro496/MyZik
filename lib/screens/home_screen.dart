@@ -1,5 +1,3 @@
-import 'dart:ui';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_iconly/flutter_iconly.dart';
 
@@ -123,7 +121,12 @@ class _HomeScreenState extends State<HomeScreen> {
               ],
             ),
           ),
-          _bottomNav(c),
+          Positioned(
+            left: 22,
+            right: 22,
+            bottom: 0,
+            child: FloatingNavBar(controller: c),
+          ),
         ],
       ),
     );
@@ -279,80 +282,6 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
           ],
         ),
-      ),
-    );
-  }
-
-  Widget _bottomNav(PlayerController c) {
-    return Positioned(
-      left: 22,
-      right: 22,
-      bottom: 0,
-      child: ClipRRect(
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
-        child: BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: 24, sigmaY: 24),
-          child: Container(
-            decoration: BoxDecoration(
-              color: const Color(0xB816161E),
-              borderRadius: const BorderRadius.vertical(
-                top: Radius.circular(28),
-              ),
-              border: Border(
-                top: BorderSide(color: AppColors.whiteAlpha(0.08)),
-              ),
-            ),
-            child: SafeArea(
-              top: false,
-              child: SizedBox(
-                height: 64,
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 12),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Container(
-                        width: 48,
-                        height: 48,
-                        decoration: const BoxDecoration(
-                          shape: BoxShape.circle,
-                          gradient: AppColors.accentGradient,
-                        ),
-                        child: const Icon(
-                          IconlyBold.home,
-                          size: 22,
-                          color: AppColors.white,
-                        ),
-                      ),
-                      _navIcon(
-                        IconlyLight.category,
-                        () => c.goTo(AppScreen.myMusic),
-                      ),
-                      _navIcon(
-                        IconlyLight.swap,
-                        () => c.goTo(AppScreen.nowPlaying),
-                      ),
-                      _navIcon(IconlyLight.bookmark, null),
-                      _navIcon(IconlyLight.setting, null),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _navIcon(IconData icon, VoidCallback? onTap) {
-    return GestureDetector(
-      onTap: onTap,
-      behavior: HitTestBehavior.opaque,
-      child: SizedBox(
-        width: 48,
-        height: 48,
-        child: Icon(icon, size: 24, color: AppColors.whiteAlpha(0.55)),
       ),
     );
   }

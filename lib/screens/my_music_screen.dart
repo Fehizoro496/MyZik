@@ -1,5 +1,3 @@
-import 'dart:ui';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_iconly/flutter_iconly.dart';
 
@@ -69,7 +67,7 @@ class _MyMusicScreenState extends State<MyMusicScreen> {
                 const SizedBox(height: 20),
                 Expanded(
                   child: ListView.separated(
-                    padding: const EdgeInsets.fromLTRB(24, 0, 24, 120),
+                    padding: const EdgeInsets.fromLTRB(24, 0, 24, 170),
                     physics: const BouncingScrollPhysics(),
                     itemCount: MusicData.songs.length,
                     itemBuilder: (context, i) => TrackRow(
@@ -82,67 +80,23 @@ class _MyMusicScreenState extends State<MyMusicScreen> {
               ],
             ),
           ),
-          _miniPlayer(c),
-        ],
-      ),
-    );
-  }
-
-  Widget _miniPlayer(PlayerController c) {
-    return Positioned(
-      bottom: 30,
-      left: 0,
-      right: 0,
-      child: Center(
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(28),
-          child: BackdropFilter(
-            filter: ImageFilter.blur(sigmaX: 24, sigmaY: 24),
-            child: GestureDetector(
-              onTap: () => c.goTo(AppScreen.nowPlaying),
-              child: Container(
-                height: 56,
-                padding: const EdgeInsets.symmetric(horizontal: 10),
-                decoration: BoxDecoration(
-                  color: const Color(0xBF16161E),
-                  borderRadius: BorderRadius.circular(28),
-                  border: Border.all(color: AppColors.whiteAlpha(0.1)),
+          // Mini-player floats above the shared nav bar.
+          Positioned(
+            left: 22,
+            right: 22,
+            bottom: 0,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 12),
+                  child: MiniPlayer(controller: c),
                 ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    GestureDetector(
-                      onTap: () => c.goTo(AppScreen.nowPlaying),
-                      child: const SizedBox(
-                        width: 40,
-                        height: 40,
-                        child: Icon(
-                          IconlyBold.play,
-                          size: 22,
-                          color: AppColors.white,
-                        ),
-                      ),
-                    ),
-                    Container(
-                      width: 1,
-                      height: 24,
-                      color: AppColors.whiteAlpha(0.15),
-                    ),
-                    const SizedBox(
-                      width: 40,
-                      height: 40,
-                      child: Icon(
-                        IconlyLight.swap,
-                        size: 20,
-                        color: Color(0xFF4F8CFF),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
+                FloatingNavBar(controller: c),
+              ],
             ),
           ),
-        ),
+        ],
       ),
     );
   }

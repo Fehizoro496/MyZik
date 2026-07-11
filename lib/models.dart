@@ -42,6 +42,13 @@ class MusicData {
     Category('Downloaded'),
   ];
 
+  static const List<Category> savedCategories = [
+    Category('Playlists'),
+    Category('Songs'),
+    Category('Albums'),
+    Category('Artists'),
+  ];
+
   static const List<List<Color>> _artGradients = [
     [Color(0xFF6F5CFF), Color(0xFF3B6FE0)],
     [Color(0xFFFF6F91), Color(0xFF8A4FFF)],
@@ -55,18 +62,68 @@ class MusicData {
   static List<Color> art(int i) => _artGradients[i % _artGradients.length];
 
   static final List<Track> topPlaylists = [
-    Track(title: 'Starlit Reverie', artist: 'Budiarti', count: 8, gradient: art(0)),
-    Track(title: 'Midnight Confessions', artist: 'Alexiao', count: 24, gradient: art(1)),
-    Track(title: 'Lost in the Echo', artist: 'Alexiao', count: 24, gradient: art(2)),
+    Track(
+      title: 'Starlit Reverie',
+      artist: 'Budiarti',
+      count: 8,
+      gradient: art(0),
+    ),
+    Track(
+      title: 'Midnight Confessions',
+      artist: 'Alexiao',
+      count: 24,
+      gradient: art(1),
+    ),
+    Track(
+      title: 'Lost in the Echo',
+      artist: 'Alexiao',
+      count: 24,
+      gradient: art(2),
+    ),
   ];
 
   static final List<Track> songs = [
-    Track(title: 'Starlit Reverie', artist: 'Budiarti', count: 8, gradient: art(0)),
-    Track(title: 'Midnight Confessions', artist: 'Alexiao', count: 24, gradient: art(1)),
-    Track(title: 'Lost in the Echo', artist: 'Alexiao', count: 24, gradient: art(2)),
-    Track(title: 'Letters I Never Sent', artist: 'Alexiao', count: 24, gradient: art(3)),
-    Track(title: 'Breaking the Silence', artist: 'Alexiao', count: 24, gradient: art(4)),
-    Track(title: 'Tears on the Vinyl', artist: 'Alexiao', count: 24, gradient: art(5)),
-    Track(title: 'Lonely Nights', artist: 'Alexiao', count: 24, gradient: art(6)),
+    Track(
+      title: 'Starlit Reverie',
+      artist: 'Budiarti',
+      count: 8,
+      gradient: art(0),
+    ),
+    Track(
+      title: 'Midnight Confessions',
+      artist: 'Alexiao',
+      count: 24,
+      gradient: art(1),
+    ),
+    Track(
+      title: 'Lost in the Echo',
+      artist: 'Alexiao',
+      count: 24,
+      gradient: art(2),
+    ),
+    Track(
+      title: 'Letters I Never Sent',
+      artist: 'Alexiao',
+      count: 24,
+      gradient: art(3),
+    ),
+    Track(
+      title: 'Breaking the Silence',
+      artist: 'Alexiao',
+      count: 24,
+      gradient: art(4),
+    ),
+    Track(
+      title: 'Tears on the Vinyl',
+      artist: 'Alexiao',
+      count: 24,
+      gradient: art(5),
+    ),
+    Track(
+      title: 'Lonely Nights',
+      artist: 'Alexiao',
+      count: 24,
+      gradient: art(6),
+    ),
   ];
 }

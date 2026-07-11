@@ -4,7 +4,7 @@ import 'package:flutter/material.dart';
 
 import 'models.dart';
 
-enum AppScreen { home, nowPlaying, myMusic }
+enum AppScreen { home, nowPlaying, myMusic, saved, settings }
 
 /// Holds navigation + playback state and drives the progress ticker.
 ///

@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_iconly/flutter_iconly.dart';
 
 import 'models.dart';
+import 'player_controller.dart';
 import 'theme.dart';
 
 /// A frosted, translucent circular icon button used throughout the design.
@@ -223,6 +224,171 @@ class TrackRow extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// The frosted bottom navigation bar. Meant to be anchored to the screen's
+/// bottom edge (top corners rounded, bottom square) so a mini-player can float
+/// above it. Shown on every screen except Now Playing. The active tab is
+/// derived from [controller].screen and shows the accent pill.
+class FloatingNavBar extends StatelessWidget {
+  const FloatingNavBar({super.key, required this.controller});
+
+  final PlayerController controller;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = controller;
+    return ClipRRect(
+      borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
+        child: Container(
+          decoration: BoxDecoration(
+            color: const Color.fromRGBO(22, 22, 30, 0.5),
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+            border: Border(top: BorderSide(color: AppColors.whiteAlpha(0.08))),
+          ),
+          child: SafeArea(
+            top: false,
+            child: SizedBox(
+              height: 64,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    _tab(
+                      c,
+                      icon: IconlyLight.home,
+                      activeIcon: IconlyBold.home,
+                      screen: AppScreen.home,
+                    ),
+                    _tab(
+                      c,
+                      icon: IconlyLight.category,
+                      activeIcon: IconlyBold.category,
+                      screen: AppScreen.myMusic,
+                    ),
+                    _action(
+                      IconlyLight.swap,
+                      () => c.goTo(AppScreen.nowPlaying),
+                    ),
+                    _tab(
+                      c,
+                      icon: IconlyLight.bookmark,
+                      activeIcon: IconlyBold.bookmark,
+                      screen: AppScreen.saved,
+                    ),
+                    _tab(
+                      c,
+                      icon: IconlyLight.setting,
+                      activeIcon: IconlyBold.setting,
+                      screen: AppScreen.settings,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _tab(
+    PlayerController c, {
+    required IconData icon,
+    required IconData activeIcon,
+    required AppScreen screen,
+  }) {
+    final active = c.screen == screen;
+    if (active) {
+      return Container(
+        width: 48,
+        height: 48,
+        decoration: const BoxDecoration(
+          shape: BoxShape.circle,
+          gradient: AppColors.accentGradient,
+        ),
+        child: Icon(activeIcon, size: 22, color: AppColors.white),
+      );
+    }
+    return _action(icon, () => c.goTo(screen));
+  }
+
+  Widget _action(IconData icon, VoidCallback? onTap) {
+    return GestureDetector(
+      onTap: onTap,
+      behavior: HitTestBehavior.opaque,
+      child: SizedBox(
+        width: 48,
+        height: 48,
+        child: Icon(icon, size: 24, color: AppColors.whiteAlpha(0.55)),
+      ),
+    );
+  }
+}
+
+/// The frosted mini-player pill: a quick playback shortcut that opens Now
+/// Playing. Floats above the [FloatingNavBar] on library-style screens.
+class MiniPlayer extends StatelessWidget {
+  const MiniPlayer({super.key, required this.controller});
+
+  final PlayerController controller;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = controller;
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(28),
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 24, sigmaY: 24),
+        child: GestureDetector(
+          onTap: () => c.goTo(AppScreen.nowPlaying),
+          child: Container(
+            height: 56,
+            padding: const EdgeInsets.symmetric(horizontal: 10),
+            decoration: BoxDecoration(
+              color: const Color(0xBF16161E),
+              borderRadius: BorderRadius.circular(28),
+              border: Border.all(color: AppColors.whiteAlpha(0.1)),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                GestureDetector(
+                  onTap: c.togglePlay,
+                  child: SizedBox(
+                    width: 40,
+                    height: 40,
+                    child: Icon(
+                      c.playing ? IconlyBold.play : IconlyLight.play,
+                      size: 22,
+                      color: AppColors.white,
+                    ),
+                  ),
+                ),
+                Container(
+                  width: 1,
+                  height: 24,
+                  color: AppColors.whiteAlpha(0.15),
+                ),
+                const SizedBox(
+                  width: 40,
+                  height: 40,
+                  child: Icon(
+                    IconlyLight.swap,
+                    size: 20,
+                    color: Color(0xFF4F8CFF),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }
