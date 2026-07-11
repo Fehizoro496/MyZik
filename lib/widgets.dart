@@ -164,11 +164,11 @@ class CategoryChips extends StatelessWidget {
   }
 }
 
-/// A song / playlist list row: art + title/subtitle + trailing play button.
+/// A song list row: art + title/subtitle + trailing play button.
 class TrackRow extends StatelessWidget {
-  const TrackRow({super.key, required this.track, this.onTap});
+  const TrackRow({super.key, required this.song, this.onTap});
 
-  final Track track;
+  final Song song;
   final VoidCallback? onTap;
 
   @override
@@ -178,7 +178,7 @@ class TrackRow extends StatelessWidget {
       onTap: onTap,
       child: Row(
         children: [
-          AlbumArt(gradient: track.gradient),
+          AlbumArt(gradient: song.artGradient),
           const SizedBox(width: 14),
           Expanded(
             child: Column(
@@ -186,7 +186,7 @@ class TrackRow extends StatelessWidget {
               mainAxisSize: MainAxisSize.min,
               children: [
                 Text(
-                  track.title,
+                  song.title,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
@@ -197,7 +197,7 @@ class TrackRow extends StatelessWidget {
                 ),
                 const SizedBox(height: 3),
                 Text(
-                  'By ${track.artist} · ${track.count} Songs',
+                  '${song.artist} · ${song.durationLabel}',
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(

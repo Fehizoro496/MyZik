@@ -58,25 +58,14 @@ class _MyMusicScreenState extends State<MyMusicScreen> {
                 SizedBox(
                   height: 44,
                   child: CategoryChips(
-                    categories: MusicData.musicCategories,
+                    categories: MusicCategories.myMusic,
                     selected: _category,
                     onSelected: (i) => setState(() => _category = i),
                     padding: const EdgeInsets.symmetric(horizontal: 24),
                   ),
                 ),
                 const SizedBox(height: 20),
-                Expanded(
-                  child: ListView.separated(
-                    padding: const EdgeInsets.fromLTRB(24, 0, 24, 170),
-                    physics: const BouncingScrollPhysics(),
-                    itemCount: MusicData.songs.length,
-                    itemBuilder: (context, i) => TrackRow(
-                      track: MusicData.songs[i],
-                      onTap: () => c.playTrack(MusicData.songs[i]),
-                    ),
-                    separatorBuilder: (_, _) => const SizedBox(height: 20),
-                  ),
-                ),
+                Expanded(child: _body(c)),
               ],
             ),
           ),
@@ -96,6 +85,74 @@ class _MyMusicScreenState extends State<MyMusicScreen> {
               ],
             ),
           ),
+        ],
+      ),
+    );
+  }
+
+  Widget _body(PlayerController c) {
+    if (c.libraryState == LibraryState.loading) {
+      return const Center(
+        child: CircularProgressIndicator(color: AppColors.accentA),
+      );
+    }
+    if (c.songs.isEmpty) {
+      return _emptyState(c);
+    }
+    return ListView.separated(
+      padding: const EdgeInsets.fromLTRB(24, 0, 24, 170),
+      physics: const BouncingScrollPhysics(),
+      itemCount: c.songs.length,
+      itemBuilder: (context, i) =>
+          TrackRow(song: c.songs[i], onTap: () => c.playSong(c.songs[i])),
+      separatorBuilder: (_, _) => const SizedBox(height: 20),
+    );
+  }
+
+  Widget _emptyState(PlayerController c) {
+    final denied = c.libraryState == LibraryState.permissionDenied;
+    final message = switch (c.libraryState) {
+      LibraryState.permissionDenied =>
+        'MyZik needs access to your audio files to show your music.',
+      LibraryState.error => 'Something went wrong reading your library.',
+      _ => 'No music found on this device.',
+    };
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(40, 0, 40, 170),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(IconlyLight.folder, size: 48, color: AppColors.whiteAlpha(0.4)),
+          const SizedBox(height: 16),
+          Text(
+            message,
+            textAlign: TextAlign.center,
+            style: TextStyle(color: AppColors.whiteAlpha(0.6), fontSize: 14),
+          ),
+          if (denied) ...[
+            const SizedBox(height: 20),
+            GestureDetector(
+              onTap: c.loadLibrary,
+              child: Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 22,
+                  vertical: 12,
+                ),
+                decoration: BoxDecoration(
+                  gradient: AppColors.accentGradient,
+                  borderRadius: BorderRadius.circular(22),
+                ),
+                child: const Text(
+                  'Grant access',
+                  style: TextStyle(
+                    color: AppColors.white,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+            ),
+          ],
         ],
       ),
     );

@@ -21,6 +21,7 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   Widget build(BuildContext context) {
     final c = widget.controller;
+    final topSongs = c.songs.take(4).toList();
     return DecoratedBox(
       decoration: const BoxDecoration(color: AppColors.homeBackground),
       child: Stack(
@@ -70,7 +71,7 @@ class _HomeScreenState extends State<HomeScreen> {
                             maxWidth: MediaQuery.of(context).size.width,
                             alignment: Alignment.centerLeft,
                             child: CategoryChips(
-                              categories: MusicData.homeCategories,
+                              categories: MusicCategories.home,
                               selected: _category,
                               onSelected: (i) => setState(() => _category = i),
                             ),
@@ -103,18 +104,17 @@ class _HomeScreenState extends State<HomeScreen> {
                         ],
                       ),
                       const SizedBox(height: 16),
-                      for (
-                        var i = 0;
-                        i < MusicData.topPlaylists.length;
-                        i++
-                      ) ...[
-                        TrackRow(
-                          track: MusicData.topPlaylists[i],
-                          onTap: () => c.playTrack(MusicData.topPlaylists[i]),
-                        ),
-                        if (i != MusicData.topPlaylists.length - 1)
-                          const SizedBox(height: 16),
-                      ],
+                      if (topSongs.isEmpty)
+                        _emptyHint(c)
+                      else
+                        for (var i = 0; i < topSongs.length; i++) ...[
+                          TrackRow(
+                            song: topSongs[i],
+                            onTap: () => c.playSong(topSongs[i]),
+                          ),
+                          if (i != topSongs.length - 1)
+                            const SizedBox(height: 16),
+                        ],
                     ],
                   ),
                 ),
@@ -194,9 +194,27 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
+  Widget _emptyHint(PlayerController c) {
+    final text = switch (c.libraryState) {
+      LibraryState.loading => 'Loading your library…',
+      LibraryState.permissionDenied =>
+        'Grant storage access to see your music.',
+      LibraryState.empty => 'No music found on this device.',
+      LibraryState.error => 'Could not read your library.',
+      LibraryState.ready => 'No tracks yet.',
+    };
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      child: Text(
+        text,
+        style: TextStyle(color: AppColors.whiteAlpha(0.5), fontSize: 14),
+      ),
+    );
+  }
+
   Widget _discoverCard(PlayerController c) {
     return GestureDetector(
-      onTap: () => c.playTrack(MusicData.topPlaylists.first),
+      onTap: () => c.songs.isEmpty ? null : c.playSong(c.songs.first),
       child: Container(
         constraints: const BoxConstraints(minHeight: 172),
         padding: const EdgeInsets.all(22),

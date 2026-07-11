@@ -56,7 +56,7 @@ class _SavedScreenState extends State<SavedScreen> {
                 SizedBox(
                   height: 44,
                   child: CategoryChips(
-                    categories: MusicData.savedCategories,
+                    categories: MusicCategories.saved,
                     selected: _category,
                     onSelected: (i) => setState(() => _category = i),
                     padding: const EdgeInsets.symmetric(horizontal: 24),
@@ -70,13 +70,12 @@ class _SavedScreenState extends State<SavedScreen> {
                     children: [
                       _likedCard(c),
                       const SizedBox(height: 26),
-                      for (var i = 0; i < MusicData.songs.length; i++) ...[
+                      for (var i = 0; i < c.songs.length; i++) ...[
                         TrackRow(
-                          track: MusicData.songs[i],
-                          onTap: () => c.playTrack(MusicData.songs[i]),
+                          song: c.songs[i],
+                          onTap: () => c.playSong(c.songs[i]),
                         ),
-                        if (i != MusicData.songs.length - 1)
-                          const SizedBox(height: 20),
+                        if (i != c.songs.length - 1) const SizedBox(height: 20),
                       ],
                     ],
                   ),
@@ -97,7 +96,7 @@ class _SavedScreenState extends State<SavedScreen> {
 
   Widget _likedCard(PlayerController c) {
     return GestureDetector(
-      onTap: () => c.playTrack(MusicData.songs.first),
+      onTap: () => c.songs.isEmpty ? null : c.playSong(c.songs.first),
       child: Container(
         padding: const EdgeInsets.all(20),
         decoration: BoxDecoration(
@@ -146,7 +145,7 @@ class _SavedScreenState extends State<SavedScreen> {
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    '${MusicData.songs.length} songs · Auto playlist',
+                    '${c.songs.length} songs · Auto playlist',
                     style: TextStyle(
                       color: AppColors.whiteAlpha(0.85),
                       fontSize: 13,

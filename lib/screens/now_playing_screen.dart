@@ -14,6 +14,9 @@ class NowPlayingScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final c = controller;
     final track = c.current;
+    if (track == null) {
+      return _empty(c);
+    }
     return Container(
       decoration: const BoxDecoration(
         gradient: LinearGradient(
@@ -102,7 +105,7 @@ class NowPlayingScreen extends StatelessWidget {
                                     ],
                                   ),
                                   child: AlbumArt(
-                                    gradient: track.gradient,
+                                    gradient: track.artGradient,
                                     size: 270,
                                     circle: true,
                                     showGlyph: false,
@@ -120,7 +123,7 @@ class NowPlayingScreen extends StatelessWidget {
                                 ),
                                 const SizedBox(height: 8),
                                 Text(
-                                  '${track.artist} x Lil magrib',
+                                  track.artist,
                                   style: TextStyle(
                                     color: AppColors.whiteAlpha(0.55),
                                     fontSize: 15,
@@ -143,6 +146,51 @@ class NowPlayingScreen extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  /// Shown when Now Playing is opened with no track selected yet.
+  Widget _empty(PlayerController c) {
+    return Container(
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [Color(0xFF2A2420), Color(0xFF14110E), Color(0xFF0A0A0C)],
+          stops: [0, 0.4, 1],
+        ),
+      ),
+      child: SafeArea(
+        child: Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(24, 12, 24, 0),
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: GlassIconButton(
+                  icon: IconlyLight.arrowLeft2,
+                  size: 44,
+                  iconSize: 22,
+                  onTap: () => c.goTo(AppScreen.home),
+                ),
+              ),
+            ),
+            Expanded(
+              child: Center(
+                child: Text(
+                  'Nothing playing yet.\nPick a track from your library.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: AppColors.whiteAlpha(0.6),
+                    fontSize: 15,
+                    height: 1.5,
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

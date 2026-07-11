@@ -6,50 +6,49 @@ class Category {
   final String label;
 }
 
-/// A playlist / song entry shown in list rows and cards.
-class Track {
-  const Track({
+/// A single audio track. Source-agnostic on purpose: the device (on_audio_query)
+/// and the future desktop repository both map their native rows into this, so
+/// nothing plugin-specific leaks into the controller or the UI.
+class Song {
+  const Song({
+    required this.id,
     required this.title,
     required this.artist,
-    required this.count,
-    required this.gradient,
+    this.album,
+    this.duration = Duration.zero,
+    this.uri,
   });
 
+  /// Stable identifier from the source (e.g. MediaStore id) — used for artwork
+  /// lookups and equality.
+  final int id;
   final String title;
   final String artist;
-  final int count;
+  final String? album;
+  final Duration duration;
 
-  /// Two-color gradient used as the album-art placeholder.
-  final List<Color> gradient;
+  /// Playable location (content:// uri or file path). Used by the audio engine
+  /// in the playback pass; may be null for sample data.
+  final String? uri;
+
+  /// Deterministic gradient placeholder for the album art, keyed off [id] so a
+  /// given track always gets the same colors until real artwork is wired in.
+  List<Color> get artGradient =>
+      AppArt.gradients[id.abs() % AppArt.gradients.length];
+
+  String get durationLabel {
+    final s = duration.inSeconds;
+    final m = s ~/ 60;
+    return '$m:${(s % 60).toString().padLeft(2, '0')}';
+  }
 }
 
-/// Static content backing the three screens. In a real app this would come
-/// from a repository / API; here it reproduces the design's sample data.
-class MusicData {
-  const MusicData._();
+/// Album-art gradient palette used as a placeholder before real cover artwork
+/// is loaded.
+class AppArt {
+  const AppArt._();
 
-  static const List<Category> homeCategories = [
-    Category('All'),
-    Category('New Release'),
-    Category('Trending'),
-    Category('Top Charts'),
-  ];
-
-  static const List<Category> musicCategories = [
-    Category('All'),
-    Category('Playlists'),
-    Category('Liked Songs'),
-    Category('Downloaded'),
-  ];
-
-  static const List<Category> savedCategories = [
-    Category('Playlists'),
-    Category('Songs'),
-    Category('Albums'),
-    Category('Artists'),
-  ];
-
-  static const List<List<Color>> _artGradients = [
+  static const List<List<Color>> gradients = [
     [Color(0xFF6F5CFF), Color(0xFF3B6FE0)],
     [Color(0xFFFF6F91), Color(0xFF8A4FFF)],
     [Color(0xFF4FD0FF), Color(0xFF4F6FFF)],
@@ -58,72 +57,30 @@ class MusicData {
     [Color(0xFFB86FFF), Color(0xFF6F5CFF)],
     [Color(0xFFE0C03B), Color(0xFFE0703B)],
   ];
+}
 
-  static List<Color> art(int i) => _artGradients[i % _artGradients.length];
+/// Static UI filter chips (not backed by the library).
+class MusicCategories {
+  const MusicCategories._();
 
-  static final List<Track> topPlaylists = [
-    Track(
-      title: 'Starlit Reverie',
-      artist: 'Budiarti',
-      count: 8,
-      gradient: art(0),
-    ),
-    Track(
-      title: 'Midnight Confessions',
-      artist: 'Alexiao',
-      count: 24,
-      gradient: art(1),
-    ),
-    Track(
-      title: 'Lost in the Echo',
-      artist: 'Alexiao',
-      count: 24,
-      gradient: art(2),
-    ),
+  static const List<Category> home = [
+    Category('All'),
+    Category('New Release'),
+    Category('Trending'),
+    Category('Top Charts'),
   ];
 
-  static final List<Track> songs = [
-    Track(
-      title: 'Starlit Reverie',
-      artist: 'Budiarti',
-      count: 8,
-      gradient: art(0),
-    ),
-    Track(
-      title: 'Midnight Confessions',
-      artist: 'Alexiao',
-      count: 24,
-      gradient: art(1),
-    ),
-    Track(
-      title: 'Lost in the Echo',
-      artist: 'Alexiao',
-      count: 24,
-      gradient: art(2),
-    ),
-    Track(
-      title: 'Letters I Never Sent',
-      artist: 'Alexiao',
-      count: 24,
-      gradient: art(3),
-    ),
-    Track(
-      title: 'Breaking the Silence',
-      artist: 'Alexiao',
-      count: 24,
-      gradient: art(4),
-    ),
-    Track(
-      title: 'Tears on the Vinyl',
-      artist: 'Alexiao',
-      count: 24,
-      gradient: art(5),
-    ),
-    Track(
-      title: 'Lonely Nights',
-      artist: 'Alexiao',
-      count: 24,
-      gradient: art(6),
-    ),
+  static const List<Category> myMusic = [
+    Category('All'),
+    Category('Playlists'),
+    Category('Liked Songs'),
+    Category('Downloaded'),
+  ];
+
+  static const List<Category> saved = [
+    Category('Playlists'),
+    Category('Songs'),
+    Category('Albums'),
+    Category('Artists'),
   ];
 }
