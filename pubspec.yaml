@@ -37,6 +37,11 @@ dependencies:
   google_fonts: ^8.1.0
   flutter_iconly: ^1.0.2
 
+  # Queries the device's on-device audio library (Android/iOS only). Kept
+  # behind the MusicRepository abstraction so desktop can plug in later.
+  # Maintained fork of on_audio_query (fixes the AGP 8 "namespace" build error).
+  on_audio_query_pluse: ^3.0.7
+
 dev_dependencies:
   flutter_test:
     sdk: flutter
