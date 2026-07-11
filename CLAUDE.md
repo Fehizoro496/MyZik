@@ -32,17 +32,17 @@ Les messages de commit suivent la spécification [Conventional Commits](https://
 ### Exemples
 
 ```
-feat(home): ajoute la barre de navigation en verre dépoli
-fix(home): rogne le circle avatar en cercle avec backgroundImage
-chore(config): configure FVM pour la gestion de version Flutter
-refactor(player): extrait la logique de lecture dans PlayerController
-docs: documente la convention de commit dans CLAUDE.md
+feat(home): add frosted glass navigation bar
+fix(home): clip circle avatar with backgroundImage
+chore(config): configure FVM for Flutter version management
+refactor(player): extract playback logic into PlayerController
+docs: document commit convention in CLAUDE.md
 ```
 
 ### Règles
 
 - Un commit = un changement logique cohérent.
-- La description est en français, à l'impératif présent (« ajoute », « corrige », pas « ajouté »/« ajoutant »).
+- Le message de commit est rédigé en anglais, à l'impératif présent (« add », « fix », pas « added »/« adding »).
 - Pas de majuscule en début de description, pas de point final.
-- Pour un changement cassant, ajouter `!` après le scope : `feat(player)!: change la signature de playTrack`.
+- Pour un changement cassant, ajouter `!` après le scope : `feat(player)!: change playTrack signature`.
 - Ne pas mentionner Claude dans les messages de commit (pas de trailer `Co-Authored-By: Claude`, pas de mention d'outil).

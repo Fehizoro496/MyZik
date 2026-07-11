@@ -130,15 +130,6 @@ class NowPlayingScreen extends StatelessWidget {
                                 _lyrics(),
                                 const Spacer(),
                                 _progressAndControls(c),
-                                const SizedBox(height: 20),
-                                Container(
-                                  width: 130,
-                                  height: 5,
-                                  decoration: BoxDecoration(
-                                    color: AppColors.whiteAlpha(0.4),
-                                    borderRadius: BorderRadius.circular(3),
-                                  ),
-                                ),
                                 const SizedBox(height: 10),
                               ],
                             ),
@@ -244,7 +235,7 @@ class NowPlayingScreen extends StatelessWidget {
                     ],
                   ),
                   child: Icon(
-                    c.playing ? Icons.pause_rounded : IconlyBold.play,
+                    c.playing ? Icons.pause_rounded : Icons.play_arrow_rounded,
                     size: 32,
                     color: AppColors.white,
                   ),
