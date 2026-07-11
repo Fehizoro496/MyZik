@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:on_audio_query_pluse/on_audio_query.dart';
 
 import '../models.dart';
@@ -42,6 +44,16 @@ class DeviceMusicRepository implements MusicRepository {
         )
         .map(_toSong)
         .toList();
+  }
+
+  @override
+  Future<Uint8List?> artworkFor(int id) {
+    return _query.queryArtwork(
+      id,
+      ArtworkType.AUDIO,
+      format: ArtworkFormat.JPEG,
+      size: 400,
+    );
   }
 
   Song _toSong(SongModel m) => Song(

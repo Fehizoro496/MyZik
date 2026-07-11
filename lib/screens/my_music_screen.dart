@@ -103,8 +103,11 @@ class _MyMusicScreenState extends State<MyMusicScreen> {
       padding: const EdgeInsets.fromLTRB(24, 0, 24, 170),
       physics: const BouncingScrollPhysics(),
       itemCount: c.songs.length,
-      itemBuilder: (context, i) =>
-          TrackRow(song: c.songs[i], onTap: () => c.playSong(c.songs[i])),
+      itemBuilder: (context, i) => TrackRow(
+        controller: c,
+        song: c.songs[i],
+        onTap: () => c.playSong(c.songs[i]),
+      ),
       separatorBuilder: (_, _) => const SizedBox(height: 20),
     );
   }

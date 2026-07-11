@@ -72,6 +72,7 @@ class _SavedScreenState extends State<SavedScreen> {
                       const SizedBox(height: 26),
                       for (var i = 0; i < c.songs.length; i++) ...[
                         TrackRow(
+                          controller: c,
                           song: c.songs[i],
                           onTap: () => c.playSong(c.songs[i]),
                         ),

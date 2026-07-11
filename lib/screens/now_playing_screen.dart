@@ -104,11 +104,11 @@ class NowPlayingScreen extends StatelessWidget {
                                       ),
                                     ],
                                   ),
-                                  child: AlbumArt(
-                                    gradient: track.artGradient,
+                                  child: SongArtwork(
+                                    controller: c,
+                                    song: track,
                                     size: 270,
                                     circle: true,
-                                    showGlyph: false,
                                   ),
                                 ),
                                 const SizedBox(height: 24),

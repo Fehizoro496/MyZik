@@ -1,3 +1,4 @@
+import 'dart:typed_data';
 import 'dart:ui';
 
 import 'package:flutter/material.dart';
@@ -90,6 +91,60 @@ class AlbumArt extends StatelessWidget {
   }
 }
 
+/// Real album art for a [Song], loaded lazily from the library. Falls back to
+/// the song's gradient placeholder while loading or when the track has no
+/// embedded cover. Keeps the artwork query out of the [Song] model so the UI
+/// stays source-agnostic.
+class SongArtwork extends StatelessWidget {
+  const SongArtwork({
+    super.key,
+    required this.controller,
+    required this.song,
+    this.size = 56,
+    this.radius = 16,
+    this.circle = false,
+  });
+
+  final PlayerController controller;
+  final Song song;
+  final double size;
+  final double radius;
+  final bool circle;
+
+  @override
+  Widget build(BuildContext context) {
+    final placeholder = AlbumArt(
+      gradient: song.artGradient,
+      size: size,
+      radius: radius,
+      circle: circle,
+    );
+    return FutureBuilder<Uint8List?>(
+      future: controller.artworkFor(song),
+      builder: (context, snapshot) {
+        final bytes = snapshot.data;
+        if (bytes == null) return placeholder;
+        final image = Image.memory(
+          bytes,
+          width: size,
+          height: size,
+          fit: BoxFit.cover,
+          gaplessPlayback: true,
+          errorBuilder: (_, _, _) => placeholder,
+        );
+        return circle
+            ? ClipOval(
+                child: SizedBox(width: size, height: size, child: image),
+              )
+            : ClipRRect(
+                borderRadius: BorderRadius.circular(radius),
+                child: image,
+              );
+      },
+    );
+  }
+}
+
 /// A pill filter/category chip. Active chips use the accent gradient.
 class CategoryChip extends StatelessWidget {
   const CategoryChip({
@@ -166,8 +221,14 @@ class CategoryChips extends StatelessWidget {
 
 /// A song list row: art + title/subtitle + trailing play button.
 class TrackRow extends StatelessWidget {
-  const TrackRow({super.key, required this.song, this.onTap});
+  const TrackRow({
+    super.key,
+    required this.controller,
+    required this.song,
+    this.onTap,
+  });
 
+  final PlayerController controller;
   final Song song;
   final VoidCallback? onTap;
 
@@ -178,7 +239,7 @@ class TrackRow extends StatelessWidget {
       onTap: onTap,
       child: Row(
         children: [
-          AlbumArt(gradient: song.artGradient),
+          SongArtwork(controller: controller, song: song),
           const SizedBox(width: 14),
           Expanded(
             child: Column(

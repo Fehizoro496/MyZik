@@ -1,4 +1,5 @@
 import 'dart:io' show Platform;
+import 'dart:typed_data';
 
 import 'package:flutter/foundation.dart' show kIsWeb;
 
@@ -20,6 +21,10 @@ abstract class MusicRepository {
 
   /// Load the full library. Call only after [ensurePermission] succeeds.
   Future<List<Song>> fetchSongs();
+
+  /// Embedded cover artwork bytes for a song, or null when there is none.
+  /// Fetched lazily (per visible row) because it is not part of the song row.
+  Future<Uint8List?> artworkFor(int id);
 }
 
 /// Picks the right repository for the current platform.

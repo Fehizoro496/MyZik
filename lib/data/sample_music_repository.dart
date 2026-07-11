@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import '../models.dart';
 import 'music_repository.dart';
 
@@ -10,6 +12,9 @@ class SampleMusicRepository implements MusicRepository {
 
   @override
   Future<bool> ensurePermission() async => true;
+
+  @override
+  Future<Uint8List?> artworkFor(int id) async => null;
 
   @override
   Future<List<Song>> fetchSongs() async => const [

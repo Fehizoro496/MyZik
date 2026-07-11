@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 
@@ -78,6 +79,15 @@ class PlayerController extends ChangeNotifier {
       _libraryState = LibraryState.error;
     }
     notifyListeners();
+  }
+
+  final Map<int, Future<Uint8List?>> _artworkCache = {};
+
+  /// Cover artwork for a song, fetched lazily and cached so scrolling doesn't
+  /// re-query. Returns the same Future per song id, keeping FutureBuilders
+  /// stable across rebuilds.
+  Future<Uint8List?> artworkFor(Song song) {
+    return _artworkCache.putIfAbsent(song.id, () => _repo.artworkFor(song.id));
   }
 
   void goTo(AppScreen screen) {

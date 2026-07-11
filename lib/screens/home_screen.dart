@@ -109,6 +109,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       else
                         for (var i = 0; i < topSongs.length; i++) ...[
                           TrackRow(
+                            controller: c,
                             song: topSongs[i],
                             onTap: () => c.playSong(topSongs[i]),
                           ),
