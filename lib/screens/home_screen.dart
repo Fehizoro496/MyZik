@@ -287,40 +287,57 @@ class _HomeScreenState extends State<HomeScreen> {
     return Positioned(
       left: 22,
       right: 22,
-      bottom: 26,
+      bottom: 0,
       child: ClipRRect(
-        borderRadius: BorderRadius.circular(32),
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
         child: BackdropFilter(
           filter: ImageFilter.blur(sigmaX: 24, sigmaY: 24),
           child: Container(
-            height: 64,
-            padding: const EdgeInsets.symmetric(horizontal: 12),
             decoration: BoxDecoration(
               color: const Color(0xB816161E),
-              borderRadius: BorderRadius.circular(32),
-              border: Border.all(color: AppColors.whiteAlpha(0.08)),
+              borderRadius: const BorderRadius.vertical(
+                top: Radius.circular(28),
+              ),
+              border: Border(
+                top: BorderSide(color: AppColors.whiteAlpha(0.08)),
+              ),
             ),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Container(
-                  width: 48,
-                  height: 48,
-                  decoration: const BoxDecoration(
-                    shape: BoxShape.circle,
-                    gradient: AppColors.accentGradient,
-                  ),
-                  child: const Icon(
-                    IconlyBold.home,
-                    size: 22,
-                    color: AppColors.white,
+            child: SafeArea(
+              top: false,
+              child: SizedBox(
+                height: 64,
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Container(
+                        width: 48,
+                        height: 48,
+                        decoration: const BoxDecoration(
+                          shape: BoxShape.circle,
+                          gradient: AppColors.accentGradient,
+                        ),
+                        child: const Icon(
+                          IconlyBold.home,
+                          size: 22,
+                          color: AppColors.white,
+                        ),
+                      ),
+                      _navIcon(
+                        IconlyLight.category,
+                        () => c.goTo(AppScreen.myMusic),
+                      ),
+                      _navIcon(
+                        IconlyLight.swap,
+                        () => c.goTo(AppScreen.nowPlaying),
+                      ),
+                      _navIcon(IconlyLight.bookmark, null),
+                      _navIcon(IconlyLight.setting, null),
+                    ],
                   ),
                 ),
-                _navIcon(IconlyLight.category, () => c.goTo(AppScreen.myMusic)),
-                _navIcon(IconlyLight.swap, () => c.goTo(AppScreen.nowPlaying)),
-                _navIcon(IconlyLight.bookmark, null),
-                _navIcon(IconlyLight.setting, null),
-              ],
+              ),
             ),
           ),
         ),
