@@ -264,7 +264,7 @@ class NowPlayingScreen extends StatelessWidget {
                 size: 22,
                 color: AppColors.whiteAlpha(0.85),
               ),
-              _circleControl(Icons.skip_previous_rounded, 56),
+              _circleControl(Icons.skip_previous_rounded, 56, c.previous),
               // Play / pause.
               GestureDetector(
                 onTap: c.togglePlay,
@@ -289,7 +289,7 @@ class NowPlayingScreen extends StatelessWidget {
                   ),
                 ),
               ),
-              _circleControl(Icons.skip_next_rounded, 56),
+              _circleControl(Icons.skip_next_rounded, 56, c.next),
               Icon(
                 Icons.queue_music_rounded,
                 size: 24,
@@ -302,16 +302,20 @@ class NowPlayingScreen extends StatelessWidget {
     );
   }
 
-  Widget _circleControl(IconData icon, double size) {
-    return Container(
-      width: size,
-      height: size,
-      decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        color: AppColors.whiteAlpha(0.08),
-        border: Border.all(color: AppColors.whiteAlpha(0.1)),
+  Widget _circleControl(IconData icon, double size, VoidCallback onTap) {
+    return GestureDetector(
+      onTap: onTap,
+      behavior: HitTestBehavior.opaque,
+      child: Container(
+        width: size,
+        height: size,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          color: AppColors.whiteAlpha(0.08),
+          border: Border.all(color: AppColors.whiteAlpha(0.1)),
+        ),
+        child: Icon(icon, size: 26, color: AppColors.white),
       ),
-      child: Icon(icon, size: 26, color: AppColors.white),
     );
   }
 }

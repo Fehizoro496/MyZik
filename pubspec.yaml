@@ -42,6 +42,9 @@ dependencies:
   # Maintained fork of on_audio_query (fixes the AGP 8 "namespace" build error).
   on_audio_query_pluse: ^3.0.7
 
+  # Audio playback engine (cross-platform). Plays the real file uris.
+  just_audio: ^0.9.42
+
 dev_dependencies:
   flutter_test:
     sdk: flutter
