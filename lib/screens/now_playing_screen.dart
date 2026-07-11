@@ -46,7 +46,6 @@ class NowPlayingScreen extends StatelessWidget {
           SafeArea(
             child: Column(
               children: [
-                const StatusBar(),
                 Padding(
                   padding: const EdgeInsets.fromLTRB(24, 12, 24, 0),
                   child: Row(
@@ -66,10 +65,7 @@ class NowPlayingScreen extends StatelessWidget {
                           fontWeight: FontWeight.w700,
                         ),
                       ),
-                      const GlassIconButton(
-                        icon: IconlyLight.heart,
-                        size: 44,
-                      ),
+                      const GlassIconButton(icon: IconlyLight.heart, size: 44),
                     ],
                   ),
                 ),
@@ -82,55 +78,58 @@ class NowPlayingScreen extends StatelessWidget {
                       return SingleChildScrollView(
                         physics: const ClampingScrollPhysics(),
                         child: ConstrainedBox(
-                          constraints:
-                              BoxConstraints(minHeight: constraints.maxHeight),
+                          constraints: BoxConstraints(
+                            minHeight: constraints.maxHeight,
+                          ),
                           child: IntrinsicHeight(
                             child: Column(
                               children: [
                                 const SizedBox(height: 28),
                                 // Circular artwork.
                                 Container(
-                  width: 270,
-                  height: 270,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withValues(alpha: 0.5),
-                        blurRadius: 70,
-                        offset: const Offset(0, 30),
-                      ),
-                    ],
-                  ),
-                  child: AlbumArt(
-                    gradient: track.gradient,
-                    size: 270,
-                    circle: true,
-                    showGlyph: false,
-                  ),
-                ),
-                const SizedBox(height: 24),
-                Text(
-                  track.title,
-                  style: const TextStyle(
-                    color: AppColors.white,
-                    fontSize: 26,
-                    fontWeight: FontWeight.w800,
-                    letterSpacing: -0.3,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  '${track.artist} x Lil magrib',
-                  style: TextStyle(
-                    color: AppColors.whiteAlpha(0.55),
-                    fontSize: 15,
-                  ),
-                ),
-                const SizedBox(height: 22),
-                _lyrics(),
-                const Spacer(),
-                _progressAndControls(c),
+                                  width: 270,
+                                  height: 270,
+                                  decoration: BoxDecoration(
+                                    shape: BoxShape.circle,
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: Colors.black.withValues(
+                                          alpha: 0.5,
+                                        ),
+                                        blurRadius: 70,
+                                        offset: const Offset(0, 30),
+                                      ),
+                                    ],
+                                  ),
+                                  child: AlbumArt(
+                                    gradient: track.gradient,
+                                    size: 270,
+                                    circle: true,
+                                    showGlyph: false,
+                                  ),
+                                ),
+                                const SizedBox(height: 24),
+                                Text(
+                                  track.title,
+                                  style: const TextStyle(
+                                    color: AppColors.white,
+                                    fontSize: 26,
+                                    fontWeight: FontWeight.w800,
+                                    letterSpacing: -0.3,
+                                  ),
+                                ),
+                                const SizedBox(height: 8),
+                                Text(
+                                  '${track.artist} x Lil magrib',
+                                  style: TextStyle(
+                                    color: AppColors.whiteAlpha(0.55),
+                                    fontSize: 15,
+                                  ),
+                                ),
+                                const SizedBox(height: 22),
+                                _lyrics(),
+                                const Spacer(),
+                                _progressAndControls(c),
                                 const SizedBox(height: 20),
                                 Container(
                                   width: 130,
@@ -199,23 +198,33 @@ class NowPlayingScreen extends StatelessWidget {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(c.elapsed,
-                  style: TextStyle(
-                      color: AppColors.whiteAlpha(0.55),
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600)),
-              Text(c.remaining,
-                  style: TextStyle(
-                      color: AppColors.whiteAlpha(0.55),
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600)),
+              Text(
+                c.elapsed,
+                style: TextStyle(
+                  color: AppColors.whiteAlpha(0.55),
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              Text(
+                c.remaining,
+                style: TextStyle(
+                  color: AppColors.whiteAlpha(0.55),
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
             ],
           ),
           const SizedBox(height: 26),
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Icon(Icons.shuffle_rounded, size: 22, color: AppColors.whiteAlpha(0.85)),
+              Icon(
+                Icons.shuffle_rounded,
+                size: 22,
+                color: AppColors.whiteAlpha(0.85),
+              ),
               _circleControl(Icons.skip_previous_rounded, 56),
               // Play / pause.
               GestureDetector(
@@ -242,7 +251,11 @@ class NowPlayingScreen extends StatelessWidget {
                 ),
               ),
               _circleControl(Icons.skip_next_rounded, 56),
-              Icon(Icons.queue_music_rounded, size: 24, color: AppColors.whiteAlpha(0.85)),
+              Icon(
+                Icons.queue_music_rounded,
+                size: 24,
+                color: AppColors.whiteAlpha(0.85),
+              ),
             ],
           ),
         ],

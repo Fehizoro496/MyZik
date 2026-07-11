@@ -6,40 +6,6 @@ import 'package:flutter_iconly/flutter_iconly.dart';
 import 'models.dart';
 import 'theme.dart';
 
-/// The faux iOS status bar (time + signal / wifi / battery).
-class StatusBar extends StatelessWidget {
-  const StatusBar({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(28, 16, 28, 4),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          const Text(
-            '9:41',
-            style: TextStyle(
-              color: AppColors.white,
-              fontSize: 15,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-          Row(
-            children: [
-              const Icon(Icons.signal_cellular_alt, size: 17, color: AppColors.white),
-              const SizedBox(width: 6),
-              const Icon(Icons.wifi, size: 17, color: AppColors.white),
-              const SizedBox(width: 6),
-              Icon(Icons.battery_full, size: 20, color: AppColors.white.withValues(alpha: 0.95)),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-}
-
 /// A frosted, translucent circular icon button used throughout the design.
 class GlassIconButton extends StatelessWidget {
   const GlassIconButton({
@@ -250,7 +216,11 @@ class TrackRow extends StatelessWidget {
               color: AppColors.whiteAlpha(0.06),
               border: Border.all(color: AppColors.whiteAlpha(0.08)),
             ),
-            child: const Icon(IconlyBold.play, size: 18, color: AppColors.white),
+            child: const Icon(
+              IconlyBold.play,
+              size: 18,
+              color: AppColors.white,
+            ),
           ),
         ],
       ),

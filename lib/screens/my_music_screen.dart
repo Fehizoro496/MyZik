@@ -31,7 +31,6 @@ class _MyMusicScreenState extends State<MyMusicScreen> {
             bottom: false,
             child: Column(
               children: [
-                const StatusBar(),
                 Padding(
                   padding: const EdgeInsets.fromLTRB(24, 12, 24, 18),
                   child: Row(
@@ -51,7 +50,10 @@ class _MyMusicScreenState extends State<MyMusicScreen> {
                           fontWeight: FontWeight.w700,
                         ),
                       ),
-                      const GlassIconButton(icon: IconlyLight.moreCircle, size: 44),
+                      const GlassIconButton(
+                        icon: IconlyLight.moreCircle,
+                        size: 44,
+                      ),
                     ],
                   ),
                 ),
@@ -114,16 +116,26 @@ class _MyMusicScreenState extends State<MyMusicScreen> {
                       child: const SizedBox(
                         width: 40,
                         height: 40,
-                        child: Icon(IconlyBold.play,
-                            size: 22, color: AppColors.white),
+                        child: Icon(
+                          IconlyBold.play,
+                          size: 22,
+                          color: AppColors.white,
+                        ),
                       ),
                     ),
-                    Container(width: 1, height: 24, color: AppColors.whiteAlpha(0.15)),
+                    Container(
+                      width: 1,
+                      height: 24,
+                      color: AppColors.whiteAlpha(0.15),
+                    ),
                     const SizedBox(
                       width: 40,
                       height: 40,
-                      child: Icon(IconlyLight.swap,
-                          size: 20, color: Color(0xFF4F8CFF)),
+                      child: Icon(
+                        IconlyLight.swap,
+                        size: 20,
+                        color: Color(0xFF4F8CFF),
+                      ),
                     ),
                   ],
                 ),
