@@ -28,13 +28,24 @@ class _HomeScreenState extends State<HomeScreen> {
       child: Stack(
         children: [
           // Ambient glows top-left / top-right.
-          _glow(top: -60, left: -40, w: 280, h: 240, color: const Color(0x8C785AFF)),
-          _glow(top: -40, right: -40, w: 220, h: 200, color: const Color(0x734F8CFF)),
+          _glow(
+            top: -60,
+            left: -40,
+            w: 280,
+            h: 240,
+            color: const Color(0x8C785AFF),
+          ),
+          _glow(
+            top: -40,
+            right: -40,
+            w: 220,
+            h: 200,
+            color: const Color(0x734F8CFF),
+          ),
           SafeArea(
             bottom: false,
             child: Column(
               children: [
-                const StatusBar(),
                 Expanded(
                   child: ListView(
                     padding: const EdgeInsets.fromLTRB(22, 8, 22, 120),
@@ -43,7 +54,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       _header(),
                       const SizedBox(height: 22),
                       const Text(
-                        'Hi, Samantha',
+                        'Hi, Fehizoro',
                         style: TextStyle(
                           color: AppColors.white,
                           fontSize: 30,
@@ -94,7 +105,11 @@ class _HomeScreenState extends State<HomeScreen> {
                         ],
                       ),
                       const SizedBox(height: 16),
-                      for (var i = 0; i < MusicData.topPlaylists.length; i++) ...[
+                      for (
+                        var i = 0;
+                        i < MusicData.topPlaylists.length;
+                        i++
+                      ) ...[
                         TrackRow(
                           track: MusicData.topPlaylists[i],
                           onTap: () => c.playTrack(MusicData.topPlaylists[i]),
@@ -131,7 +146,9 @@ class _HomeScreenState extends State<HomeScreen> {
           width: w,
           height: h,
           decoration: BoxDecoration(
-            gradient: RadialGradient(colors: [color, color.withValues(alpha: 0)]),
+            gradient: RadialGradient(
+              colors: [color, color.withValues(alpha: 0)],
+            ),
           ),
         ),
       ),
@@ -145,18 +162,10 @@ class _HomeScreenState extends State<HomeScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Container(
-            padding: const EdgeInsets.all(2),
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              border: Border.all(color: AppColors.whiteAlpha(0.12), width: 2),
-            ),
-            child: const AlbumArt(
-              gradient: [Color(0xFFFFB86F), Color(0xFFFF6F91)],
-              size: 52,
-              circle: true,
-              showGlyph: false,
-            ),
+          const CircleAvatar(
+            radius: 22,
+            backgroundColor: Color(0xFF1A1730),
+            backgroundImage: AssetImage('assets/images/avatar.png'),
           ),
           Row(
             children: [
@@ -240,18 +249,30 @@ class _HomeScreenState extends State<HomeScreen> {
                         shape: BoxShape.circle,
                         color: Color(0xFF0B1220),
                       ),
-                      child: const Icon(IconlyBold.play,
-                          size: 20, color: AppColors.white),
+                      child: const Icon(
+                        IconlyBold.play,
+                        size: 20,
+                        color: AppColors.white,
+                      ),
                     ),
                     const SizedBox(width: 16),
-                    Icon(IconlyLight.heart,
-                        size: 20, color: AppColors.whiteAlpha(0.9)),
+                    Icon(
+                      IconlyLight.heart,
+                      size: 20,
+                      color: AppColors.whiteAlpha(0.9),
+                    ),
                     const SizedBox(width: 16),
-                    Icon(IconlyLight.download,
-                        size: 20, color: AppColors.whiteAlpha(0.9)),
+                    Icon(
+                      IconlyLight.download,
+                      size: 20,
+                      color: AppColors.whiteAlpha(0.9),
+                    ),
                     const SizedBox(width: 16),
-                    Icon(IconlyLight.moreCircle,
-                        size: 22, color: AppColors.whiteAlpha(0.9)),
+                    Icon(
+                      IconlyLight.moreCircle,
+                      size: 22,
+                      color: AppColors.whiteAlpha(0.9),
+                    ),
                   ],
                 ),
               ],
@@ -289,7 +310,11 @@ class _HomeScreenState extends State<HomeScreen> {
                     shape: BoxShape.circle,
                     gradient: AppColors.accentGradient,
                   ),
-                  child: const Icon(IconlyBold.home, size: 22, color: AppColors.white),
+                  child: const Icon(
+                    IconlyBold.home,
+                    size: 22,
+                    color: AppColors.white,
+                  ),
                 ),
                 _navIcon(IconlyLight.category, () => c.goTo(AppScreen.myMusic)),
                 _navIcon(IconlyLight.swap, () => c.goTo(AppScreen.nowPlaying)),
