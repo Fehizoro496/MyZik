@@ -2,6 +2,17 @@
 
 Application Flutter de lecteur musical (design Music Player).
 
+## Outillage Flutter
+
+Le projet est épinglé sur une version de Flutter via FVM (voir `.fvmrc`). Toujours passer par `fvm` pour lancer Flutter/Dart plutôt que le binaire global :
+
+```
+fvm flutter analyze
+fvm flutter run
+fvm flutter test
+fvm dart ...
+```
+
 ## Convention de commit
 
 Les messages de commit suivent la spécification [Conventional Commits](https://www.conventionalcommits.org/) :
