@@ -1,27 +1,28 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_iconly/flutter_iconly.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../models.dart';
-import '../player_controller.dart';
+import '../providers/library_provider.dart';
+import '../providers/navigation_provider.dart';
+import '../providers/playback_provider.dart';
 import '../theme.dart';
 import '../widgets.dart';
 
-class HomeScreen extends StatefulWidget {
-  const HomeScreen({super.key, required this.controller});
-
-  final PlayerController controller;
+class HomeScreen extends ConsumerStatefulWidget {
+  const HomeScreen({super.key});
 
   @override
-  State<HomeScreen> createState() => _HomeScreenState();
+  ConsumerState<HomeScreen> createState() => _HomeScreenState();
 }
 
-class _HomeScreenState extends State<HomeScreen> {
+class _HomeScreenState extends ConsumerState<HomeScreen> {
   int _category = 0;
 
   @override
   Widget build(BuildContext context) {
-    final c = widget.controller;
-    final topSongs = c.songs.take(4).toList();
+    final library = ref.watch(libraryProvider);
+    final topSongs = library.songs.take(4).toList();
     return DecoratedBox(
       decoration: const BoxDecoration(color: AppColors.homeBackground),
       child: Stack(
@@ -81,7 +82,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       const SizedBox(height: 26),
                       _sectionTitle('Curated & trending'),
                       const SizedBox(height: 16),
-                      _discoverCard(c),
+                      _discoverCard(library),
                       const SizedBox(height: 30),
                       Row(
                         crossAxisAlignment: CrossAxisAlignment.baseline,
@@ -91,7 +92,9 @@ class _HomeScreenState extends State<HomeScreen> {
                           Flexible(child: _sectionTitle('Top daily playlists')),
                           const SizedBox(width: 12),
                           GestureDetector(
-                            onTap: () => c.goTo(AppScreen.myMusic),
+                            onTap: () => ref
+                                .read(navigationProvider.notifier)
+                                .goTo(AppScreen.myMusic),
                             child: const Text(
                               'See all',
                               style: TextStyle(
@@ -105,13 +108,14 @@ class _HomeScreenState extends State<HomeScreen> {
                       ),
                       const SizedBox(height: 16),
                       if (topSongs.isEmpty)
-                        _emptyHint(c)
+                        _emptyHint(library.status)
                       else
                         for (var i = 0; i < topSongs.length; i++) ...[
                           TrackRow(
-                            controller: c,
                             song: topSongs[i],
-                            onTap: () => c.playSong(topSongs[i]),
+                            onTap: () => ref
+                                .read(playbackProvider.notifier)
+                                .playSong(topSongs[i]),
                           ),
                           if (i != topSongs.length - 1)
                             const SizedBox(height: 16),
@@ -122,11 +126,11 @@ class _HomeScreenState extends State<HomeScreen> {
               ],
             ),
           ),
-          Positioned(
+          const Positioned(
             left: 22,
             right: 22,
             bottom: 0,
-            child: FloatingNavBar(controller: c),
+            child: FloatingNavBar(),
           ),
         ],
       ),
@@ -195,14 +199,14 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Widget _emptyHint(PlayerController c) {
-    final text = switch (c.libraryState) {
-      LibraryState.loading => 'Loading your library…',
-      LibraryState.permissionDenied =>
+  Widget _emptyHint(LibraryStatus status) {
+    final text = switch (status) {
+      LibraryStatus.loading => 'Loading your library…',
+      LibraryStatus.permissionDenied =>
         'Grant storage access to see your music.',
-      LibraryState.empty => 'No music found on this device.',
-      LibraryState.error => 'Could not read your library.',
-      LibraryState.ready => 'No tracks yet.',
+      LibraryStatus.empty => 'No music found on this device.',
+      LibraryStatus.error => 'Could not read your library.',
+      LibraryStatus.ready => 'No tracks yet.',
     };
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 8),
@@ -213,9 +217,11 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Widget _discoverCard(PlayerController c) {
+  Widget _discoverCard(LibraryState library) {
     return GestureDetector(
-      onTap: () => c.songs.isEmpty ? null : c.playSong(c.songs.first),
+      onTap: () => library.songs.isEmpty
+          ? null
+          : ref.read(playbackProvider.notifier).playSong(library.songs.first),
       child: Container(
         constraints: const BoxConstraints(minHeight: 172),
         padding: const EdgeInsets.all(22),

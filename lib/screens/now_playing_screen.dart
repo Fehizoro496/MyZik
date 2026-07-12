@@ -1,22 +1,23 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_iconly/flutter_iconly.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../player_controller.dart';
+import '../providers/navigation_provider.dart';
+import '../providers/playback_provider.dart';
 import '../theme.dart';
 import '../widgets.dart';
 
-class NowPlayingScreen extends StatelessWidget {
-  const NowPlayingScreen({super.key, required this.controller});
-
-  final PlayerController controller;
+class NowPlayingScreen extends ConsumerWidget {
+  const NowPlayingScreen({super.key});
 
   @override
-  Widget build(BuildContext context) {
-    final c = controller;
-    final track = c.current;
+  Widget build(BuildContext context, WidgetRef ref) {
+    final playback = ref.watch(playbackProvider);
+    final track = playback.current;
     if (track == null) {
-      return _empty(c);
+      return _empty(ref);
     }
+    final notifier = ref.read(playbackProvider.notifier);
     return Container(
       decoration: const BoxDecoration(
         gradient: LinearGradient(
@@ -58,7 +59,9 @@ class NowPlayingScreen extends StatelessWidget {
                         icon: IconlyLight.arrowLeft2,
                         size: 44,
                         iconSize: 22,
-                        onTap: () => c.goTo(AppScreen.home),
+                        onTap: () => ref
+                            .read(navigationProvider.notifier)
+                            .goTo(AppScreen.home),
                       ),
                       const Text(
                         'Now Playing',
@@ -105,7 +108,6 @@ class NowPlayingScreen extends StatelessWidget {
                                     ],
                                   ),
                                   child: SongArtwork(
-                                    controller: c,
                                     song: track,
                                     size: 270,
                                     circle: true,
@@ -132,7 +134,7 @@ class NowPlayingScreen extends StatelessWidget {
                                 const SizedBox(height: 22),
                                 _lyrics(),
                                 const Spacer(),
-                                _progressAndControls(c),
+                                _progressAndControls(playback, notifier),
                                 const SizedBox(height: 10),
                               ],
                             ),
@@ -151,7 +153,7 @@ class NowPlayingScreen extends StatelessWidget {
   }
 
   /// Shown when Now Playing is opened with no track selected yet.
-  Widget _empty(PlayerController c) {
+  Widget _empty(WidgetRef ref) {
     return Container(
       decoration: const BoxDecoration(
         gradient: LinearGradient(
@@ -172,7 +174,8 @@ class NowPlayingScreen extends StatelessWidget {
                   icon: IconlyLight.arrowLeft2,
                   size: 44,
                   iconSize: 22,
-                  onTap: () => c.goTo(AppScreen.home),
+                  onTap: () =>
+                      ref.read(navigationProvider.notifier).goTo(AppScreen.home),
                 ),
               ),
             ),
@@ -226,19 +229,22 @@ class NowPlayingScreen extends StatelessWidget {
     );
   }
 
-  Widget _progressAndControls(PlayerController c) {
+  Widget _progressAndControls(PlaybackState playback, PlaybackNotifier notifier) {
     return Padding(
       padding: const EdgeInsets.fromLTRB(28, 0, 28, 0),
       child: Column(
         children: [
           // Scrubbable progress bar.
-          ProgressBar(progress: c.progress, onSeek: c.seekFraction),
+          ProgressBar(
+            progress: playback.progress,
+            onSeek: notifier.seekFraction,
+          ),
           const SizedBox(height: 10),
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text(
-                c.elapsed,
+                playback.elapsed,
                 style: TextStyle(
                   color: AppColors.whiteAlpha(0.55),
                   fontSize: 12,
@@ -246,7 +252,7 @@ class NowPlayingScreen extends StatelessWidget {
                 ),
               ),
               Text(
-                c.remaining,
+                playback.remaining,
                 style: TextStyle(
                   color: AppColors.whiteAlpha(0.55),
                   fontSize: 12,
@@ -264,10 +270,10 @@ class NowPlayingScreen extends StatelessWidget {
                 size: 22,
                 color: AppColors.whiteAlpha(0.85),
               ),
-              _circleControl(Icons.skip_previous_rounded, 56, c.previous),
+              _circleControl(Icons.skip_previous_rounded, 56, notifier.previous),
               // Play / pause.
               GestureDetector(
-                onTap: c.togglePlay,
+                onTap: notifier.togglePlay,
                 child: Container(
                   width: 76,
                   height: 76,
@@ -283,13 +289,15 @@ class NowPlayingScreen extends StatelessWidget {
                     ],
                   ),
                   child: Icon(
-                    c.playing ? Icons.pause_rounded : Icons.play_arrow_rounded,
+                    playback.playing
+                        ? Icons.pause_rounded
+                        : Icons.play_arrow_rounded,
                     size: 32,
                     color: AppColors.white,
                   ),
                 ),
               ),
-              _circleControl(Icons.skip_next_rounded, 56, c.next),
+              _circleControl(Icons.skip_next_rounded, 56, notifier.next),
               Icon(
                 Icons.queue_music_rounded,
                 size: 24,

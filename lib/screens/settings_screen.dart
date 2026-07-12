@@ -1,28 +1,20 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_iconly/flutter_iconly.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../player_controller.dart';
+import '../providers/navigation_provider.dart';
+import '../providers/settings_provider.dart';
 import '../theme.dart';
 import '../widgets.dart';
 
 /// The "Settings" screen: profile card + grouped preference rows.
-class SettingsScreen extends StatefulWidget {
-  const SettingsScreen({super.key, required this.controller});
-
-  final PlayerController controller;
+class SettingsScreen extends ConsumerWidget {
+  const SettingsScreen({super.key});
 
   @override
-  State<SettingsScreen> createState() => _SettingsScreenState();
-}
-
-class _SettingsScreenState extends State<SettingsScreen> {
-  bool _notifications = true;
-  bool _wifiOnly = false;
-  bool _crossfade = true;
-
-  @override
-  Widget build(BuildContext context) {
-    final c = widget.controller;
+  Widget build(BuildContext context, WidgetRef ref) {
+    final settings = ref.watch(settingsProvider);
+    final notifier = ref.read(settingsProvider.notifier);
     return DecoratedBox(
       decoration: const BoxDecoration(color: AppColors.musicBackground),
       child: Stack(
@@ -40,7 +32,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         icon: IconlyLight.arrowLeft2,
                         size: 44,
                         iconSize: 22,
-                        onTap: () => c.goTo(AppScreen.home),
+                        onTap: () => ref
+                            .read(navigationProvider.notifier)
+                            .goTo(AppScreen.home),
                       ),
                       const Text(
                         'Settings',
@@ -69,8 +63,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         _switchRow(
                           IconlyLight.notification,
                           'Notifications',
-                          _notifications,
-                          (v) => setState(() => _notifications = v),
+                          settings.notifications,
+                          notifier.setNotifications,
                         ),
                         _divider(),
                         _navRow(IconlyLight.shieldDone, 'Privacy'),
@@ -88,15 +82,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         _switchRow(
                           IconlyLight.download,
                           'Download over Wi-Fi only',
-                          _wifiOnly,
-                          (v) => setState(() => _wifiOnly = v),
+                          settings.wifiOnly,
+                          notifier.setWifiOnly,
                         ),
                         _divider(),
                         _switchRow(
                           IconlyLight.swap,
                           'Crossfade',
-                          _crossfade,
-                          (v) => setState(() => _crossfade = v),
+                          settings.crossfade,
+                          notifier.setCrossfade,
                         ),
                       ]),
                       const SizedBox(height: 24),
@@ -115,11 +109,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ],
             ),
           ),
-          Positioned(
+          const Positioned(
             left: 22,
             right: 22,
             bottom: 0,
-            child: FloatingNavBar(controller: c),
+            child: FloatingNavBar(),
           ),
         ],
       ),

@@ -45,6 +45,13 @@ dependencies:
   # Audio playback engine (cross-platform). Plays the real file uris.
   just_audio: ^0.9.42
 
+  # State management. Providers replace the old PlayerController ChangeNotifier.
+  flutter_riverpod: ^2.6.1
+
+  # Local key-value storage backing the persisted providers (settings, resume
+  # playback).
+  shared_preferences: ^2.3.3
+
 dev_dependencies:
   flutter_test:
     sdk: flutter

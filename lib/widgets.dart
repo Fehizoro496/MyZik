@@ -1,11 +1,13 @@
-import 'dart:typed_data';
 import 'dart:ui';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_iconly/flutter_iconly.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'models.dart';
-import 'player_controller.dart';
+import 'providers/library_provider.dart';
+import 'providers/navigation_provider.dart';
+import 'providers/playback_provider.dart';
 import 'theme.dart';
 
 /// A frosted, translucent circular icon button used throughout the design.
@@ -91,57 +93,49 @@ class AlbumArt extends StatelessWidget {
   }
 }
 
-/// Real album art for a [Song], loaded lazily from the library. Falls back to
-/// the song's gradient placeholder while loading or when the track has no
-/// embedded cover. Keeps the artwork query out of the [Song] model so the UI
-/// stays source-agnostic.
-class SongArtwork extends StatelessWidget {
+/// Real album art for a [Song], loaded lazily from the library via
+/// [artworkProvider]. Falls back to the song's gradient placeholder while
+/// loading or when the track has no embedded cover. Keeps the artwork query
+/// out of the [Song] model so the UI stays source-agnostic.
+class SongArtwork extends ConsumerWidget {
   const SongArtwork({
     super.key,
-    required this.controller,
     required this.song,
     this.size = 56,
     this.radius = 16,
     this.circle = false,
   });
 
-  final PlayerController controller;
   final Song song;
   final double size;
   final double radius;
   final bool circle;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final placeholder = AlbumArt(
       gradient: song.artGradient,
       size: size,
       radius: radius,
       circle: circle,
     );
-    return FutureBuilder<Uint8List?>(
-      future: controller.artworkFor(song),
-      builder: (context, snapshot) {
-        final bytes = snapshot.data;
-        if (bytes == null) return placeholder;
-        final image = Image.memory(
-          bytes,
-          width: size,
-          height: size,
-          fit: BoxFit.cover,
-          gaplessPlayback: true,
-          errorBuilder: (_, _, _) => placeholder,
-        );
-        return circle
-            ? ClipOval(
-                child: SizedBox(width: size, height: size, child: image),
-              )
-            : ClipRRect(
-                borderRadius: BorderRadius.circular(radius),
-                child: image,
-              );
-      },
+    final artwork = ref.watch(artworkProvider(song.id));
+    final bytes = artwork.asData?.value;
+    if (bytes == null) return placeholder;
+    final image = Image.memory(
+      bytes,
+      width: size,
+      height: size,
+      fit: BoxFit.cover,
+      gaplessPlayback: true,
+      errorBuilder: (_, _, _) => placeholder,
     );
+    return circle
+        ? ClipOval(child: SizedBox(width: size, height: size, child: image))
+        : ClipRRect(
+            borderRadius: BorderRadius.circular(radius),
+            child: image,
+          );
   }
 }
 
@@ -221,14 +215,8 @@ class CategoryChips extends StatelessWidget {
 
 /// A song list row: art + title/subtitle + trailing play button.
 class TrackRow extends StatelessWidget {
-  const TrackRow({
-    super.key,
-    required this.controller,
-    required this.song,
-    this.onTap,
-  });
+  const TrackRow({super.key, required this.song, this.onTap});
 
-  final PlayerController controller;
   final Song song;
   final VoidCallback? onTap;
 
@@ -239,7 +227,7 @@ class TrackRow extends StatelessWidget {
       onTap: onTap,
       child: Row(
         children: [
-          SongArtwork(controller: controller, song: song),
+          SongArtwork(song: song),
           const SizedBox(width: 14),
           Expanded(
             child: Column(
@@ -293,15 +281,14 @@ class TrackRow extends StatelessWidget {
 /// The frosted bottom navigation bar. Meant to be anchored to the screen's
 /// bottom edge (top corners rounded, bottom square) so a mini-player can float
 /// above it. Shown on every screen except Now Playing. The active tab is
-/// derived from [controller].screen and shows the accent pill.
-class FloatingNavBar extends StatelessWidget {
-  const FloatingNavBar({super.key, required this.controller});
-
-  final PlayerController controller;
+/// derived from [navigationProvider] and shows the accent pill.
+class FloatingNavBar extends ConsumerWidget {
+  const FloatingNavBar({super.key});
 
   @override
-  Widget build(BuildContext context) {
-    final c = controller;
+  Widget build(BuildContext context, WidgetRef ref) {
+    final screen = ref.watch(navigationProvider);
+    final goTo = ref.read(navigationProvider.notifier).goTo;
     return ClipRRect(
       borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
       child: BackdropFilter(
@@ -322,32 +309,36 @@ class FloatingNavBar extends StatelessWidget {
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     _tab(
-                      c,
+                      screen,
+                      goTo,
                       icon: IconlyLight.home,
                       activeIcon: IconlyBold.home,
-                      screen: AppScreen.home,
+                      target: AppScreen.home,
                     ),
                     _tab(
-                      c,
+                      screen,
+                      goTo,
                       icon: IconlyLight.category,
                       activeIcon: IconlyBold.category,
-                      screen: AppScreen.myMusic,
+                      target: AppScreen.myMusic,
                     ),
                     _action(
                       IconlyLight.swap,
-                      () => c.goTo(AppScreen.nowPlaying),
+                      () => goTo(AppScreen.nowPlaying),
                     ),
                     _tab(
-                      c,
+                      screen,
+                      goTo,
                       icon: IconlyLight.bookmark,
                       activeIcon: IconlyBold.bookmark,
-                      screen: AppScreen.saved,
+                      target: AppScreen.saved,
                     ),
                     _tab(
-                      c,
+                      screen,
+                      goTo,
                       icon: IconlyLight.setting,
                       activeIcon: IconlyBold.setting,
-                      screen: AppScreen.settings,
+                      target: AppScreen.settings,
                     ),
                   ],
                 ),
@@ -360,12 +351,13 @@ class FloatingNavBar extends StatelessWidget {
   }
 
   Widget _tab(
-    PlayerController c, {
+    AppScreen current,
+    ValueChanged<AppScreen> goTo, {
     required IconData icon,
     required IconData activeIcon,
-    required AppScreen screen,
+    required AppScreen target,
   }) {
-    final active = c.screen == screen;
+    final active = current == target;
     if (active) {
       return Container(
         width: 48,
@@ -377,7 +369,7 @@ class FloatingNavBar extends StatelessWidget {
         child: Icon(activeIcon, size: 22, color: AppColors.white),
       );
     }
-    return _action(icon, () => c.goTo(screen));
+    return _action(icon, () => goTo(target));
   }
 
   Widget _action(IconData icon, VoidCallback? onTap) {
@@ -395,20 +387,20 @@ class FloatingNavBar extends StatelessWidget {
 
 /// The frosted mini-player pill: a quick playback shortcut that opens Now
 /// Playing. Floats above the [FloatingNavBar] on library-style screens.
-class MiniPlayer extends StatelessWidget {
-  const MiniPlayer({super.key, required this.controller});
-
-  final PlayerController controller;
+class MiniPlayer extends ConsumerWidget {
+  const MiniPlayer({super.key});
 
   @override
-  Widget build(BuildContext context) {
-    final c = controller;
+  Widget build(BuildContext context, WidgetRef ref) {
+    final playing = ref.watch(playbackProvider.select((s) => s.playing));
+    final notifier = ref.read(playbackProvider.notifier);
     return ClipRRect(
       borderRadius: BorderRadius.circular(28),
       child: BackdropFilter(
         filter: ImageFilter.blur(sigmaX: 24, sigmaY: 24),
         child: GestureDetector(
-          onTap: () => c.goTo(AppScreen.nowPlaying),
+          onTap: () =>
+              ref.read(navigationProvider.notifier).goTo(AppScreen.nowPlaying),
           child: Container(
             height: 56,
             padding: const EdgeInsets.symmetric(horizontal: 10),
@@ -421,12 +413,12 @@ class MiniPlayer extends StatelessWidget {
               mainAxisSize: MainAxisSize.min,
               children: [
                 GestureDetector(
-                  onTap: c.togglePlay,
+                  onTap: notifier.togglePlay,
                   child: SizedBox(
                     width: 40,
                     height: 40,
                     child: Icon(
-                      c.playing ? IconlyBold.play : IconlyLight.play,
+                      playing ? IconlyBold.play : IconlyLight.play,
                       size: 22,
                       color: AppColors.white,
                     ),

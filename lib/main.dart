@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
-import 'player_controller.dart';
+import 'providers/navigation_provider.dart';
+import 'providers/shared_preferences_provider.dart';
 import 'screens/home_screen.dart';
 import 'screens/my_music_screen.dart';
 import 'screens/now_playing_screen.dart';
@@ -8,8 +11,15 @@ import 'screens/saved_screen.dart';
 import 'screens/settings_screen.dart';
 import 'theme.dart';
 
-void main() {
-  runApp(const MyZikApp());
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  final prefs = await SharedPreferences.getInstance();
+  runApp(
+    ProviderScope(
+      overrides: [sharedPreferencesProvider.overrideWithValue(prefs)],
+      child: const MyZikApp(),
+    ),
+  );
 }
 
 class MyZikApp extends StatelessWidget {
@@ -26,57 +36,37 @@ class MyZikApp extends StatelessWidget {
   }
 }
 
-/// Owns the [PlayerController] and swaps between the three screens. On wide
+/// Swaps between the app's screens based on [navigationProvider]. On wide
 /// viewports (desktop / web) the app is framed inside a 390×844 phone mockup;
 /// on a phone it fills the screen edge to edge.
-class PlayerShell extends StatefulWidget {
+class PlayerShell extends ConsumerWidget {
   const PlayerShell({super.key});
-
-  @override
-  State<PlayerShell> createState() => _PlayerShellState();
-}
-
-class _PlayerShellState extends State<PlayerShell> {
-  final PlayerController _controller = PlayerController();
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
 
   Widget _screenFor(AppScreen screen) {
     switch (screen) {
       case AppScreen.home:
-        return HomeScreen(controller: _controller);
+        return const HomeScreen();
       case AppScreen.nowPlaying:
-        return NowPlayingScreen(controller: _controller);
+        return const NowPlayingScreen();
       case AppScreen.myMusic:
-        return MyMusicScreen(controller: _controller);
+        return const MyMusicScreen();
       case AppScreen.saved:
-        return SavedScreen(controller: _controller);
+        return const SavedScreen();
       case AppScreen.settings:
-        return SettingsScreen(controller: _controller);
+        return const SettingsScreen();
     }
   }
 
   @override
-  Widget build(BuildContext context) {
-    final app = AnimatedBuilder(
-      animation: _controller,
-      builder: (context, _) {
-        return AnimatedSwitcher(
-          duration: const Duration(milliseconds: 320),
-          switchInCurve: Curves.easeOutCubic,
-          switchOutCurve: Curves.easeInCubic,
-          transitionBuilder: (child, animation) =>
-              FadeTransition(opacity: animation, child: child),
-          child: KeyedSubtree(
-            key: ValueKey(_controller.screen),
-            child: _screenFor(_controller.screen),
-          ),
-        );
-      },
+  Widget build(BuildContext context, WidgetRef ref) {
+    final screen = ref.watch(navigationProvider);
+    final app = AnimatedSwitcher(
+      duration: const Duration(milliseconds: 320),
+      switchInCurve: Curves.easeOutCubic,
+      switchOutCurve: Curves.easeInCubic,
+      transitionBuilder: (child, animation) =>
+          FadeTransition(opacity: animation, child: child),
+      child: KeyedSubtree(key: ValueKey(screen), child: _screenFor(screen)),
     );
 
     return Scaffold(

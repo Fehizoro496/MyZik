@@ -1,26 +1,27 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_iconly/flutter_iconly.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../models.dart';
-import '../player_controller.dart';
+import '../providers/library_provider.dart';
+import '../providers/navigation_provider.dart';
+import '../providers/playback_provider.dart';
 import '../theme.dart';
 import '../widgets.dart';
 
-class MyMusicScreen extends StatefulWidget {
-  const MyMusicScreen({super.key, required this.controller});
-
-  final PlayerController controller;
+class MyMusicScreen extends ConsumerStatefulWidget {
+  const MyMusicScreen({super.key});
 
   @override
-  State<MyMusicScreen> createState() => _MyMusicScreenState();
+  ConsumerState<MyMusicScreen> createState() => _MyMusicScreenState();
 }
 
-class _MyMusicScreenState extends State<MyMusicScreen> {
+class _MyMusicScreenState extends ConsumerState<MyMusicScreen> {
   int _category = 0;
 
   @override
   Widget build(BuildContext context) {
-    final c = widget.controller;
+    final library = ref.watch(libraryProvider);
     return DecoratedBox(
       decoration: const BoxDecoration(color: AppColors.musicBackground),
       child: Stack(
@@ -38,7 +39,9 @@ class _MyMusicScreenState extends State<MyMusicScreen> {
                         icon: IconlyLight.arrowLeft2,
                         size: 44,
                         iconSize: 22,
-                        onTap: () => c.goTo(AppScreen.home),
+                        onTap: () => ref
+                            .read(navigationProvider.notifier)
+                            .goTo(AppScreen.home),
                       ),
                       const Text(
                         'My Music',
@@ -65,23 +68,20 @@ class _MyMusicScreenState extends State<MyMusicScreen> {
                   ),
                 ),
                 const SizedBox(height: 20),
-                Expanded(child: _body(c)),
+                Expanded(child: _body(library)),
               ],
             ),
           ),
           // Mini-player floats above the shared nav bar.
-          Positioned(
+          const Positioned(
             left: 22,
             right: 22,
             bottom: 0,
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 12),
-                  child: MiniPlayer(controller: c),
-                ),
-                FloatingNavBar(controller: c),
+                Padding(padding: EdgeInsets.only(bottom: 12), child: MiniPlayer()),
+                FloatingNavBar(),
               ],
             ),
           ),
@@ -90,34 +90,34 @@ class _MyMusicScreenState extends State<MyMusicScreen> {
     );
   }
 
-  Widget _body(PlayerController c) {
-    if (c.libraryState == LibraryState.loading) {
+  Widget _body(LibraryState library) {
+    if (library.status == LibraryStatus.loading) {
       return const Center(
         child: CircularProgressIndicator(color: AppColors.accentA),
       );
     }
-    if (c.songs.isEmpty) {
-      return _emptyState(c);
+    if (library.songs.isEmpty) {
+      return _emptyState(library.status);
     }
     return ListView.separated(
       padding: const EdgeInsets.fromLTRB(24, 0, 24, 170),
       physics: const BouncingScrollPhysics(),
-      itemCount: c.songs.length,
+      itemCount: library.songs.length,
       itemBuilder: (context, i) => TrackRow(
-        controller: c,
-        song: c.songs[i],
-        onTap: () => c.playSong(c.songs[i]),
+        song: library.songs[i],
+        onTap: () =>
+            ref.read(playbackProvider.notifier).playSong(library.songs[i]),
       ),
       separatorBuilder: (_, _) => const SizedBox(height: 20),
     );
   }
 
-  Widget _emptyState(PlayerController c) {
-    final denied = c.libraryState == LibraryState.permissionDenied;
-    final message = switch (c.libraryState) {
-      LibraryState.permissionDenied =>
+  Widget _emptyState(LibraryStatus status) {
+    final denied = status == LibraryStatus.permissionDenied;
+    final message = switch (status) {
+      LibraryStatus.permissionDenied =>
         'MyZik needs access to your audio files to show your music.',
-      LibraryState.error => 'Something went wrong reading your library.',
+      LibraryStatus.error => 'Something went wrong reading your library.',
       _ => 'No music found on this device.',
     };
     return Padding(
@@ -135,7 +135,7 @@ class _MyMusicScreenState extends State<MyMusicScreen> {
           if (denied) ...[
             const SizedBox(height: 20),
             GestureDetector(
-              onTap: c.loadLibrary,
+              onTap: () => ref.read(libraryProvider.notifier).load(),
               child: Container(
                 padding: const EdgeInsets.symmetric(
                   horizontal: 22,

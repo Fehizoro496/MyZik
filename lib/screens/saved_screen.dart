@@ -1,27 +1,28 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_iconly/flutter_iconly.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../models.dart';
-import '../player_controller.dart';
+import '../providers/library_provider.dart';
+import '../providers/navigation_provider.dart';
+import '../providers/playback_provider.dart';
 import '../theme.dart';
 import '../widgets.dart';
 
 /// The "Saved" library: liked-songs hero card + the list of saved tracks.
-class SavedScreen extends StatefulWidget {
-  const SavedScreen({super.key, required this.controller});
-
-  final PlayerController controller;
+class SavedScreen extends ConsumerStatefulWidget {
+  const SavedScreen({super.key});
 
   @override
-  State<SavedScreen> createState() => _SavedScreenState();
+  ConsumerState<SavedScreen> createState() => _SavedScreenState();
 }
 
-class _SavedScreenState extends State<SavedScreen> {
+class _SavedScreenState extends ConsumerState<SavedScreen> {
   int _category = 0;
 
   @override
   Widget build(BuildContext context) {
-    final c = widget.controller;
+    final songs = ref.watch(libraryProvider.select((s) => s.songs));
     return DecoratedBox(
       decoration: const BoxDecoration(color: AppColors.musicBackground),
       child: Stack(
@@ -39,7 +40,9 @@ class _SavedScreenState extends State<SavedScreen> {
                         icon: IconlyLight.arrowLeft2,
                         size: 44,
                         iconSize: 22,
-                        onTap: () => c.goTo(AppScreen.home),
+                        onTap: () => ref
+                            .read(navigationProvider.notifier)
+                            .goTo(AppScreen.home),
                       ),
                       const Text(
                         'Saved',
@@ -68,15 +71,15 @@ class _SavedScreenState extends State<SavedScreen> {
                     padding: const EdgeInsets.fromLTRB(24, 0, 24, 120),
                     physics: const BouncingScrollPhysics(),
                     children: [
-                      _likedCard(c),
+                      _likedCard(songs),
                       const SizedBox(height: 26),
-                      for (var i = 0; i < c.songs.length; i++) ...[
+                      for (var i = 0; i < songs.length; i++) ...[
                         TrackRow(
-                          controller: c,
-                          song: c.songs[i],
-                          onTap: () => c.playSong(c.songs[i]),
+                          song: songs[i],
+                          onTap: () =>
+                              ref.read(playbackProvider.notifier).playSong(songs[i]),
                         ),
-                        if (i != c.songs.length - 1) const SizedBox(height: 20),
+                        if (i != songs.length - 1) const SizedBox(height: 20),
                       ],
                     ],
                   ),
@@ -84,20 +87,22 @@ class _SavedScreenState extends State<SavedScreen> {
               ],
             ),
           ),
-          Positioned(
+          const Positioned(
             left: 22,
             right: 22,
             bottom: 0,
-            child: FloatingNavBar(controller: c),
+            child: FloatingNavBar(),
           ),
         ],
       ),
     );
   }
 
-  Widget _likedCard(PlayerController c) {
+  Widget _likedCard(List<Song> songs) {
     return GestureDetector(
-      onTap: () => c.songs.isEmpty ? null : c.playSong(c.songs.first),
+      onTap: () => songs.isEmpty
+          ? null
+          : ref.read(playbackProvider.notifier).playSong(songs.first),
       child: Container(
         padding: const EdgeInsets.all(20),
         decoration: BoxDecoration(
@@ -146,7 +151,7 @@ class _SavedScreenState extends State<SavedScreen> {
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    '${c.songs.length} songs · Auto playlist',
+                    '${songs.length} songs · Auto playlist',
                     style: TextStyle(
                       color: AppColors.whiteAlpha(0.85),
                       fontSize: 13,
