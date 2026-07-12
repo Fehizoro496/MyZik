@@ -266,7 +266,7 @@ class TrackRow extends StatelessWidget {
               border: Border.all(color: AppColors.whiteAlpha(0.08)),
             ),
             child: const Icon(
-              IconlyBold.play,
+              Icons.play_arrow_rounded,
               size: 18,
               color: AppColors.white,
             ),

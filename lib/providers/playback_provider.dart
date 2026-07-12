@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:just_audio/just_audio.dart';
@@ -11,6 +12,18 @@ import 'shared_preferences_provider.dart';
 const _kLastSongId = 'playback.lastSongId';
 const _kLastPositionMs = 'playback.lastPositionMs';
 
+/// How playback behaves once the queue reaches its end.
+enum PlaybackRepeatMode {
+  /// Stop after the last track.
+  off,
+
+  /// Wrap back to the first track (the historical default behaviour).
+  all,
+
+  /// Keep replaying the current track.
+  one,
+}
+
 class PlaybackState {
   const PlaybackState({
     this.current,
@@ -18,6 +31,8 @@ class PlaybackState {
     this.playing = false,
     this.position = Duration.zero,
     this.duration = Duration.zero,
+    this.shuffle = false,
+    this.repeatMode = PlaybackRepeatMode.all,
   });
 
   final Song? current;
@@ -25,6 +40,8 @@ class PlaybackState {
   final bool playing;
   final Duration position;
   final Duration duration;
+  final bool shuffle;
+  final PlaybackRepeatMode repeatMode;
 
   double get progress {
     final total = duration.inMilliseconds;
@@ -44,13 +61,21 @@ class PlaybackState {
     return '$m:${s.toString().padLeft(2, '0')}';
   }
 
-  PlaybackState copyWith({bool? playing, Duration? position, Duration? duration}) {
+  PlaybackState copyWith({
+    bool? playing,
+    Duration? position,
+    Duration? duration,
+    bool? shuffle,
+    PlaybackRepeatMode? repeatMode,
+  }) {
     return PlaybackState(
       current: current,
       currentIndex: currentIndex,
       playing: playing ?? this.playing,
       position: position ?? this.position,
       duration: duration ?? this.duration,
+      shuffle: shuffle ?? this.shuffle,
+      repeatMode: repeatMode ?? this.repeatMode,
     );
   }
 }
@@ -84,7 +109,7 @@ class PlaybackNotifier extends Notifier<PlaybackState> {
       if (d != null) state = state.copyWith(duration: d);
     });
     _player.processingStateStream.listen((s) {
-      if (s == ProcessingState.completed) next();
+      if (s == ProcessingState.completed) _onTrackFinished();
     });
 
     _persistTimer = Timer.periodic(
@@ -146,6 +171,8 @@ class PlaybackNotifier extends Notifier<PlaybackState> {
       current: song,
       currentIndex: index == -1 ? null : index,
       duration: song.duration,
+      shuffle: state.shuffle,
+      repeatMode: state.repeatMode,
     );
     ref.read(navigationProvider.notifier).goTo(AppScreen.nowPlaying);
     _persistSongId(song.id);
@@ -170,15 +197,20 @@ class PlaybackNotifier extends Notifier<PlaybackState> {
     }
   }
 
-  /// Skip to the next song (wraps around).
+  /// Skip to the next song: a random one when shuffling, otherwise the next
+  /// in the library order (wraps around).
   Future<void> next() async {
     final songs = ref.read(libraryProvider).songs;
     final idx = state.currentIndex;
     if (songs.isEmpty || idx == null) return;
-    await playSong(songs[(idx + 1) % songs.length]);
+    final i = state.shuffle
+        ? _randomIndexExcluding(songs.length, idx)
+        : (idx + 1) % songs.length;
+    await playSong(songs[i]);
   }
 
-  /// Restart the current song if we're past 3s, otherwise go to the previous.
+  /// Restart the current song if we're past 3s, otherwise go to the previous
+  /// (a random one when shuffling, otherwise the prior library entry).
   Future<void> previous() async {
     final songs = ref.read(libraryProvider).songs;
     final idx = state.currentIndex;
@@ -187,8 +219,46 @@ class PlaybackNotifier extends Notifier<PlaybackState> {
       await _player.seek(Duration.zero);
       return;
     }
-    final i = (idx - 1 + songs.length) % songs.length;
+    final i = state.shuffle
+        ? _randomIndexExcluding(songs.length, idx)
+        : (idx - 1 + songs.length) % songs.length;
     await playSong(songs[i]);
+  }
+
+  /// Called when a track finishes playing on its own (not a manual skip):
+  /// honours [PlaybackRepeatMode.one] by looping and [PlaybackRepeatMode.off] by stopping at
+  /// the end of the library instead of wrapping around.
+  Future<void> _onTrackFinished() async {
+    if (state.repeatMode == PlaybackRepeatMode.one) {
+      await _player.seek(Duration.zero);
+      await _player.play();
+      return;
+    }
+    final songs = ref.read(libraryProvider).songs;
+    final idx = state.currentIndex;
+    if (songs.isEmpty || idx == null) return;
+    final atLastTrack = !state.shuffle && idx == songs.length - 1;
+    if (atLastTrack && state.repeatMode == PlaybackRepeatMode.off) return;
+    await next();
+  }
+
+  void toggleShuffle() {
+    state = state.copyWith(shuffle: !state.shuffle);
+  }
+
+  void cycleRepeatMode() {
+    final next = switch (state.repeatMode) {
+      PlaybackRepeatMode.off => PlaybackRepeatMode.all,
+      PlaybackRepeatMode.all => PlaybackRepeatMode.one,
+      PlaybackRepeatMode.one => PlaybackRepeatMode.off,
+    };
+    state = state.copyWith(repeatMode: next);
+  }
+
+  int _randomIndexExcluding(int length, int exclude) {
+    if (length <= 1) return exclude;
+    final i = Random().nextInt(length - 1);
+    return i < exclude ? i : i + 1;
   }
 
   /// Move the playhead from a 0..1 fraction (progress-bar scrub).
