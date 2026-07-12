@@ -68,7 +68,7 @@ class _SavedScreenState extends ConsumerState<SavedScreen> {
                 const SizedBox(height: 20),
                 Expanded(
                   child: ListView(
-                    padding: const EdgeInsets.fromLTRB(24, 0, 24, 120),
+                    padding: const EdgeInsets.fromLTRB(24, 0, 24, 170),
                     physics: const BouncingScrollPhysics(),
                     children: [
                       _likedCard(songs),
@@ -76,8 +76,9 @@ class _SavedScreenState extends ConsumerState<SavedScreen> {
                       for (var i = 0; i < songs.length; i++) ...[
                         TrackRow(
                           song: songs[i],
-                          onTap: () =>
-                              ref.read(playbackProvider.notifier).playSong(songs[i]),
+                          onTap: () => ref
+                              .read(playbackProvider.notifier)
+                              .playSong(songs[i]),
                         ),
                         if (i != songs.length - 1) const SizedBox(height: 20),
                       ],
@@ -91,7 +92,16 @@ class _SavedScreenState extends ConsumerState<SavedScreen> {
             left: 22,
             right: 22,
             bottom: 0,
-            child: FloatingNavBar(),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Padding(
+                  padding: EdgeInsets.only(bottom: 12),
+                  child: MiniPlayer(),
+                ),
+                NavBar(),
+              ],
+            ),
           ),
         ],
       ),

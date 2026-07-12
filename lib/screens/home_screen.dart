@@ -48,7 +48,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               children: [
                 Expanded(
                   child: ListView(
-                    padding: const EdgeInsets.fromLTRB(22, 8, 22, 120),
+                    padding: const EdgeInsets.fromLTRB(22, 8, 22, 170),
                     physics: const BouncingScrollPhysics(),
                     children: [
                       _header(),
@@ -130,7 +130,16 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             left: 22,
             right: 22,
             bottom: 0,
-            child: FloatingNavBar(),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Padding(
+                  padding: EdgeInsets.only(bottom: 12),
+                  child: MiniPlayer(),
+                ),
+                NavBar(),
+              ],
+            ),
           ),
         ],
       ),

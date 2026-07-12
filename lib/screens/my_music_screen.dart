@@ -80,8 +80,11 @@ class _MyMusicScreenState extends ConsumerState<MyMusicScreen> {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Padding(padding: EdgeInsets.only(bottom: 12), child: MiniPlayer()),
-                FloatingNavBar(),
+                Padding(
+                  padding: EdgeInsets.only(bottom: 12),
+                  child: MiniPlayer(),
+                ),
+                NavBar(),
               ],
             ),
           ),

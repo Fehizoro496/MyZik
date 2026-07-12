@@ -131,11 +131,10 @@ class SongArtwork extends ConsumerWidget {
       errorBuilder: (_, _, _) => placeholder,
     );
     return circle
-        ? ClipOval(child: SizedBox(width: size, height: size, child: image))
-        : ClipRRect(
-            borderRadius: BorderRadius.circular(radius),
-            child: image,
-          );
+        ? ClipOval(
+            child: SizedBox(width: size, height: size, child: image),
+          )
+        : ClipRRect(borderRadius: BorderRadius.circular(radius), child: image);
   }
 }
 
@@ -282,8 +281,8 @@ class TrackRow extends StatelessWidget {
 /// bottom edge (top corners rounded, bottom square) so a mini-player can float
 /// above it. Shown on every screen except Now Playing. The active tab is
 /// derived from [navigationProvider] and shows the accent pill.
-class FloatingNavBar extends ConsumerWidget {
-  const FloatingNavBar({super.key});
+class NavBar extends ConsumerWidget {
+  const NavBar({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -322,10 +321,10 @@ class FloatingNavBar extends ConsumerWidget {
                       activeIcon: IconlyBold.category,
                       target: AppScreen.myMusic,
                     ),
-                    _action(
-                      IconlyLight.swap,
-                      () => goTo(AppScreen.nowPlaying),
-                    ),
+                    // _action(
+                    //   IconlyLight.swap,
+                    //   () => goTo(AppScreen.nowPlaying),
+                    // ),
                     _tab(
                       screen,
                       goTo,
@@ -385,57 +384,88 @@ class FloatingNavBar extends ConsumerWidget {
   }
 }
 
-/// The frosted mini-player pill: a quick playback shortcut that opens Now
-/// Playing. Floats above the [FloatingNavBar] on library-style screens.
+/// The frosted mini-player pill: floats above the [NavBar] whenever a
+/// track is loaded, showing its art + title as a "playback in progress"
+/// notice. Tapping it opens Now Playing; the play/pause button toggles
+/// playback in place without navigating. Renders nothing when no track has
+/// been played yet.
 class MiniPlayer extends ConsumerWidget {
   const MiniPlayer({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final playing = ref.watch(playbackProvider.select((s) => s.playing));
+    final playback = ref.watch(playbackProvider);
+    final track = playback.current;
+    if (track == null) return const SizedBox.shrink();
     final notifier = ref.read(playbackProvider.notifier);
     return ClipRRect(
-      borderRadius: BorderRadius.circular(28),
+      borderRadius: BorderRadius.circular(30),
       child: BackdropFilter(
         filter: ImageFilter.blur(sigmaX: 24, sigmaY: 24),
         child: GestureDetector(
           onTap: () =>
               ref.read(navigationProvider.notifier).goTo(AppScreen.nowPlaying),
           child: Container(
-            height: 56,
-            padding: const EdgeInsets.symmetric(horizontal: 10),
+            height: 60,
+            padding: const EdgeInsets.fromLTRB(8, 8, 14, 8),
             decoration: BoxDecoration(
-              color: const Color(0xBF16161E),
-              borderRadius: BorderRadius.circular(28),
-              border: Border.all(color: AppColors.whiteAlpha(0.1)),
+              // Same tint + alpha as NavBar's frosted panel so the two floating
+              // elements read as one consistent glass surface.
+              color: const Color.fromRGBO(22, 22, 30, 0.5),
+              borderRadius: BorderRadius.circular(30),
+              border: Border.all(color: AppColors.whiteAlpha(0.08)),
             ),
             child: Row(
-              mainAxisSize: MainAxisSize.min,
               children: [
-                GestureDetector(
-                  onTap: notifier.togglePlay,
-                  child: SizedBox(
-                    width: 40,
-                    height: 40,
-                    child: Icon(
-                      playing ? IconlyBold.play : IconlyLight.play,
-                      size: 22,
-                      color: AppColors.white,
-                    ),
+                SongArtwork(song: track, size: 44, circle: true),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        track.title,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: AppColors.white,
+                          fontSize: 14,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        track.artist,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: AppColors.whiteAlpha(0.55),
+                          fontSize: 12,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
-                Container(
-                  width: 1,
-                  height: 24,
-                  color: AppColors.whiteAlpha(0.15),
-                ),
-                const SizedBox(
-                  width: 40,
-                  height: 40,
-                  child: Icon(
-                    IconlyLight.swap,
-                    size: 20,
-                    color: Color(0xFF4F8CFF),
+                const SizedBox(width: 8),
+                GestureDetector(
+                  onTap: notifier.togglePlay,
+                  behavior: HitTestBehavior.opaque,
+                  child: Container(
+                    width: 36,
+                    height: 36,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: AppColors.whiteAlpha(0.08),
+                      border: Border.all(color: AppColors.whiteAlpha(0.1)),
+                    ),
+                    child: Icon(
+                      playback.playing
+                          ? Icons.pause_rounded
+                          : Icons.play_arrow_rounded,
+                      size: 18,
+                      color: AppColors.white,
+                    ),
                   ),
                 ),
               ],

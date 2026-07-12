@@ -50,7 +50,7 @@ class SettingsScreen extends ConsumerWidget {
                 ),
                 Expanded(
                   child: ListView(
-                    padding: const EdgeInsets.fromLTRB(24, 0, 24, 120),
+                    padding: const EdgeInsets.fromLTRB(24, 0, 24, 170),
                     physics: const BouncingScrollPhysics(),
                     children: [
                       _profile(),
@@ -113,7 +113,16 @@ class SettingsScreen extends ConsumerWidget {
             left: 22,
             right: 22,
             bottom: 0,
-            child: FloatingNavBar(),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Padding(
+                  padding: EdgeInsets.only(bottom: 12),
+                  child: MiniPlayer(),
+                ),
+                NavBar(),
+              ],
+            ),
           ),
         ],
       ),
