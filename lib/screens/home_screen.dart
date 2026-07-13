@@ -184,7 +184,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             backgroundColor: Color(0xFF1A1730),
             backgroundImage: AssetImage('assets/images/avatar.png'),
           ),
-          const GlassIconButton(icon: IconlyLight.search),
+          GlassIconButton(
+            icon: IconlyLight.search,
+            onTap: () =>
+                ref.read(navigationProvider.notifier).goTo(AppScreen.search),
+          ),
         ],
       ),
     );

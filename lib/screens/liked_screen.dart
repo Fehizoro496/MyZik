@@ -57,7 +57,13 @@ class _LikedScreenState extends ConsumerState<LikedScreen> {
                           fontWeight: FontWeight.w700,
                         ),
                       ),
-                      const GlassIconButton(icon: IconlyLight.search, size: 44),
+                      GlassIconButton(
+                        icon: IconlyLight.search,
+                        size: 44,
+                        onTap: () => ref
+                            .read(navigationProvider.notifier)
+                            .goTo(AppScreen.search),
+                      ),
                     ],
                   ),
                 ),
