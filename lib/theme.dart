@@ -20,6 +20,9 @@ class AppColors {
 
   static const Color white = Colors.white;
   static Color whiteAlpha(double a) => Colors.white.withValues(alpha: a);
+
+  /// Accent for the "liked" heart, matching the Liked Songs hero gradient.
+  static const Color liked = Color(0xFFFF6F91);
 }
 
 class AppTheme {

@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'models.dart';
 import 'providers/library_provider.dart';
+import 'providers/liked_provider.dart';
 import 'providers/navigation_provider.dart';
 import 'providers/playback_provider.dart';
 import 'theme.dart';
@@ -213,14 +214,15 @@ class CategoryChips extends StatelessWidget {
 }
 
 /// A song list row: art + title/subtitle + trailing play button.
-class TrackRow extends StatelessWidget {
+class TrackRow extends ConsumerWidget {
   const TrackRow({super.key, required this.song, this.onTap});
 
   final Song song;
   final VoidCallback? onTap;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final liked = ref.watch(isLikedProvider(song.id));
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
       onTap: onTap,
@@ -257,18 +259,22 @@ class TrackRow extends StatelessWidget {
             ),
           ),
           const SizedBox(width: 12),
-          Container(
-            width: 40,
-            height: 40,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: AppColors.whiteAlpha(0.06),
-              border: Border.all(color: AppColors.whiteAlpha(0.08)),
-            ),
-            child: const Icon(
-              Icons.play_arrow_rounded,
-              size: 18,
-              color: AppColors.white,
+          GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: () => ref.read(likedProvider.notifier).toggle(song.id),
+            child: Container(
+              width: 40,
+              height: 40,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: AppColors.whiteAlpha(0.06),
+                border: Border.all(color: AppColors.whiteAlpha(0.08)),
+              ),
+              child: Icon(
+                liked ? IconlyBold.heart : IconlyLight.heart,
+                size: 18,
+                color: liked ? AppColors.liked : AppColors.white,
+              ),
             ),
           ),
         ],

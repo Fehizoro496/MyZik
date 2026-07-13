@@ -7,6 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../models.dart';
 import '../providers/library_provider.dart';
+import '../providers/liked_provider.dart';
 import '../providers/navigation_provider.dart';
 import '../providers/playback_provider.dart';
 import '../theme.dart';
@@ -59,7 +60,17 @@ class NowPlayingScreen extends ConsumerWidget {
                           fontWeight: FontWeight.w700,
                         ),
                       ),
-                      const GlassIconButton(icon: IconlyLight.heart, size: 44),
+                      GlassIconButton(
+                        icon: ref.watch(isLikedProvider(track.id))
+                            ? IconlyBold.heart
+                            : IconlyLight.heart,
+                        iconColor: ref.watch(isLikedProvider(track.id))
+                            ? AppColors.liked
+                            : AppColors.white,
+                        size: 44,
+                        onTap: () =>
+                            ref.read(likedProvider.notifier).toggle(track.id),
+                      ),
                     ],
                   ),
                 ),

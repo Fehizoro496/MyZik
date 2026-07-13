@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../models.dart';
 import '../providers/library_provider.dart';
+import '../providers/liked_provider.dart';
 import '../providers/navigation_provider.dart';
 import '../providers/playback_provider.dart';
 import '../theme.dart';
@@ -22,7 +23,11 @@ class _LikedScreenState extends ConsumerState<LikedScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final songs = ref.watch(libraryProvider.select((s) => s.songs));
+    final likedIds = ref.watch(likedProvider);
+    final songs = ref
+        .watch(libraryProvider.select((s) => s.songs))
+        .where((s) => likedIds.contains(s.id))
+        .toList();
     return DecoratedBox(
       decoration: const BoxDecoration(color: AppColors.musicBackground),
       child: Stack(
@@ -73,15 +78,18 @@ class _LikedScreenState extends ConsumerState<LikedScreen> {
                     children: [
                       _likedCard(songs),
                       const SizedBox(height: 26),
-                      for (var i = 0; i < songs.length; i++) ...[
-                        TrackRow(
-                          song: songs[i],
-                          onTap: () => ref
-                              .read(playbackProvider.notifier)
-                              .playSong(songs[i]),
-                        ),
-                        if (i != songs.length - 1) const SizedBox(height: 20),
-                      ],
+                      if (songs.isEmpty)
+                        _emptyState()
+                      else
+                        for (var i = 0; i < songs.length; i++) ...[
+                          TrackRow(
+                            song: songs[i],
+                            onTap: () => ref
+                                .read(playbackProvider.notifier)
+                                .playSong(songs[i]),
+                          ),
+                          if (i != songs.length - 1) const SizedBox(height: 20),
+                        ],
                     ],
                   ),
                 ),
@@ -185,6 +193,29 @@ class _LikedScreenState extends ConsumerState<LikedScreen> {
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  /// Shown when nothing has been liked yet — the list would otherwise be an
+  /// empty gap under the hero card.
+  Widget _emptyState() {
+    return Padding(
+      padding: const EdgeInsets.only(top: 60),
+      child: Column(
+        children: [
+          Icon(IconlyLight.heart, size: 48, color: AppColors.whiteAlpha(0.3)),
+          const SizedBox(height: 16),
+          Text(
+            'No liked songs yet.\nTap the heart on any track to add it here.',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              color: AppColors.whiteAlpha(0.5),
+              fontSize: 14,
+              height: 1.5,
+            ),
+          ),
+        ],
       ),
     );
   }
