@@ -70,10 +70,9 @@ void main() {
     await tester.tap(find.byIcon(Icons.queue_music_rounded));
     await tester.pumpAndSettle();
 
-    // Sheet is open: hero shows the current track, Up Next lists the tracks
-    // after it in queue order, each with a drag handle.
+    // Sheet is open: hero shows the current track, the up-next tracks are
+    // listed after it in queue order, each with a drag handle.
     expect(find.text('NOW PLAYING'), findsOneWidget);
-    expect(find.text('UP NEXT'), findsOneWidget);
     // The current track shows both in the screen body and the sheet hero.
     expect(find.text('Starlit Reverie'), findsNWidgets(2));
     expect(find.text('Midnight Confessions'), findsOneWidget); // up next

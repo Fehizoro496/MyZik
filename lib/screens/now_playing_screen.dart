@@ -614,10 +614,6 @@ class _QueueHero extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final playing = ref.watch(playbackProvider.select((p) => p.playing));
-    final progress = ref.watch(playbackProvider.select((p) => p.progress));
-    final elapsed = ref.watch(playbackProvider.select((p) => p.elapsed));
-    final remaining = ref.watch(playbackProvider.select((p) => p.remaining));
-    final notifier = ref.read(playbackProvider.notifier);
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(24, 12, 24, 18),
