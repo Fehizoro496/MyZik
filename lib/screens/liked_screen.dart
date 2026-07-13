@@ -9,15 +9,15 @@ import '../providers/playback_provider.dart';
 import '../theme.dart';
 import '../widgets.dart';
 
-/// The "Saved" library: liked-songs hero card + the list of saved tracks.
-class SavedScreen extends ConsumerStatefulWidget {
-  const SavedScreen({super.key});
+/// The "Liked" library: liked-songs hero card + the list of liked tracks.
+class LikedScreen extends ConsumerStatefulWidget {
+  const LikedScreen({super.key});
 
   @override
-  ConsumerState<SavedScreen> createState() => _SavedScreenState();
+  ConsumerState<LikedScreen> createState() => _LikedScreenState();
 }
 
-class _SavedScreenState extends ConsumerState<SavedScreen> {
+class _LikedScreenState extends ConsumerState<LikedScreen> {
   int _category = 0;
 
   @override
@@ -45,7 +45,7 @@ class _SavedScreenState extends ConsumerState<SavedScreen> {
                             .goTo(AppScreen.home),
                       ),
                       const Text(
-                        'Saved',
+                        'Liked',
                         style: TextStyle(
                           color: AppColors.white,
                           fontSize: 18,
@@ -59,7 +59,7 @@ class _SavedScreenState extends ConsumerState<SavedScreen> {
                 SizedBox(
                   height: 44,
                   child: CategoryChips(
-                    categories: MusicCategories.saved,
+                    categories: MusicCategories.liked,
                     selected: _category,
                     onSelected: (i) => setState(() => _category = i),
                     padding: const EdgeInsets.symmetric(horizontal: 24),

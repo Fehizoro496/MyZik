@@ -7,7 +7,7 @@ import 'providers/shared_preferences_provider.dart';
 import 'screens/home_screen.dart';
 import 'screens/my_music_screen.dart';
 import 'screens/now_playing_screen.dart';
-import 'screens/saved_screen.dart';
+import 'screens/liked_screen.dart';
 import 'screens/settings_screen.dart';
 import 'theme.dart';
 
@@ -50,8 +50,8 @@ class PlayerShell extends ConsumerWidget {
         return const NowPlayingScreen();
       case AppScreen.myMusic:
         return const MyMusicScreen();
-      case AppScreen.saved:
-        return const SavedScreen();
+      case AppScreen.liked:
+        return const LikedScreen();
       case AppScreen.settings:
         return const SettingsScreen();
     }

@@ -77,10 +77,10 @@ class MusicCategories {
     Category('Downloaded'),
   ];
 
-  static const List<Category> saved = [
-    Category('Playlists'),
+  static const List<Category> liked = [
     Category('Songs'),
     Category('Albums'),
     Category('Artists'),
+    Category('Playlists'),
   ];
 }

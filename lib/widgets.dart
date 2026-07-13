@@ -328,9 +328,9 @@ class NavBar extends ConsumerWidget {
                     _tab(
                       screen,
                       goTo,
-                      icon: IconlyLight.bookmark,
-                      activeIcon: IconlyBold.bookmark,
-                      target: AppScreen.saved,
+                      icon: IconlyLight.heart,
+                      activeIcon: IconlyBold.heart,
+                      target: AppScreen.liked,
                     ),
                     _tab(
                       screen,
