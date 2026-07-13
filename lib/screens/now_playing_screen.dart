@@ -1,3 +1,4 @@
+import 'dart:math' as math;
 import 'dart:typed_data';
 import 'dart:ui';
 
@@ -19,9 +20,6 @@ class NowPlayingScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final playback = ref.watch(playbackProvider);
-    debugPrint(
-      'DEBUG repeatMode=${playback.repeatMode} shuffle=${playback.shuffle}',
-    );
     final track = playback.current;
     if (track == null) {
       return _empty(ref);
@@ -41,17 +39,11 @@ class NowPlayingScreen extends ConsumerWidget {
               children: [
                 Padding(
                   padding: const EdgeInsets.fromLTRB(24, 12, 24, 0),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  // Stack so the title stays centred regardless of how wide the
+                  // right-hand action group grows.
+                  child: Stack(
+                    alignment: Alignment.center,
                     children: [
-                      GlassIconButton(
-                        icon: IconlyLight.arrowLeft2,
-                        size: 44,
-                        iconSize: 22,
-                        onTap: () => ref
-                            .read(navigationProvider.notifier)
-                            .goTo(AppScreen.home),
-                      ),
                       const Text(
                         'Now Playing',
                         style: TextStyle(
@@ -60,16 +52,42 @@ class NowPlayingScreen extends ConsumerWidget {
                           fontWeight: FontWeight.w700,
                         ),
                       ),
-                      GlassIconButton(
-                        icon: ref.watch(isLikedProvider(track.id))
-                            ? IconlyBold.heart
-                            : IconlyLight.heart,
-                        iconColor: ref.watch(isLikedProvider(track.id))
-                            ? AppColors.liked
-                            : AppColors.white,
-                        size: 44,
-                        onTap: () =>
-                            ref.read(likedProvider.notifier).toggle(track.id),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          GlassIconButton(
+                            icon: IconlyLight.arrowLeft2,
+                            size: 44,
+                            iconSize: 22,
+                            onTap: () => ref
+                                .read(navigationProvider.notifier)
+                                .goTo(AppScreen.home),
+                          ),
+                          Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              GlassIconButton(
+                                icon: Icons.queue_music_rounded,
+                                size: 44,
+                                iconSize: 22,
+                                onTap: () => _showQueue(context, ref),
+                              ),
+                              const SizedBox(width: 10),
+                              GlassIconButton(
+                                icon: ref.watch(isLikedProvider(track.id))
+                                    ? IconlyBold.heart
+                                    : IconlyLight.heart,
+                                iconColor: ref.watch(isLikedProvider(track.id))
+                                    ? AppColors.liked
+                                    : AppColors.white,
+                                size: 44,
+                                onTap: () => ref
+                                    .read(likedProvider.notifier)
+                                    .toggle(track.id),
+                              ),
+                            ],
+                          ),
+                        ],
                       ),
                     ],
                   ),
@@ -148,6 +166,17 @@ class NowPlayingScreen extends ConsumerWidget {
           ),
         ],
       ),
+    );
+  }
+
+  /// Opens the playback queue (the library in play order) as a bottom sheet,
+  /// with the current track highlighted. Tapping a row jumps to that track.
+  void _showQueue(BuildContext context, WidgetRef ref) {
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (_) => const _QueueSheet(),
     );
   }
 
@@ -399,6 +428,442 @@ class NowPlayingScreen extends ConsumerWidget {
       child: Padding(
         padding: const EdgeInsets.all(15),
         child: Icon(icon, size: size, color: color ?? AppColors.white),
+      ),
+    );
+  }
+}
+
+/// The playback queue as a frosted bottom sheet: a "Now Playing" hero on top,
+/// then the upcoming tracks in real play order (rotated to start after the
+/// current one) strung along a numbered spine.
+class _QueueSheet extends ConsumerWidget {
+  const _QueueSheet();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final queue = ref.watch(playbackProvider.select((p) => p.queue));
+    final current = ref.watch(playbackProvider.select((p) => p.current));
+    final currentIndex = ref.watch(
+      playbackProvider.select((p) => p.currentIndex),
+    );
+    final maxHeight = MediaQuery.of(context).size.height * 0.8;
+
+    // The hero is the current track; "up next" is everything after it in the
+    // queue, in queue order (no wrap — reorder indices must map 1:1 to the
+    // queue). `base` is where that slice starts in the full queue.
+    final hero = current;
+    final base = (currentIndex != null && currentIndex >= 0)
+        ? currentIndex + 1
+        : 0;
+    final upNext = (base <= queue.length)
+        ? queue.sublist(base)
+        : const <Song>[];
+    // Per-track accent: the current cover's dominant colour, so the sheet is
+    // tinted by what's playing. Falls back to the placeholder gradient while the
+    // colour is still being extracted or when the track has no artwork.
+    final fallbackAccent =
+        (hero ?? current)?.artGradient.first ?? AppColors.accentA;
+    final accent = hero == null
+        ? fallbackAccent
+        : ref.watch(coverAccentProvider(hero.id)).asData?.value ??
+              fallbackAccent;
+
+    return ClipRRect(
+      borderRadius: const BorderRadius.vertical(top: Radius.circular(30)),
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 30, sigmaY: 30),
+        child: Container(
+          constraints: BoxConstraints(maxHeight: maxHeight),
+          decoration: BoxDecoration(
+            color: const Color.fromRGBO(15, 15, 21, 0.86),
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(30)),
+            border: Border(top: BorderSide(color: AppColors.whiteAlpha(0.09))),
+          ),
+          child: Stack(
+            children: [
+              // Cover-gradient bleed at the top, fading into the glass.
+              Positioned(
+                top: 0,
+                left: 0,
+                right: 0,
+                height: 200,
+                child: IgnorePointer(
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                        colors: [
+                          accent.withValues(alpha: 0.22),
+                          accent.withValues(alpha: 0),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+              SafeArea(
+                top: false,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const SizedBox(height: 10),
+                    Container(
+                      width: 38,
+                      height: 4,
+                      decoration: BoxDecoration(
+                        color: AppColors.whiteAlpha(0.22),
+                        borderRadius: BorderRadius.circular(2),
+                      ),
+                    ),
+                    if (hero == null)
+                      Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 44),
+                        child: Text(
+                          'Nothing is playing.',
+                          style: TextStyle(
+                            color: AppColors.whiteAlpha(0.5),
+                            fontSize: 14,
+                          ),
+                        ),
+                      )
+                    else ...[
+                      const SizedBox(height: 6),
+                      _QueueHero(song: hero, accent: accent),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 20,
+                          vertical: 0,
+                        ),
+                        child: Divider(
+                          height: 1,
+                          color: AppColors.whiteAlpha(0.08),
+                        ),
+                      ),
+                      Flexible(
+                        child: upNext.isEmpty
+                            ? Align(
+                                alignment: Alignment.topCenter,
+                                child: Padding(
+                                  padding: const EdgeInsets.fromLTRB(
+                                    24,
+                                    18,
+                                    24,
+                                    32,
+                                  ),
+                                  child: Text(
+                                    'Nothing queued after this track.',
+                                    style: TextStyle(
+                                      color: AppColors.whiteAlpha(0.4),
+                                      fontSize: 13,
+                                    ),
+                                  ),
+                                ),
+                              )
+                            : ReorderableListView.builder(
+                                padding: const EdgeInsets.fromLTRB(
+                                  20,
+                                  6,
+                                  20,
+                                  16,
+                                ),
+                                physics: const BouncingScrollPhysics(),
+                                buildDefaultDragHandles: false,
+                                itemCount: upNext.length,
+                                onReorder: (oldIndex, newIndex) => ref
+                                    .read(playbackProvider.notifier)
+                                    .reorderQueue(
+                                      base + oldIndex,
+                                      base + newIndex,
+                                    ),
+                                itemBuilder: (context, i) => _UpNextRow(
+                                  key: ValueKey(upNext[i].id),
+                                  song: upNext[i],
+                                  index: i,
+                                  onTap: () {
+                                    ref
+                                        .read(playbackProvider.notifier)
+                                        .playQueueIndex(base + i);
+                                    Navigator.of(context).pop();
+                                  },
+                                ),
+                              ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// The "Now Playing" hero at the top of the queue sheet: cover with a
+/// gradient halo, a live equalizer, title/artist, and the scrubbable progress
+/// bar. Watches only the playback fields it shows, so the queue list below it
+/// doesn't rebuild on every position tick.
+class _QueueHero extends ConsumerWidget {
+  const _QueueHero({required this.song, required this.accent});
+
+  final Song song;
+  final Color accent;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final playing = ref.watch(playbackProvider.select((p) => p.playing));
+    final progress = ref.watch(playbackProvider.select((p) => p.progress));
+    final elapsed = ref.watch(playbackProvider.select((p) => p.elapsed));
+    final remaining = ref.watch(playbackProvider.select((p) => p.remaining));
+    final notifier = ref.read(playbackProvider.notifier);
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(24, 12, 24, 18),
+      child: Column(
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 66,
+                height: 66,
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(18),
+                  boxShadow: [
+                    BoxShadow(
+                      color: accent.withValues(alpha: 0.5),
+                      blurRadius: 26,
+                      offset: const Offset(0, 10),
+                    ),
+                  ],
+                ),
+                child: SongArtwork(song: song, size: 66, radius: 18),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Row(
+                      children: [
+                        Text(
+                          'NOW PLAYING',
+                          style: TextStyle(
+                            color: AppColors.whiteAlpha(0.55),
+                            fontSize: 10.5,
+                            fontWeight: FontWeight.w800,
+                            letterSpacing: 1.8,
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        _EqualizerBars(playing: playing, color: accent),
+                      ],
+                    ),
+                    const SizedBox(height: 7),
+                    Text(
+                      song.title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: AppColors.white,
+                        fontSize: 19,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: -0.2,
+                      ),
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      song.artist,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: AppColors.whiteAlpha(0.55),
+                        fontSize: 13,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+        ],
+      ),
+    );
+  }
+}
+
+/// One upcoming track. The left affordance is a drag handle: press and drag it
+/// to reorder the queue. Tapping the rest of the row jumps to that track.
+class _UpNextRow extends StatelessWidget {
+  const _UpNextRow({
+    super.key,
+    required this.song,
+    required this.index,
+    required this.onTap,
+  });
+
+  final Song song;
+
+  /// Position within the up-next list, used by the reorder drag listener.
+  final int index;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: onTap,
+      child: SizedBox(
+        height: 58,
+        child: Row(
+          children: [
+            // Drag handle: only this initiates a reorder (the list is built
+            // with buildDefaultDragHandles: false).
+            ReorderableDragStartListener(
+              index: index,
+              child: Padding(
+                padding: const EdgeInsets.only(right: 12, top: 8, bottom: 8),
+                child: Icon(
+                  Icons.drag_handle_rounded,
+                  size: 22,
+                  color: AppColors.whiteAlpha(0.4),
+                ),
+              ),
+            ),
+            Expanded(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    song.title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: AppColors.white,
+                      fontSize: 15,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const SizedBox(height: 3),
+                  Text(
+                    song.artist,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: AppColors.whiteAlpha(0.45),
+                      fontSize: 12.5,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 12),
+            Text(
+              song.durationLabel,
+              style: TextStyle(
+                color: AppColors.whiteAlpha(0.4),
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                fontFeatures: const [FontFeature.tabularFigures()],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// A tiny four-bar audio equalizer. Bars bounce while [playing]; they hold a
+/// staggered static shape when paused or when the platform asks to reduce
+/// motion. This is the sheet's signature — the visual language of sound.
+class _EqualizerBars extends StatefulWidget {
+  const _EqualizerBars({required this.playing, required this.color});
+
+  final bool playing;
+  final Color color;
+
+  @override
+  State<_EqualizerBars> createState() => _EqualizerBarsState();
+}
+
+class _EqualizerBarsState extends State<_EqualizerBars>
+    with SingleTickerProviderStateMixin {
+  static const _bars = 4;
+  static const _height = 13.0;
+  static const _phases = [0.0, 1.4, 0.6, 2.1];
+
+  late final AnimationController _controller = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 1100),
+  );
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.playing) _controller.repeat();
+  }
+
+  @override
+  void didUpdateWidget(_EqualizerBars old) {
+    super.didUpdateWidget(old);
+    if (widget.playing && !_controller.isAnimating) {
+      _controller.repeat();
+    } else if (!widget.playing && _controller.isAnimating) {
+      _controller.stop();
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final reduceMotion =
+        MediaQuery.maybeOf(context)?.disableAnimations ?? false;
+    if (!widget.playing || reduceMotion) {
+      return _row(const [0.45, 0.85, 0.35, 0.65]);
+    }
+    return AnimatedBuilder(
+      animation: _controller,
+      builder: (context, _) {
+        final t = _controller.value * 2 * math.pi;
+        return _row([
+          for (var i = 0; i < _bars; i++)
+            0.28 + 0.72 * (0.5 + 0.5 * math.sin(t + _phases[i])),
+        ]);
+      },
+    );
+  }
+
+  Widget _row(List<double> fractions) {
+    return SizedBox(
+      height: _height,
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: [
+          for (var i = 0; i < fractions.length; i++)
+            Padding(
+              padding: EdgeInsets.only(left: i == 0 ? 0 : 2.5),
+              child: Container(
+                width: 3,
+                height: (_height * fractions[i]).clamp(3.0, _height),
+                decoration: BoxDecoration(
+                  color: widget.color,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+            ),
+        ],
       ),
     );
   }

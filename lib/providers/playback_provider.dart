@@ -28,6 +28,7 @@ class PlaybackState {
   const PlaybackState({
     this.current,
     this.currentIndex,
+    this.queue = const [],
     this.playing = false,
     this.position = Duration.zero,
     this.duration = Duration.zero,
@@ -36,7 +37,15 @@ class PlaybackState {
   });
 
   final Song? current;
+
+  /// Index of [current] within [queue].
   final int? currentIndex;
+
+  /// The ordered play queue. Defaults to library order when a song is played
+  /// from a list, but the user can reorder it from the queue sheet, so it is
+  /// its own list rather than a view over the library.
+  final List<Song> queue;
+
   final bool playing;
   final Duration position;
   final Duration duration;
@@ -62,6 +71,9 @@ class PlaybackState {
   }
 
   PlaybackState copyWith({
+    Song? current,
+    int? currentIndex,
+    List<Song>? queue,
     bool? playing,
     Duration? position,
     Duration? duration,
@@ -69,8 +81,9 @@ class PlaybackState {
     PlaybackRepeatMode? repeatMode,
   }) {
     return PlaybackState(
-      current: current,
-      currentIndex: currentIndex,
+      current: current ?? this.current,
+      currentIndex: currentIndex ?? this.currentIndex,
+      queue: queue ?? this.queue,
       playing: playing ?? this.playing,
       position: position ?? this.position,
       duration: duration ?? this.duration,
@@ -147,6 +160,7 @@ class PlaybackNotifier extends Notifier<PlaybackState> {
     state = PlaybackState(
       current: song,
       currentIndex: index,
+      queue: List<Song>.of(songs),
       duration: song.duration,
       position: position,
     );
@@ -163,25 +177,71 @@ class PlaybackNotifier extends Notifier<PlaybackState> {
     }
   }
 
-  /// Open a song, jump to Now Playing and start real playback of its file.
+  /// Open a song from a library list, jump to Now Playing and start playback.
+  /// Resets the queue to library order starting context (the user picked from
+  /// the library, so a fresh queue is expected); [playQueueIndex] is used
+  /// instead when jumping within the existing queue.
   Future<void> playSong(Song song) async {
     final songs = ref.read(libraryProvider).songs;
-    final index = songs.indexOf(song);
+    final inLibrary = songs.contains(song);
+    final queue = inLibrary ? List<Song>.of(songs) : <Song>[song];
+    final index = inLibrary ? songs.indexOf(song) : 0;
     state = PlaybackState(
       current: song,
-      currentIndex: index == -1 ? null : index,
+      currentIndex: index,
+      queue: queue,
       duration: song.duration,
       shuffle: state.shuffle,
       repeatMode: state.repeatMode,
     );
     ref.read(navigationProvider.notifier).goTo(AppScreen.nowPlaying);
     _persistSongId(song.id);
+    await _load(song, play: true);
+  }
 
+  /// Jump to a track already in the queue by its index, preserving queue order
+  /// (used by the queue sheet). Unlike [playSong] it never rebuilds the queue.
+  Future<void> playQueueIndex(int index) async {
+    final queue = state.queue;
+    if (index < 0 || index >= queue.length) return;
+    final song = queue[index];
+    state = state.copyWith(
+      current: song,
+      currentIndex: index,
+      duration: song.duration,
+      position: Duration.zero,
+    );
+    ref.read(navigationProvider.notifier).goTo(AppScreen.nowPlaying);
+    _persistSongId(song.id);
+    await _load(song, play: true);
+  }
+
+  /// Reorder the queue (ReorderableListView indices). Keeps the currently
+  /// playing track current by recomputing its index after the move.
+  void reorderQueue(int oldIndex, int newIndex) {
+    final queue = List<Song>.of(state.queue);
+    if (oldIndex < 0 || oldIndex >= queue.length) return;
+    if (newIndex > oldIndex) newIndex -= 1;
+    newIndex = newIndex.clamp(0, queue.length - 1);
+    if (newIndex == oldIndex) return;
+    final moved = queue.removeAt(oldIndex);
+    queue.insert(newIndex, moved);
+    final current = state.current;
+    final newCurrent = current == null ? -1 : queue.indexOf(current);
+    state = state.copyWith(
+      queue: queue,
+      currentIndex: newCurrent == -1 ? state.currentIndex : newCurrent,
+    );
+  }
+
+  /// Load [song]'s file into the player (and optionally start it). Sample /
+  /// desktop data has no uri yet, so this is a no-op there.
+  Future<void> _load(Song song, {required bool play}) async {
     final uri = song.uri;
-    if (uri == null) return; // sample/desktop data has no playable file yet.
+    if (uri == null) return;
     try {
       await _player.setAudioSource(AudioSource.uri(Uri.parse(uri)));
-      await _player.play();
+      if (play) await _player.play();
     } catch (_) {
       // Ignore unsupported/unreadable sources; keep the UI responsive.
     }
@@ -198,31 +258,31 @@ class PlaybackNotifier extends Notifier<PlaybackState> {
   }
 
   /// Skip to the next song: a random one when shuffling, otherwise the next
-  /// in the library order (wraps around).
+  /// in the queue order (wraps around).
   Future<void> next() async {
-    final songs = ref.read(libraryProvider).songs;
+    final queue = state.queue;
     final idx = state.currentIndex;
-    if (songs.isEmpty || idx == null) return;
+    if (queue.isEmpty || idx == null) return;
     final i = state.shuffle
-        ? _randomIndexExcluding(songs.length, idx)
-        : (idx + 1) % songs.length;
-    await playSong(songs[i]);
+        ? _randomIndexExcluding(queue.length, idx)
+        : (idx + 1) % queue.length;
+    await playQueueIndex(i);
   }
 
   /// Restart the current song if we're past 3s, otherwise go to the previous
-  /// (a random one when shuffling, otherwise the prior library entry).
+  /// (a random one when shuffling, otherwise the prior queue entry).
   Future<void> previous() async {
-    final songs = ref.read(libraryProvider).songs;
+    final queue = state.queue;
     final idx = state.currentIndex;
-    if (songs.isEmpty || idx == null) return;
+    if (queue.isEmpty || idx == null) return;
     if (state.position.inSeconds > 3) {
       await _player.seek(Duration.zero);
       return;
     }
     final i = state.shuffle
-        ? _randomIndexExcluding(songs.length, idx)
-        : (idx - 1 + songs.length) % songs.length;
-    await playSong(songs[i]);
+        ? _randomIndexExcluding(queue.length, idx)
+        : (idx - 1 + queue.length) % queue.length;
+    await playQueueIndex(i);
   }
 
   /// Called when a track finishes playing on its own (not a manual skip):
@@ -234,10 +294,10 @@ class PlaybackNotifier extends Notifier<PlaybackState> {
       await _player.play();
       return;
     }
-    final songs = ref.read(libraryProvider).songs;
+    final queue = state.queue;
     final idx = state.currentIndex;
-    if (songs.isEmpty || idx == null) return;
-    final atLastTrack = !state.shuffle && idx == songs.length - 1;
+    if (queue.isEmpty || idx == null) return;
+    final atLastTrack = !state.shuffle && idx == queue.length - 1;
     if (atLastTrack && state.repeatMode == PlaybackRepeatMode.off) return;
     await next();
   }
