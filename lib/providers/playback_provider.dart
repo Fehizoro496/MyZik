@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 import 'dart:math';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -300,6 +301,34 @@ class PlaybackNotifier extends Notifier<PlaybackState> {
         album: song.album,
         duration: song.duration,
       );
+      // Cover art arrives asynchronously; re-publish the item with it once ready.
+      _publishArtwork(song);
+    }
+  }
+
+  /// Stage the current track's cover art to a temp file and re-publish the
+  /// now-playing item with its `file://` URI, so it shows on the lock screen
+  /// and notification (the session can't render the raw bytes on_audio_query
+  /// returns). No-op when the track has no embedded artwork.
+  Future<void> _publishArtwork(Song song) async {
+    try {
+      final bytes = await ref.read(artworkProvider(song.id).future);
+      if (bytes == null || state.current?.id != song.id) return;
+      final file = File('${Directory.systemTemp.path}/myzik_art_${song.id}.jpg');
+      if (!file.existsSync()) await file.writeAsBytes(bytes, flush: true);
+      if (state.current?.id != song.id) return; // track changed while writing
+      ref
+          .read(audioHandlerProvider)
+          .setNowPlaying(
+            id: song.id.toString(),
+            title: song.title,
+            artist: song.artist,
+            album: song.album,
+            duration: song.duration,
+            artUri: Uri.file(file.path),
+          );
+    } catch (_) {
+      // Best-effort: keep playing without cover art on the lock screen.
     }
   }
 

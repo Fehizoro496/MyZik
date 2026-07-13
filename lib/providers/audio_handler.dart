@@ -62,12 +62,15 @@ class MyZikAudioHandler extends BaseAudioHandler {
   }
 
   /// Update the now-playing metadata shown on the lock screen / notification.
+  /// [artUri] is a `file://` (or content/network) URI to the cover art; the
+  /// session can't render raw bytes, so callers stage the artwork to a file.
   void setNowPlaying({
     required String id,
     required String title,
     required String artist,
     String? album,
     Duration? duration,
+    Uri? artUri,
   }) {
     mediaItem.add(
       MediaItem(
@@ -76,6 +79,7 @@ class MyZikAudioHandler extends BaseAudioHandler {
         artist: artist,
         album: album,
         duration: duration,
+        artUri: artUri,
       ),
     );
   }
