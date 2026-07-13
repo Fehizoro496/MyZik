@@ -115,7 +115,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                             song: topSongs[i],
                             onTap: () => ref
                                 .read(playbackProvider.notifier)
-                                .playSong(topSongs[i]),
+                                .playSong(topSongs[i], context: topSongs),
                           ),
                           if (i != topSongs.length - 1)
                             const SizedBox(height: 16),

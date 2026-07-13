@@ -177,15 +177,16 @@ class PlaybackNotifier extends Notifier<PlaybackState> {
     }
   }
 
-  /// Open a song from a library list, jump to Now Playing and start playback.
-  /// Resets the queue to library order starting context (the user picked from
-  /// the library, so a fresh queue is expected); [playQueueIndex] is used
-  /// instead when jumping within the existing queue.
-  Future<void> playSong(Song song) async {
-    final songs = ref.read(libraryProvider).songs;
-    final inLibrary = songs.contains(song);
-    final queue = inLibrary ? List<Song>.of(songs) : <Song>[song];
-    final index = inLibrary ? songs.indexOf(song) : 0;
+  /// Open [song] and start playback, setting the play queue to [context] — the
+  /// list the user picked it from (e.g. the liked tracks, a playlist, the home
+  /// "top songs"). Defaults to the whole library when no context is given. This
+  /// is what scopes next/previous to the right set of tracks; [playQueueIndex]
+  /// is used instead when jumping within the existing queue.
+  Future<void> playSong(Song song, {List<Song>? context}) async {
+    final source = context ?? ref.read(libraryProvider).songs;
+    final inSource = source.contains(song);
+    final queue = inSource ? List<Song>.of(source) : <Song>[song];
+    final index = inSource ? source.indexOf(song) : 0;
     state = PlaybackState(
       current: song,
       currentIndex: index,

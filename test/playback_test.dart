@@ -72,6 +72,23 @@ void main() {
     expect(state.currentIndex, 1);
   });
 
+  test('playSong scopes the queue to the given context', () async {
+    final (container, songs) = await _bootstrap();
+    final notifier = container.read(playbackProvider.notifier);
+
+    // Play from a filtered subset (e.g. the liked list): ids 1 and 3 only.
+    final subset = [songs[0], songs[2]];
+    await notifier.playSong(songs[2], context: subset);
+
+    final state = container.read(playbackProvider);
+    expect(state.queue.map((s) => s.id).toList(), [1, 3]);
+    expect(state.currentIndex, 1);
+
+    // next stays within the subset and wraps — it never plays id 2.
+    await notifier.next();
+    expect(container.read(playbackProvider).current?.id, 1);
+  });
+
   test('next advances and wraps around the library order', () async {
     final (container, songs) = await _bootstrap();
     final notifier = container.read(playbackProvider.notifier);

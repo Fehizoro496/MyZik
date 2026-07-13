@@ -86,7 +86,7 @@ class _LikedScreenState extends ConsumerState<LikedScreen> {
                             song: songs[i],
                             onTap: () => ref
                                 .read(playbackProvider.notifier)
-                                .playSong(songs[i]),
+                                .playSong(songs[i], context: songs),
                           ),
                           if (i != songs.length - 1) const SizedBox(height: 20),
                         ],
@@ -120,7 +120,9 @@ class _LikedScreenState extends ConsumerState<LikedScreen> {
     return GestureDetector(
       onTap: () => songs.isEmpty
           ? null
-          : ref.read(playbackProvider.notifier).playSong(songs.first),
+          : ref
+                .read(playbackProvider.notifier)
+                .playSong(songs.first, context: songs),
       child: Container(
         padding: const EdgeInsets.all(20),
         decoration: BoxDecoration(
