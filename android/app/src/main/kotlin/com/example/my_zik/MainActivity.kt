@@ -1,5 +1,7 @@
 package com.example.my_zik
 
-import io.flutter.embedding.android.FlutterActivity
+import com.ryanheise.audioservice.AudioServiceActivity
 
-class MainActivity : FlutterActivity()
+// Extends AudioServiceActivity (instead of FlutterActivity) so tapping the
+// media notification brings this activity back to the foreground.
+class MainActivity : AudioServiceActivity()

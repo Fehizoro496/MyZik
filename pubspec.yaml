@@ -45,6 +45,10 @@ dependencies:
   # Audio playback engine (cross-platform). Plays the real file uris.
   just_audio: ^0.9.42
 
+  # OS media session: lock-screen, notification and headset/Bluetooth transport
+  # controls (play/pause, next/previous) wired to the playback controller.
+  audio_service: ^0.18.15
+
   # State management. Providers replace the old PlayerController ChangeNotifier.
   flutter_riverpod: ^2.6.1
 

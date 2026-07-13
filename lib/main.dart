@@ -1,7 +1,9 @@
+import 'package:audio_service/audio_service.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'providers/audio_handler.dart';
 import 'providers/navigation_provider.dart';
 import 'providers/shared_preferences_provider.dart';
 import 'screens/home_screen.dart';
@@ -15,9 +17,23 @@ import 'theme.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   final prefs = await SharedPreferences.getInstance();
+  // Start the OS media session so headset/Bluetooth, lock-screen and
+  // notification transport controls are wired up before the UI builds.
+  final audioHandler = await AudioService.init(
+    builder: MyZikAudioHandler.new,
+    config: const AudioServiceConfig(
+      androidNotificationChannelId: 'com.example.my_zik.audio',
+      androidNotificationChannelName: 'Playback',
+      androidNotificationOngoing: true,
+      androidStopForegroundOnPause: true,
+    ),
+  );
   runApp(
     ProviderScope(
-      overrides: [sharedPreferencesProvider.overrideWithValue(prefs)],
+      overrides: [
+        sharedPreferencesProvider.overrideWithValue(prefs),
+        audioHandlerProvider.overrideWithValue(audioHandler),
+      ],
       child: const MyZikApp(),
     ),
   );

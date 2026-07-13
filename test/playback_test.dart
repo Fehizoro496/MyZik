@@ -16,6 +16,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:my_zik/data/music_repository.dart';
 import 'package:my_zik/models.dart';
+import 'package:my_zik/providers/audio_handler.dart';
 import 'package:my_zik/providers/library_provider.dart';
 import 'package:my_zik/providers/playback_provider.dart';
 import 'package:my_zik/providers/shared_preferences_provider.dart';
@@ -142,6 +143,22 @@ void main() {
     // next now follows the reordered queue: index 0 -> 1 -> id 3.
     await notifier.next();
     expect(container.read(playbackProvider).current?.id, 3);
+  });
+
+  test('OS media buttons drive the queue through the audio handler', () async {
+    final (container, songs) = await _bootstrap();
+    final handler = container.read(audioHandlerProvider);
+    // Reading the notifier builds it, which wires the handler's callbacks.
+    final notifier = container.read(playbackProvider.notifier);
+    await notifier.playSong(songs[0]);
+    expect(container.read(playbackProvider).currentIndex, 0);
+
+    // A headset/Bluetooth "next" reaches the handler, which advances our queue.
+    await handler.skipToNext();
+    expect(container.read(playbackProvider).currentIndex, 1);
+
+    await handler.skipToPrevious();
+    expect(container.read(playbackProvider).currentIndex, 0);
   });
 
   test('toggleShuffle flips the shuffle flag', () async {

@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:just_audio/just_audio.dart';
 
 import '../models.dart';
+import 'audio_handler.dart';
 import 'library_provider.dart';
 import 'navigation_provider.dart';
 import 'shared_preferences_provider.dart';
@@ -130,6 +131,18 @@ class PlaybackNotifier extends Notifier<PlaybackState> {
       (_) => _persistPosition(),
     );
 
+    // Route OS media-session buttons (headset/Bluetooth, lock screen,
+    // notification) to the same controller methods the in-app UI uses.
+    ref.read(audioHandlerProvider)
+      ..onPlay = resume
+      ..onPause = pause
+      ..onNext = next
+      ..onPrevious = previous
+      ..onSeekTo = _player.seek;
+
+    // Mirror playback state out to the OS session on every change.
+    listenSelf((previous, next) => _broadcast(previous, next));
+
     ref.listen<LibraryState>(
       libraryProvider,
       (previous, next) => _maybeRestore(next.songs),
@@ -251,10 +264,42 @@ class PlaybackNotifier extends Notifier<PlaybackState> {
   Future<void> togglePlay() async {
     if (state.current == null) return;
     if (_player.playing) {
-      await _player.pause();
-      _persistPosition();
+      await pause();
     } else {
-      await _player.play();
+      await resume();
+    }
+  }
+
+  /// Resume the current track. Also the OS session's "play" action.
+  Future<void> resume() async {
+    if (state.current == null) return;
+    await _player.play();
+  }
+
+  /// Pause the current track. Also the OS session's "pause" action.
+  Future<void> pause() async {
+    await _player.pause();
+    _persistPosition();
+  }
+
+  /// Mirror a state change out to the OS media session: transport state every
+  /// time, now-playing metadata only when the track actually changes.
+  void _broadcast(PlaybackState? previous, PlaybackState next) {
+    final handler = ref.read(audioHandlerProvider);
+    handler.broadcast(
+      playing: next.playing,
+      position: next.position,
+      bufferedPosition: next.position,
+    );
+    final song = next.current;
+    if (song != null && song.id != previous?.current?.id) {
+      handler.setNowPlaying(
+        id: song.id.toString(),
+        title: song.title,
+        artist: song.artist,
+        album: song.album,
+        duration: song.duration,
+      );
     }
   }
 
