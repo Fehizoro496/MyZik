@@ -39,9 +39,8 @@ class _MyMusicScreenState extends ConsumerState<MyMusicScreen> {
                         icon: IconlyLight.arrowLeft2,
                         size: 44,
                         iconSize: 22,
-                        onTap: () => ref
-                            .read(navigationProvider.notifier)
-                            .goTo(AppScreen.home),
+                        onTap: () =>
+                            ref.read(navigationProvider.notifier).back(),
                       ),
                       const Text(
                         'My Music',

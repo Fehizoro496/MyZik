@@ -79,6 +79,7 @@ class PlayerShell extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final screen = ref.watch(navigationProvider);
+    final canGoBack = ref.read(navigationProvider.notifier).canGoBack;
     final app = AnimatedSwitcher(
       duration: const Duration(milliseconds: 320),
       switchInCurve: Curves.easeOutCubic,
@@ -88,39 +89,49 @@ class PlayerShell extends ConsumerWidget {
       child: KeyedSubtree(key: ValueKey(screen), child: _screenFor(screen)),
     );
 
-    return Scaffold(
-      backgroundColor: Colors.black,
-      body: LayoutBuilder(
-        builder: (context, constraints) {
-          final wide =
-              constraints.maxWidth > 500 || constraints.maxHeight > 900;
-          if (!wide) return app;
-          // Phone-frame presentation for desktop / web.
-          return Container(
-            decoration: const BoxDecoration(
-              gradient: RadialGradient(
-                center: Alignment(-0.6, -1),
-                radius: 1.4,
-                colors: [Color(0xFF1A1730), Color(0xFF08080C)],
-              ),
-            ),
-            alignment: Alignment.center,
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(46),
-              child: SizedBox(
-                width: 390,
-                height: 844,
-                child: MediaQuery(
-                  // Give the framed app a realistic notch inset.
-                  data: MediaQuery.of(
-                    context,
-                  ).copyWith(padding: const EdgeInsets.only(top: 0, bottom: 0)),
-                  child: app,
+    // Route the system/hardware back gesture through the in-app history stack:
+    // pop to the previous screen while there is one, and only let the pop reach
+    // the OS (closing the app) once we're back at the root.
+    return PopScope(
+      canPop: !canGoBack,
+      onPopInvokedWithResult: (didPop, _) {
+        if (didPop) return;
+        ref.read(navigationProvider.notifier).back();
+      },
+      child: Scaffold(
+        backgroundColor: Colors.black,
+        body: LayoutBuilder(
+          builder: (context, constraints) {
+            final wide =
+                constraints.maxWidth > 500 || constraints.maxHeight > 900;
+            if (!wide) return app;
+            // Phone-frame presentation for desktop / web.
+            return Container(
+              decoration: const BoxDecoration(
+                gradient: RadialGradient(
+                  center: Alignment(-0.6, -1),
+                  radius: 1.4,
+                  colors: [Color(0xFF1A1730), Color(0xFF08080C)],
                 ),
               ),
-            ),
-          );
-        },
+              alignment: Alignment.center,
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(46),
+                child: SizedBox(
+                  width: 390,
+                  height: 844,
+                  child: MediaQuery(
+                    // Give the framed app a realistic notch inset.
+                    data: MediaQuery.of(context).copyWith(
+                      padding: const EdgeInsets.only(top: 0, bottom: 0),
+                    ),
+                    child: app,
+                  ),
+                ),
+              ),
+            );
+          },
+        ),
       ),
     );
   }

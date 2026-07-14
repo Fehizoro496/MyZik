@@ -67,9 +67,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
                     icon: IconlyLight.arrowLeft2,
                     size: 44,
                     iconSize: 22,
-                    onTap: () => ref
-                        .read(navigationProvider.notifier)
-                        .goTo(AppScreen.home),
+                    onTap: () => ref.read(navigationProvider.notifier).back(),
                   ),
                   const SizedBox(width: 12),
                   Expanded(child: _searchField()),
