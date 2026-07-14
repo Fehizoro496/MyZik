@@ -63,25 +63,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                         ),
                       ),
                       const SizedBox(height: 18),
-                      // Category chips bleed to the screen edges.
-                      Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 0),
-                        child: SizedBox(
-                          height: 44,
-                          child: OverflowBox(
-                            maxWidth: MediaQuery.of(context).size.width,
-                            alignment: Alignment.centerLeft,
-                            child: CategoryChips(
-                              categories: MusicCategories.home,
-                              selected: _category,
-                              onSelected: (i) => setState(() => _category = i),
-                            ),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 26),
-                      _sectionTitle('Curated & trending'),
-                      const SizedBox(height: 16),
                       _discoverCard(library),
                       const SizedBox(height: 30),
                       Row(

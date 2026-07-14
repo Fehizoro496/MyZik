@@ -66,16 +66,6 @@ class _LikedScreenState extends ConsumerState<LikedScreen> {
                     ],
                   ),
                 ),
-                SizedBox(
-                  height: 44,
-                  child: CategoryChips(
-                    categories: MusicCategories.liked,
-                    selected: _category,
-                    onSelected: (i) => setState(() => _category = i),
-                    padding: const EdgeInsets.symmetric(horizontal: 24),
-                  ),
-                ),
-                const SizedBox(height: 20),
                 Expanded(
                   child: ListView(
                     padding: const EdgeInsets.fromLTRB(24, 0, 24, 170),
