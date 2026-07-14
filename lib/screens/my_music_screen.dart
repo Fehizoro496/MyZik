@@ -51,9 +51,11 @@ class _MyMusicScreenState extends ConsumerState<MyMusicScreen> {
                           fontWeight: FontWeight.w700,
                         ),
                       ),
-                      const GlassIconButton(
-                        icon: IconlyLight.moreCircle,
-                        size: 44,
+                      GlassIconButton(
+                        icon: IconlyLight.search,
+                        onTap: () => ref
+                            .read(navigationProvider.notifier)
+                            .goTo(AppScreen.search),
                       ),
                     ],
                   ),
