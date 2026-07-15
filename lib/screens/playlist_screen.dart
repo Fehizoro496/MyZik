@@ -179,21 +179,10 @@ class PlaylistScreen extends ConsumerWidget {
                         behavior: HitTestBehavior.opaque,
                         onTap: () =>
                             _showTrackMenu(buttonContext, ref, playlist, song),
-                        child: Container(
-                          width: 40,
-                          height: 40,
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            color: AppColors.whiteAlpha(0.06),
-                            border: Border.all(
-                              color: AppColors.whiteAlpha(0.08),
-                            ),
-                          ),
-                          child: Icon(
-                            Icons.more_vert_rounded,
-                            size: 20,
-                            color: AppColors.whiteAlpha(0.8),
-                          ),
+                        child: Icon(
+                          Icons.more_vert_rounded,
+                          size: 20,
+                          color: AppColors.whiteAlpha(0.8),
                         ),
                       ),
                     ),
