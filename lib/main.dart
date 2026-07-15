@@ -14,6 +14,7 @@ import 'screens/liked_screen.dart';
 import 'screens/playlist_screen.dart';
 import 'screens/search_screen.dart';
 import 'screens/settings_screen.dart';
+import 'screens/song_detail_screen.dart';
 import 'theme.dart';
 
 void main() async {
@@ -79,6 +80,8 @@ class PlayerShell extends ConsumerWidget {
         return const CollectionScreen();
       case AppScreen.playlist:
         return const PlaylistScreen();
+      case AppScreen.songDetail:
+        return const SongDetailScreen();
     }
   }
 

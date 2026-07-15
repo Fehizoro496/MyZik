@@ -10,6 +10,7 @@ import 'providers/liked_provider.dart';
 import 'providers/navigation_provider.dart';
 import 'providers/playback_provider.dart';
 import 'providers/playlists_provider.dart';
+import 'providers/song_detail_provider.dart';
 import 'theme.dart';
 
 /// A frosted, translucent circular icon button used throughout the design.
@@ -257,8 +258,8 @@ class SegmentedTabs extends StatelessWidget {
 
 /// A song list row: art + title/subtitle + a trailing button. Long-pressing the
 /// row opens the "add to playlist" sheet unless [onLongPress] overrides it. The
-/// trailing button is the like toggle by default; pass [trailing] to replace it
-/// (e.g. a "remove from playlist" button).
+/// trailing button is the ⋮ track menu (song details, add to playlist, like) by
+/// default; pass [trailing] to replace it (e.g. a playlist's remove menu).
 class TrackRow extends ConsumerWidget {
   const TrackRow({
     super.key,
@@ -313,40 +314,71 @@ class TrackRow extends ConsumerWidget {
             ),
           ),
           const SizedBox(width: 12),
-          trailing ?? _LikeButton(songId: song.id),
+          trailing ?? _TrackMenuButton(song: song),
         ],
       ),
     );
   }
 }
 
-/// The circular like toggle used as [TrackRow]'s default trailing button.
-class _LikeButton extends ConsumerWidget {
-  const _LikeButton({required this.songId});
+/// [TrackRow]'s default trailing button: a ⋮ that opens the track's popover menu
+/// (song details, add to playlist, like/unlike).
+class _TrackMenuButton extends ConsumerWidget {
+  const _TrackMenuButton({required this.song});
 
-  final int songId;
+  final Song song;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final liked = ref.watch(isLikedProvider(songId));
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onTap: () => ref.read(likedProvider.notifier).toggle(songId),
-      child: Container(
-        width: 40,
-        height: 40,
-        decoration: BoxDecoration(
-          shape: BoxShape.circle,
-          color: AppColors.whiteAlpha(0.06),
-          border: Border.all(color: AppColors.whiteAlpha(0.08)),
-        ),
+    return Builder(
+      builder: (buttonContext) => GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: () => _openMenu(buttonContext, ref),
         child: Icon(
-          liked ? IconlyBold.heart : IconlyLight.heart,
-          size: 18,
-          color: liked ? AppColors.liked : AppColors.white,
+          Icons.more_vert_rounded,
+          size: 20,
+          color: AppColors.whiteAlpha(0.8),
         ),
       ),
     );
+  }
+
+  Future<void> _openMenu(BuildContext buttonContext, WidgetRef ref) async {
+    final liked = ref.read(isLikedProvider(song.id));
+    final selected = await showPopoverMenu<String>(buttonContext, [
+      const PopupMenuItem(
+        value: 'details',
+        child: PopoverMenuRow(
+          icon: Icons.info_outline_rounded,
+          label: 'Song details',
+        ),
+      ),
+      const PopupMenuItem(
+        value: 'add',
+        child: PopoverMenuRow(
+          icon: Icons.playlist_add_rounded,
+          label: 'Add to playlist',
+        ),
+      ),
+      PopupMenuItem(
+        value: 'like',
+        child: PopoverMenuRow(
+          icon: liked ? IconlyBold.heart : IconlyLight.heart,
+          label: liked ? 'Remove from liked' : 'Add to liked',
+        ),
+      ),
+    ]);
+    switch (selected) {
+      case 'details':
+        ref.read(selectedSongProvider.notifier).state = song;
+        ref.read(navigationProvider.notifier).goTo(AppScreen.songDetail);
+      case 'add':
+        if (buttonContext.mounted) {
+          showAddToPlaylistSheet(buttonContext, song.id);
+        }
+      case 'like':
+        ref.read(likedProvider.notifier).toggle(song.id);
+    }
   }
 }
 
@@ -546,6 +578,82 @@ class MiniPlayer extends ConsumerWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+/// Shows a dark popover menu anchored on the tapped button ([buttonContext] is
+/// the button's own context, used to position it) and returns the picked value.
+/// Opens below the button, or above it when there isn't room below.
+Future<T?> showPopoverMenu<T>(
+  BuildContext buttonContext,
+  List<PopupMenuEntry<T>> items,
+) {
+  final button = buttonContext.findRenderObject() as RenderBox;
+  final overlay =
+      Navigator.of(buttonContext).overlay!.context.findRenderObject()
+          as RenderBox;
+  const gap = 6.0;
+  final topLeft = button.localToGlobal(Offset.zero, ancestor: overlay);
+  final bottomRight = button.localToGlobal(
+    button.size.bottomRight(Offset.zero),
+    ancestor: overlay,
+  );
+  // Menu height is estimated from the item count to decide which way to open.
+  final menuHeight = items.length * kMinInteractiveDimension + 16;
+  final roomBelow = overlay.size.height - bottomRight.dy - gap;
+  final top = roomBelow < menuHeight
+      ? topLeft.dy -
+            gap -
+            menuHeight // above the button
+      : bottomRight.dy + gap; // below the button
+  final position = RelativeRect.fromLTRB(
+    topLeft.dx,
+    top,
+    overlay.size.width - bottomRight.dx,
+    overlay.size.height - top,
+  );
+  return showMenu<T>(
+    context: buttonContext,
+    position: position,
+    color: const Color(0xFF1B1B24),
+    elevation: 12,
+    shape: RoundedRectangleBorder(
+      borderRadius: BorderRadius.circular(16),
+      side: BorderSide(color: AppColors.whiteAlpha(0.08)),
+    ),
+    items: items,
+  );
+}
+
+/// One row of a [showPopoverMenu]: an icon + label, styled for the dark menu
+/// surface.
+class PopoverMenuRow extends StatelessWidget {
+  const PopoverMenuRow({super.key, required this.icon, required this.label});
+
+  final IconData icon;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(icon, size: 20, color: AppColors.whiteAlpha(0.85)),
+        const SizedBox(width: 14),
+        Flexible(
+          child: Text(
+            label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(
+              color: AppColors.white,
+              fontSize: 14.5,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ),
+      ],
     );
   }
 }

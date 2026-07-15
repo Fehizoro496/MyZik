@@ -7,6 +7,7 @@ import '../providers/library_provider.dart';
 import '../providers/navigation_provider.dart';
 import '../providers/playback_provider.dart';
 import '../providers/playlists_provider.dart';
+import '../providers/song_detail_provider.dart';
 import '../theme.dart';
 import '../widgets.dart';
 
@@ -307,51 +308,6 @@ class PlaylistScreen extends ConsumerWidget {
     );
   }
 
-  /// Shows a dark popover menu anchored on the tapped button ([buttonContext] is
-  /// the button's own context, used to position it) and returns the picked
-  /// value.
-  Future<T?> _showPopover<T>(
-    BuildContext buttonContext,
-    List<PopupMenuEntry<T>> items,
-  ) {
-    final button = buttonContext.findRenderObject() as RenderBox;
-    final overlay =
-        Navigator.of(buttonContext).overlay!.context.findRenderObject()
-            as RenderBox;
-    const gap = 6.0;
-    final topLeft = button.localToGlobal(Offset.zero, ancestor: overlay);
-    final bottomRight = button.localToGlobal(
-      button.size.bottomRight(Offset.zero),
-      ancestor: overlay,
-    );
-    // Open below the button, or above it when there isn't room below (button
-    // near the screen bottom). Menu height is estimated from the item count.
-    final menuHeight = items.length * kMinInteractiveDimension + 16;
-    final roomBelow = overlay.size.height - bottomRight.dy - gap;
-    final top = roomBelow < menuHeight
-        ? topLeft.dy -
-              gap -
-              menuHeight // above the button
-        : bottomRight.dy + gap; // below the button
-    final position = RelativeRect.fromLTRB(
-      topLeft.dx,
-      top,
-      overlay.size.width - bottomRight.dx,
-      overlay.size.height - top,
-    );
-    return showMenu<T>(
-      context: buttonContext,
-      position: position,
-      color: const Color(0xFF1B1B24),
-      elevation: 12,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(16),
-        side: BorderSide(color: AppColors.whiteAlpha(0.08)),
-      ),
-      items: items,
-    );
-  }
-
   Future<void> _showMenu(
     BuildContext buttonContext,
     WidgetRef ref,
@@ -359,14 +315,17 @@ class PlaylistScreen extends ConsumerWidget {
   ) async {
     final notifier = ref.read(playlistsProvider.notifier);
     final nav = ref.read(navigationProvider.notifier);
-    final selected = await _showPopover<String>(buttonContext, const [
+    final selected = await showPopoverMenu<String>(buttonContext, const [
       PopupMenuItem(
         value: 'rename',
-        child: _MenuRow(icon: Icons.edit_rounded, label: 'Rename playlist'),
+        child: PopoverMenuRow(
+          icon: Icons.edit_rounded,
+          label: 'Rename playlist',
+        ),
       ),
       PopupMenuItem(
         value: 'delete',
-        child: _MenuRow(
+        child: PopoverMenuRow(
           icon: Icons.delete_outline_rounded,
           label: 'Delete playlist',
         ),
@@ -395,23 +354,34 @@ class PlaylistScreen extends ConsumerWidget {
     Song song,
   ) async {
     final notifier = ref.read(playlistsProvider.notifier);
-    final selected = await _showPopover<String>(buttonContext, const [
+    final nav = ref.read(navigationProvider.notifier);
+    final selected = await showPopoverMenu<String>(buttonContext, const [
+      PopupMenuItem(
+        value: 'details',
+        child: PopoverMenuRow(
+          icon: Icons.info_outline_rounded,
+          label: 'Song details',
+        ),
+      ),
       PopupMenuItem(
         value: 'add',
-        child: _MenuRow(
+        child: PopoverMenuRow(
           icon: Icons.playlist_add_rounded,
           label: 'Add to playlist',
         ),
       ),
       PopupMenuItem(
         value: 'remove',
-        child: _MenuRow(
+        child: PopoverMenuRow(
           icon: Icons.playlist_remove_rounded,
           label: 'Remove from playlist',
         ),
       ),
     ]);
     switch (selected) {
+      case 'details':
+        ref.read(selectedSongProvider.notifier).state = song;
+        nav.goTo(AppScreen.songDetail);
       case 'add':
         if (buttonContext.mounted) {
           showAddToPlaylistSheet(buttonContext, song.id);
@@ -436,38 +406,6 @@ class PlaylistScreen extends ConsumerWidget {
         'Playlist not found.',
         style: TextStyle(color: AppColors.whiteAlpha(0.5), fontSize: 15),
       ),
-    );
-  }
-}
-
-/// One row of a popover menu: an icon + label, styled for the dark menu
-/// surface.
-class _MenuRow extends StatelessWidget {
-  const _MenuRow({required this.icon, required this.label});
-
-  final IconData icon;
-  final String label;
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Icon(icon, size: 20, color: AppColors.whiteAlpha(0.85)),
-        const SizedBox(width: 14),
-        Flexible(
-          child: Text(
-            label,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: const TextStyle(
-              color: AppColors.white,
-              fontSize: 14.5,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-        ),
-      ],
     );
   }
 }
