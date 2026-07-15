@@ -10,10 +10,10 @@ import 'screens/collection_screen.dart';
 import 'screens/home_screen.dart';
 import 'screens/my_music_screen.dart';
 import 'screens/now_playing_screen.dart';
+import 'screens/discover_screen.dart';
 import 'screens/liked_screen.dart';
 import 'screens/playlist_screen.dart';
 import 'screens/search_screen.dart';
-import 'screens/settings_screen.dart';
 import 'screens/song_detail_screen.dart';
 import 'theme.dart';
 
@@ -74,8 +74,8 @@ class PlayerShell extends ConsumerWidget {
         return const LikedScreen();
       case AppScreen.search:
         return const SearchScreen();
-      case AppScreen.settings:
-        return const SettingsScreen();
+      case AppScreen.discover:
+        return const DiscoverScreen();
       case AppScreen.collection:
         return const CollectionScreen();
       case AppScreen.playlist:

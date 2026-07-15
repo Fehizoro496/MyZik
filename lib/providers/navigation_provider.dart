@@ -6,7 +6,7 @@ enum AppScreen {
   myMusic,
   liked,
   search,
-  settings,
+  discover,
   collection,
   playlist,
   songDetail,

@@ -440,9 +440,9 @@ class NavBar extends ConsumerWidget {
                     _tab(
                       screen,
                       goTo,
-                      icon: IconlyLight.setting,
-                      activeIcon: IconlyBold.setting,
-                      target: AppScreen.settings,
+                      icon: IconlyLight.download,
+                      activeIcon: IconlyBold.download,
+                      target: AppScreen.discover,
                     ),
                   ],
                 ),
