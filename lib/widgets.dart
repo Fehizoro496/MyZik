@@ -255,18 +255,26 @@ class SegmentedTabs extends StatelessWidget {
   }
 }
 
-/// A song list row: art + title/subtitle + trailing play button. Long-pressing
-/// the row opens the "add to playlist" sheet unless [onLongPress] overrides it.
+/// A song list row: art + title/subtitle + a trailing button. Long-pressing the
+/// row opens the "add to playlist" sheet unless [onLongPress] overrides it. The
+/// trailing button is the like toggle by default; pass [trailing] to replace it
+/// (e.g. a "remove from playlist" button).
 class TrackRow extends ConsumerWidget {
-  const TrackRow({super.key, required this.song, this.onTap, this.onLongPress});
+  const TrackRow({
+    super.key,
+    required this.song,
+    this.onTap,
+    this.onLongPress,
+    this.trailing,
+  });
 
   final Song song;
   final VoidCallback? onTap;
   final VoidCallback? onLongPress;
+  final Widget? trailing;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final liked = ref.watch(isLikedProvider(song.id));
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
       onTap: onTap,
@@ -305,25 +313,38 @@ class TrackRow extends ConsumerWidget {
             ),
           ),
           const SizedBox(width: 12),
-          GestureDetector(
-            behavior: HitTestBehavior.opaque,
-            onTap: () => ref.read(likedProvider.notifier).toggle(song.id),
-            child: Container(
-              width: 40,
-              height: 40,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: AppColors.whiteAlpha(0.06),
-                border: Border.all(color: AppColors.whiteAlpha(0.08)),
-              ),
-              child: Icon(
-                liked ? IconlyBold.heart : IconlyLight.heart,
-                size: 18,
-                color: liked ? AppColors.liked : AppColors.white,
-              ),
-            ),
-          ),
+          trailing ?? _LikeButton(songId: song.id),
         ],
+      ),
+    );
+  }
+}
+
+/// The circular like toggle used as [TrackRow]'s default trailing button.
+class _LikeButton extends ConsumerWidget {
+  const _LikeButton({required this.songId});
+
+  final int songId;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final liked = ref.watch(isLikedProvider(songId));
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: () => ref.read(likedProvider.notifier).toggle(songId),
+      child: Container(
+        width: 40,
+        height: 40,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          color: AppColors.whiteAlpha(0.06),
+          border: Border.all(color: AppColors.whiteAlpha(0.08)),
+        ),
+        child: Icon(
+          liked ? IconlyBold.heart : IconlyLight.heart,
+          size: 18,
+          color: liked ? AppColors.liked : AppColors.white,
+        ),
       ),
     );
   }
@@ -529,39 +550,160 @@ class MiniPlayer extends ConsumerWidget {
   }
 }
 
-/// A playlist's cover: the first track's artwork, or an accent-gradient tile
-/// with a queue glyph when the playlist is empty (or its tracks aren't in the
-/// library yet).
-class PlaylistCover extends StatelessWidget {
+/// A playlist's cover: a mosaic of the first tracks that actually have embedded
+/// artwork (up to four, laid out to fill the square). Tracks without a cover are
+/// skipped, so the collage is real artwork only. Falls back to a gradient tile
+/// (accent + queue glyph for an empty playlist, else the first track's gradient
+/// when none of its tracks have covers).
+class PlaylistCover extends ConsumerWidget {
   const PlaylistCover({
     super.key,
     required this.songs,
     this.size = 54,
     this.radius = 14,
+    this.probeLimit = 8,
   });
 
   final List<Song> songs;
   final double size;
   final double radius;
 
+  /// How many leading tracks to check for artwork while looking for four with a
+  /// cover — bounds artwork loads for a mere thumbnail.
+  final int probeLimit;
+
+  /// Thin seam between mosaic tiles so they read as a collage, not one image.
+  static const _gap = 2.0;
+
   @override
-  Widget build(BuildContext context) {
-    if (songs.isEmpty) {
-      return Container(
-        width: size,
-        height: size,
-        decoration: BoxDecoration(
-          gradient: AppColors.accentGradient,
-          borderRadius: BorderRadius.circular(radius),
-        ),
-        child: Icon(
-          Icons.queue_music_rounded,
-          size: size * 0.42,
-          color: AppColors.white,
+  Widget build(BuildContext context, WidgetRef ref) {
+    if (songs.isEmpty) return _gradientTile(gradient: AppColors.accentGradient);
+
+    // Take the first tracks that have a loaded cover, up to four.
+    final covers = <Song>[];
+    for (final song in songs.take(probeLimit)) {
+      if (covers.length == 4) break;
+      if (ref.watch(artworkProvider(song.id)).asData?.value != null) {
+        covers.add(song);
+      }
+    }
+    if (covers.isEmpty) {
+      // Nothing has a cover (yet): tint by the first track's placeholder.
+      return _gradientTile(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: songs.first.artGradient,
         ),
       );
     }
-    return SongArtwork(song: songs.first, size: size, radius: radius);
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(radius),
+      child: SizedBox(width: size, height: size, child: _mosaic(covers)),
+    );
+  }
+
+  Widget _gradientTile({required Gradient gradient}) {
+    return Container(
+      width: size,
+      height: size,
+      decoration: BoxDecoration(
+        gradient: gradient,
+        borderRadius: BorderRadius.circular(radius),
+      ),
+      child: songs.isEmpty
+          ? Icon(
+              Icons.queue_music_rounded,
+              size: size * 0.42,
+              color: AppColors.white,
+            )
+          : null,
+    );
+  }
+
+  Widget _mosaic(List<Song> covers) {
+    switch (covers.length) {
+      case 1:
+        return _CoverTile(song: covers[0]);
+      case 2:
+        // Two vertical halves.
+        return Row(
+          children: [
+            Expanded(child: _CoverTile(song: covers[0])),
+            const SizedBox(width: _gap),
+            Expanded(child: _CoverTile(song: covers[1])),
+          ],
+        );
+      case 3:
+        // One tall tile on the left, two stacked on the right.
+        return Row(
+          children: [
+            Expanded(child: _CoverTile(song: covers[0])),
+            const SizedBox(width: _gap),
+            Expanded(
+              child: Column(
+                children: [
+                  Expanded(child: _CoverTile(song: covers[1])),
+                  const SizedBox(height: _gap),
+                  Expanded(child: _CoverTile(song: covers[2])),
+                ],
+              ),
+            ),
+          ],
+        );
+      default:
+        // 2×2 grid.
+        return Column(
+          children: [
+            Expanded(child: _mosaicRow(covers[0], covers[1])),
+            const SizedBox(height: _gap),
+            Expanded(child: _mosaicRow(covers[2], covers[3])),
+          ],
+        );
+    }
+  }
+
+  Widget _mosaicRow(Song left, Song right) {
+    return Row(
+      children: [
+        Expanded(child: _CoverTile(song: left)),
+        const SizedBox(width: _gap),
+        Expanded(child: _CoverTile(song: right)),
+      ],
+    );
+  }
+}
+
+/// One tile of a [PlaylistCover] mosaic: the track's artwork covering the cell,
+/// falling back to its gradient placeholder while loading or when it has none.
+/// Fills whatever box its parent gives it (unlike [SongArtwork], which is a
+/// fixed square).
+class _CoverTile extends ConsumerWidget {
+  const _CoverTile({required this.song});
+
+  final Song song;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final placeholder = DecoratedBox(
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: song.artGradient,
+        ),
+      ),
+    );
+    final bytes = ref.watch(artworkProvider(song.id)).asData?.value;
+    if (bytes == null) return placeholder;
+    return Image.memory(
+      bytes,
+      fit: BoxFit.cover,
+      width: double.infinity,
+      height: double.infinity,
+      gaplessPlayback: true,
+      errorBuilder: (_, _, _) => placeholder,
+    );
   }
 }
 
@@ -665,12 +807,16 @@ class SheetActionTile extends StatelessWidget {
               child: Icon(icon, size: 20, color: AppColors.white),
             ),
             const SizedBox(width: 14),
-            Text(
-              label,
-              style: const TextStyle(
-                color: AppColors.white,
-                fontSize: 15,
-                fontWeight: FontWeight.w700,
+            Expanded(
+              child: Text(
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  color: AppColors.white,
+                  fontSize: 15,
+                  fontWeight: FontWeight.w700,
+                ),
               ),
             ),
           ],

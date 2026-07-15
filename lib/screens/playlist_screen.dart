@@ -11,9 +11,10 @@ import '../theme.dart';
 import '../widgets.dart';
 
 /// Detail view for a user playlist: a cover hero with Play / Add-songs actions
-/// over its track list. Tracks swipe away to remove; the header menu renames or
-/// deletes the playlist. The playlist to show is read from
-/// [selectedPlaylistIdProvider].
+/// over its track list. Each track's ⋮ button opens a popover menu (add to
+/// another playlist, remove); tracks can also be swiped away, and the handle
+/// drags them to reorder. The header's ⋯ button opens a popover to rename or
+/// delete the playlist. The playlist is read from [selectedPlaylistIdProvider].
 class PlaylistScreen extends ConsumerWidget {
   const PlaylistScreen({super.key});
 
@@ -49,11 +50,13 @@ class PlaylistScreen extends ConsumerWidget {
                     ),
                   ),
                   if (playlist != null)
-                    GlassIconButton(
-                      icon: Icons.more_horiz_rounded,
-                      size: 44,
-                      iconSize: 22,
-                      onTap: () => _showMenu(context, ref, playlist),
+                    Builder(
+                      builder: (buttonContext) => GlassIconButton(
+                        icon: Icons.more_horiz_rounded,
+                        size: 44,
+                        iconSize: 22,
+                        onTap: () => _showMenu(buttonContext, ref, playlist),
+                      ),
                     ),
                 ],
               ),
@@ -80,13 +83,13 @@ class PlaylistScreen extends ConsumerWidget {
     Playlist playlist,
     List<Song> songs,
   ) {
-    return ListView(
-      padding: const EdgeInsets.fromLTRB(24, 8, 24, 40),
-      physics: const BouncingScrollPhysics(),
-      children: [
-        _hero(context, ref, playlist, songs),
-        const SizedBox(height: 24),
-        if (songs.isEmpty)
+    if (songs.isEmpty) {
+      return ListView(
+        padding: const EdgeInsets.fromLTRB(24, 8, 24, 40),
+        physics: const BouncingScrollPhysics(),
+        children: [
+          _hero(context, ref, playlist, songs),
+          const SizedBox(height: 24),
           Padding(
             padding: const EdgeInsets.only(top: 30),
             child: Text(
@@ -98,38 +101,108 @@ class PlaylistScreen extends ConsumerWidget {
                 height: 1.5,
               ),
             ),
-          )
-        else
-          for (var i = 0; i < songs.length; i++) ...[
-            Dismissible(
-              key: ValueKey(songs[i].id),
-              direction: DismissDirection.endToStart,
-              onDismissed: (_) => ref
-                  .read(playlistsProvider.notifier)
-                  .removeSong(playlist.id, songs[i].id),
-              background: Container(
-                alignment: Alignment.centerRight,
-                padding: const EdgeInsets.only(right: 20),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFE0554F).withValues(alpha: 0.85),
-                  borderRadius: BorderRadius.circular(16),
-                ),
-                child: const Icon(
-                  Icons.delete_rounded,
-                  color: AppColors.white,
-                  size: 22,
-                ),
+          ),
+        ],
+      );
+    }
+    // Drag the handle on a row to reorder; swipe a row left to remove it. Only
+    // the handle starts a reorder (buildDefaultDragHandles: false), so tap-to-
+    // play and swipe-to-remove keep working.
+    return ReorderableListView.builder(
+      padding: const EdgeInsets.fromLTRB(24, 8, 24, 40),
+      physics: const BouncingScrollPhysics(),
+      buildDefaultDragHandles: false,
+      header: Column(
+        children: [
+          _hero(context, ref, playlist, songs),
+          const SizedBox(height: 24),
+        ],
+      ),
+      itemCount: songs.length,
+      onReorder: (oldIndex, newIndex) {
+        final ids = [for (final s in songs) s.id];
+        if (newIndex > oldIndex) newIndex -= 1;
+        final moved = ids.removeAt(oldIndex);
+        ids.insert(newIndex, moved);
+        ref.read(playlistsProvider.notifier).reorderSongs(playlist.id, ids);
+      },
+      itemBuilder: (context, i) {
+        final song = songs[i];
+        return Padding(
+          key: ValueKey(song.id),
+          padding: const EdgeInsets.only(bottom: 20),
+          child: Dismissible(
+            key: ValueKey('dismiss-${song.id}'),
+            direction: DismissDirection.endToStart,
+            onDismissed: (_) => ref
+                .read(playlistsProvider.notifier)
+                .removeSong(playlist.id, song.id),
+            background: Container(
+              alignment: Alignment.centerRight,
+              padding: const EdgeInsets.only(right: 20),
+              decoration: BoxDecoration(
+                color: const Color(0xFFE0554F).withValues(alpha: 0.85),
+                borderRadius: BorderRadius.circular(16),
               ),
-              child: TrackRow(
-                song: songs[i],
-                onTap: () => ref
-                    .read(playbackProvider.notifier)
-                    .playSong(songs[i], context: songs),
+              child: const Icon(
+                Icons.delete_rounded,
+                color: AppColors.white,
+                size: 22,
               ),
             ),
-            if (i != songs.length - 1) const SizedBox(height: 20),
-          ],
-      ],
+            child: Row(
+              children: [
+                ReorderableDragStartListener(
+                  index: i,
+                  child: Padding(
+                    padding: const EdgeInsets.only(
+                      right: 12,
+                      top: 8,
+                      bottom: 8,
+                    ),
+                    child: Icon(
+                      Icons.drag_handle_rounded,
+                      size: 22,
+                      color: AppColors.whiteAlpha(0.4),
+                    ),
+                  ),
+                ),
+                Expanded(
+                  child: TrackRow(
+                    song: song,
+                    onTap: () => ref
+                        .read(playbackProvider.notifier)
+                        .playSong(song, context: songs),
+                    trailing: Builder(
+                      builder: (buttonContext) => GestureDetector(
+                        behavior: HitTestBehavior.opaque,
+                        onTap: () =>
+                            _showTrackMenu(buttonContext, ref, playlist, song),
+                        child: Container(
+                          width: 40,
+                          height: 40,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: AppColors.whiteAlpha(0.06),
+                            border: Border.all(
+                              color: AppColors.whiteAlpha(0.08),
+                            ),
+                          ),
+                          child: Icon(
+                            Icons.more_vert_rounded,
+                            size: 20,
+                            color: AppColors.whiteAlpha(0.8),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
     );
   }
 
@@ -234,44 +307,118 @@ class PlaylistScreen extends ConsumerWidget {
     );
   }
 
-  void _showMenu(BuildContext context, WidgetRef ref, Playlist playlist) {
-    showModalBottomSheet<void>(
-      context: context,
-      backgroundColor: Colors.transparent,
-      isScrollControlled: true,
-      builder: (sheetContext) => GlassSheet(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            SheetActionTile(
-              icon: Icons.edit_rounded,
-              label: 'Rename playlist',
-              onTap: () async {
-                final notifier = ref.read(playlistsProvider.notifier);
-                Navigator.of(sheetContext).pop();
-                final name = await showNameSheet(
-                  context,
-                  title: 'Rename playlist',
-                  initial: playlist.name,
-                  actionLabel: 'Save',
-                );
-                if (name != null) notifier.rename(playlist.id, name);
-              },
-            ),
-            SheetActionTile(
-              icon: Icons.delete_outline_rounded,
-              label: 'Delete playlist',
-              onTap: () {
-                Navigator.of(sheetContext).pop();
-                ref.read(playlistsProvider.notifier).delete(playlist.id);
-                ref.read(navigationProvider.notifier).back();
-              },
-            ),
-            const SizedBox(height: 8),
-          ],
+  /// Shows a dark popover menu anchored on the tapped button ([buttonContext] is
+  /// the button's own context, used to position it) and returns the picked
+  /// value.
+  Future<T?> _showPopover<T>(
+    BuildContext buttonContext,
+    List<PopupMenuEntry<T>> items,
+  ) {
+    final button = buttonContext.findRenderObject() as RenderBox;
+    final overlay =
+        Navigator.of(buttonContext).overlay!.context.findRenderObject()
+            as RenderBox;
+    const gap = 6.0;
+    final topLeft = button.localToGlobal(Offset.zero, ancestor: overlay);
+    final bottomRight = button.localToGlobal(
+      button.size.bottomRight(Offset.zero),
+      ancestor: overlay,
+    );
+    // Open below the button, or above it when there isn't room below (button
+    // near the screen bottom). Menu height is estimated from the item count.
+    final menuHeight = items.length * kMinInteractiveDimension + 16;
+    final roomBelow = overlay.size.height - bottomRight.dy - gap;
+    final top = roomBelow < menuHeight
+        ? topLeft.dy -
+              gap -
+              menuHeight // above the button
+        : bottomRight.dy + gap; // below the button
+    final position = RelativeRect.fromLTRB(
+      topLeft.dx,
+      top,
+      overlay.size.width - bottomRight.dx,
+      overlay.size.height - top,
+    );
+    return showMenu<T>(
+      context: buttonContext,
+      position: position,
+      color: const Color(0xFF1B1B24),
+      elevation: 12,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+        side: BorderSide(color: AppColors.whiteAlpha(0.08)),
+      ),
+      items: items,
+    );
+  }
+
+  Future<void> _showMenu(
+    BuildContext buttonContext,
+    WidgetRef ref,
+    Playlist playlist,
+  ) async {
+    final notifier = ref.read(playlistsProvider.notifier);
+    final nav = ref.read(navigationProvider.notifier);
+    final selected = await _showPopover<String>(buttonContext, const [
+      PopupMenuItem(
+        value: 'rename',
+        child: _MenuRow(icon: Icons.edit_rounded, label: 'Rename playlist'),
+      ),
+      PopupMenuItem(
+        value: 'delete',
+        child: _MenuRow(
+          icon: Icons.delete_outline_rounded,
+          label: 'Delete playlist',
         ),
       ),
-    );
+    ]);
+    switch (selected) {
+      case 'rename':
+        if (!buttonContext.mounted) return;
+        final name = await showNameSheet(
+          buttonContext,
+          title: 'Rename playlist',
+          initial: playlist.name,
+          actionLabel: 'Save',
+        );
+        if (name != null) notifier.rename(playlist.id, name);
+      case 'delete':
+        notifier.delete(playlist.id);
+        nav.back();
+    }
+  }
+
+  Future<void> _showTrackMenu(
+    BuildContext buttonContext,
+    WidgetRef ref,
+    Playlist playlist,
+    Song song,
+  ) async {
+    final notifier = ref.read(playlistsProvider.notifier);
+    final selected = await _showPopover<String>(buttonContext, const [
+      PopupMenuItem(
+        value: 'add',
+        child: _MenuRow(
+          icon: Icons.playlist_add_rounded,
+          label: 'Add to playlist',
+        ),
+      ),
+      PopupMenuItem(
+        value: 'remove',
+        child: _MenuRow(
+          icon: Icons.playlist_remove_rounded,
+          label: 'Remove from playlist',
+        ),
+      ),
+    ]);
+    switch (selected) {
+      case 'add':
+        if (buttonContext.mounted) {
+          showAddToPlaylistSheet(buttonContext, song.id);
+        }
+      case 'remove':
+        notifier.removeSong(playlist.id, song.id);
+    }
   }
 
   void _showAddSongs(BuildContext context, String playlistId) {
@@ -289,6 +436,38 @@ class PlaylistScreen extends ConsumerWidget {
         'Playlist not found.',
         style: TextStyle(color: AppColors.whiteAlpha(0.5), fontSize: 15),
       ),
+    );
+  }
+}
+
+/// One row of a popover menu: an icon + label, styled for the dark menu
+/// surface.
+class _MenuRow extends StatelessWidget {
+  const _MenuRow({required this.icon, required this.label});
+
+  final IconData icon;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(icon, size: 20, color: AppColors.whiteAlpha(0.85)),
+        const SizedBox(width: 14),
+        Flexible(
+          child: Text(
+            label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(
+              color: AppColors.white,
+              fontSize: 14.5,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ),
+      ],
     );
   }
 }

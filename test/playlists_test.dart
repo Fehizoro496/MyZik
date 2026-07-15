@@ -117,6 +117,33 @@ void main() {
     await tester.pumpAndSettle();
     expect(container.read(playlistsProvider).first.songIds, [2, 3]);
 
+    // Close the add-to-playlist sheet (tap its barrier).
+    await tester.tapAt(const Offset(195, 10));
+    await tester.pumpAndSettle();
+
+    // Reordering rewrites the stored order and persists it.
+    final playlistId = container.read(playlistsProvider).first.id;
+    container.read(playlistsProvider.notifier).reorderSongs(playlistId, const [
+      3,
+      2,
+    ]);
+    expect(container.read(playlistsProvider).first.songIds, [3, 2]);
+    expect(prefs.getString('playlists.v1'), contains('"songIds":[3,2]'));
+
+    // Open the playlist and remove the first track via its ⋮ context menu.
+    await tester.tap(find.text('Playlists'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Road trip'));
+    await tester.pumpAndSettle();
+    expect(find.byType(PlaylistScreen), findsOneWidget);
+    expect(find.byIcon(Icons.more_vert_rounded), findsNWidgets(2));
+    await tester.tap(find.byIcon(Icons.more_vert_rounded).first);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Remove from playlist'));
+    await tester.pumpAndSettle();
+    // The first row was track 3 (order [3, 2]); removing it leaves [2].
+    expect(container.read(playlistsProvider).first.songIds, [2]);
+
     await tester.pumpWidget(const SizedBox.shrink());
   });
 }

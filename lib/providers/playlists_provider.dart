@@ -88,6 +88,27 @@ class PlaylistsNotifier extends Notifier<List<Playlist>> {
     _persist();
   }
 
+  /// Reorders the playlist to [orderedIds] (the ids the UI shows, in their new
+  /// order). Any ids not in [orderedIds] — e.g. tracks missing from the current
+  /// library, so not shown — are kept, appended in their previous order.
+  void reorderSongs(String id, List<int> orderedIds) {
+    final shown = orderedIds.toSet();
+    state = [
+      for (final p in state)
+        if (p.id == id)
+          p.copyWith(
+            songIds: [
+              ...orderedIds,
+              for (final s in p.songIds)
+                if (!shown.contains(s)) s,
+            ],
+          )
+        else
+          p,
+    ];
+    _persist();
+  }
+
   void _persist() {
     _prefs.setString(
       _kPlaylists,
