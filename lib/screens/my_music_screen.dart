@@ -8,6 +8,7 @@ import '../providers/library_provider.dart';
 import '../providers/my_music_provider.dart';
 import '../providers/navigation_provider.dart';
 import '../providers/playback_provider.dart';
+import '../providers/playlists_provider.dart';
 import '../theme.dart';
 import '../widgets.dart';
 
@@ -120,11 +121,7 @@ class _MyMusicScreenState extends ConsumerState<MyMusicScreen> {
     return switch (tab) {
       1 => _AlbumsGrid(albums: albumsFrom(songs), onOpen: _openCollection),
       2 => _ArtistsList(artists: artistsFrom(songs), onOpen: _openCollection),
-      3 => _placeholder(
-        icon: IconlyLight.paper,
-        title: 'No playlists yet',
-        subtitle: 'Playlists are coming soon.',
-      ),
+      3 => const _PlaylistsTab(),
       _ => _songsList(songs),
     };
   }
@@ -154,37 +151,6 @@ class _MyMusicScreenState extends ConsumerState<MyMusicScreen> {
       );
     }
     return _emptyState(library.status);
-  }
-
-  Widget _placeholder({
-    required IconData icon,
-    required String title,
-    required String subtitle,
-  }) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(40, 0, 40, 170),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(icon, size: 46, color: AppColors.whiteAlpha(0.3)),
-          const SizedBox(height: 16),
-          Text(
-            title,
-            style: const TextStyle(
-              color: AppColors.white,
-              fontSize: 16,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-          const SizedBox(height: 6),
-          Text(
-            subtitle,
-            textAlign: TextAlign.center,
-            style: TextStyle(color: AppColors.whiteAlpha(0.5), fontSize: 13.5),
-          ),
-        ],
-      ),
-    );
   }
 
   Widget _emptyState(LibraryStatus status) {
@@ -360,6 +326,188 @@ class _ArtistsList extends StatelessWidget {
         );
       },
       separatorBuilder: (_, _) => const SizedBox(height: 20),
+    );
+  }
+}
+
+/// The Playlists tab: a "New playlist" button on top of the user's playlists.
+/// Tapping a playlist opens its detail screen.
+class _PlaylistsTab extends ConsumerWidget {
+  const _PlaylistsTab();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final playlists = ref.watch(playlistsProvider);
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(24, 70, 24, 170),
+      physics: const BouncingScrollPhysics(),
+      children: [
+        GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: () => _create(context, ref),
+          child: Container(
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: AppColors.whiteAlpha(0.05),
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(color: AppColors.whiteAlpha(0.1)),
+            ),
+            child: Row(
+              children: [
+                Container(
+                  width: 48,
+                  height: 48,
+                  decoration: const BoxDecoration(
+                    shape: BoxShape.circle,
+                    gradient: AppColors.accentGradient,
+                  ),
+                  child: const Icon(
+                    Icons.add_rounded,
+                    color: AppColors.white,
+                    size: 24,
+                  ),
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Text(
+                        'New playlist',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: AppColors.white,
+                          fontSize: 16,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        'Group tracks your way',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: AppColors.whiteAlpha(0.5),
+                          fontSize: 12.5,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+        const SizedBox(height: 24),
+        if (playlists.isEmpty)
+          Padding(
+            padding: const EdgeInsets.only(top: 40),
+            child: Column(
+              children: [
+                Icon(
+                  Icons.queue_music_rounded,
+                  size: 46,
+                  color: AppColors.whiteAlpha(0.3),
+                ),
+                const SizedBox(height: 14),
+                Text(
+                  'No playlists yet.\nCreate one, or long-press any track to add it.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: AppColors.whiteAlpha(0.5),
+                    fontSize: 14,
+                    height: 1.5,
+                  ),
+                ),
+              ],
+            ),
+          )
+        else
+          for (var i = 0; i < playlists.length; i++) ...[
+            _PlaylistRow(
+              playlist: playlists[i],
+              onTap: () => _open(ref, playlists[i].id),
+            ),
+            if (i != playlists.length - 1) const SizedBox(height: 18),
+          ],
+      ],
+    );
+  }
+
+  void _open(WidgetRef ref, String id) {
+    ref.read(selectedPlaylistIdProvider.notifier).state = id;
+    ref.read(navigationProvider.notifier).goTo(AppScreen.playlist);
+  }
+
+  Future<void> _create(BuildContext context, WidgetRef ref) async {
+    final playlistsNotifier = ref.read(playlistsProvider.notifier);
+    final selectedNotifier = ref.read(selectedPlaylistIdProvider.notifier);
+    final nav = ref.read(navigationProvider.notifier);
+    final name = await showNameSheet(
+      context,
+      title: 'New playlist',
+      actionLabel: 'Create',
+    );
+    if (name == null) return;
+    final playlist = playlistsNotifier.create(name);
+    selectedNotifier.state = playlist.id;
+    nav.goTo(AppScreen.playlist);
+  }
+}
+
+/// One playlist in the list: cover + name + track count.
+class _PlaylistRow extends ConsumerWidget {
+  const _PlaylistRow({required this.playlist, required this.onTap});
+
+  final Playlist playlist;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final songs = ref.watch(playlistSongsProvider(playlist.id));
+    final count = playlist.songIds.length;
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: onTap,
+      child: Row(
+        children: [
+          PlaylistCover(songs: songs, size: 56, radius: 16),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  playlist.name,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: AppColors.white,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  '$count ${count == 1 ? 'song' : 'songs'}',
+                  style: TextStyle(
+                    color: AppColors.whiteAlpha(0.5),
+                    fontSize: 13,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Icon(
+            IconlyLight.arrowRight2,
+            size: 20,
+            color: AppColors.whiteAlpha(0.35),
+          ),
+        ],
+      ),
     );
   }
 }

@@ -170,7 +170,9 @@ class PlaybackNotifier extends Notifier<PlaybackState> {
     if (index == -1) return;
 
     final song = songs[index];
-    final position = Duration(milliseconds: prefs.getInt(_kLastPositionMs) ?? 0);
+    final position = Duration(
+      milliseconds: prefs.getInt(_kLastPositionMs) ?? 0,
+    );
     state = PlaybackState(
       current: song,
       currentIndex: index,
@@ -314,7 +316,9 @@ class PlaybackNotifier extends Notifier<PlaybackState> {
     try {
       final bytes = await ref.read(artworkProvider(song.id).future);
       if (bytes == null || state.current?.id != song.id) return;
-      final file = File('${Directory.systemTemp.path}/myzik_art_${song.id}.jpg');
+      final file = File(
+        '${Directory.systemTemp.path}/myzik_art_${song.id}.jpg',
+      );
       if (!file.existsSync()) await file.writeAsBytes(bytes, flush: true);
       if (state.current?.id != song.id) return; // track changed while writing
       ref

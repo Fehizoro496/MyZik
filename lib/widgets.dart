@@ -9,6 +9,7 @@ import 'providers/library_provider.dart';
 import 'providers/liked_provider.dart';
 import 'providers/navigation_provider.dart';
 import 'providers/playback_provider.dart';
+import 'providers/playlists_provider.dart';
 import 'theme.dart';
 
 /// A frosted, translucent circular icon button used throughout the design.
@@ -254,12 +255,14 @@ class SegmentedTabs extends StatelessWidget {
   }
 }
 
-/// A song list row: art + title/subtitle + trailing play button.
+/// A song list row: art + title/subtitle + trailing play button. Long-pressing
+/// the row opens the "add to playlist" sheet unless [onLongPress] overrides it.
 class TrackRow extends ConsumerWidget {
-  const TrackRow({super.key, required this.song, this.onTap});
+  const TrackRow({super.key, required this.song, this.onTap, this.onLongPress});
 
   final Song song;
   final VoidCallback? onTap;
+  final VoidCallback? onLongPress;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -267,6 +270,8 @@ class TrackRow extends ConsumerWidget {
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
       onTap: onTap,
+      onLongPress:
+          onLongPress ?? () => showAddToPlaylistSheet(context, song.id),
       child: Row(
         children: [
           SongArtwork(song: song),
@@ -518,6 +523,459 @@ class MiniPlayer extends ConsumerWidget {
               ],
             ),
           ),
+        ),
+      ),
+    );
+  }
+}
+
+/// A playlist's cover: the first track's artwork, or an accent-gradient tile
+/// with a queue glyph when the playlist is empty (or its tracks aren't in the
+/// library yet).
+class PlaylistCover extends StatelessWidget {
+  const PlaylistCover({
+    super.key,
+    required this.songs,
+    this.size = 54,
+    this.radius = 14,
+  });
+
+  final List<Song> songs;
+  final double size;
+  final double radius;
+
+  @override
+  Widget build(BuildContext context) {
+    if (songs.isEmpty) {
+      return Container(
+        width: size,
+        height: size,
+        decoration: BoxDecoration(
+          gradient: AppColors.accentGradient,
+          borderRadius: BorderRadius.circular(radius),
+        ),
+        child: Icon(
+          Icons.queue_music_rounded,
+          size: size * 0.42,
+          color: AppColors.white,
+        ),
+      );
+    }
+    return SongArtwork(song: songs.first, size: size, radius: radius);
+  }
+}
+
+/// The app's frosted bottom-sheet chrome: rounded top, backdrop blur, dark
+/// glass tint and a drag handle, lifting above the keyboard. [header] is a fixed
+/// area under the handle; [child] fills the rest (wrap a scrollable in it, e.g.
+/// a `shrinkWrap` ListView, so the sheet sizes to content up to
+/// [maxHeightFactor] of the screen and scrolls beyond).
+class GlassSheet extends StatelessWidget {
+  const GlassSheet({
+    super.key,
+    required this.child,
+    this.header,
+    this.maxHeightFactor = 0.85,
+  });
+
+  final Widget child;
+  final Widget? header;
+  final double maxHeightFactor;
+
+  @override
+  Widget build(BuildContext context) {
+    final media = MediaQuery.of(context);
+    return Padding(
+      padding: EdgeInsets.only(bottom: media.viewInsets.bottom),
+      child: ClipRRect(
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(30)),
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 30, sigmaY: 30),
+          child: Container(
+            constraints: BoxConstraints(
+              maxHeight: media.size.height * maxHeightFactor,
+            ),
+            decoration: BoxDecoration(
+              color: const Color.fromRGBO(15, 15, 21, 0.92),
+              borderRadius: const BorderRadius.vertical(
+                top: Radius.circular(30),
+              ),
+              border: Border(
+                top: BorderSide(color: AppColors.whiteAlpha(0.09)),
+              ),
+            ),
+            child: SafeArea(
+              top: false,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const SizedBox(height: 10),
+                  Container(
+                    width: 38,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: AppColors.whiteAlpha(0.22),
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  ?header,
+                  Flexible(child: child),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// A tappable row for a sheet action (e.g. "New playlist"): a circular glass
+/// icon chip + label.
+class SheetActionTile extends StatelessWidget {
+  const SheetActionTile({
+    super.key,
+    required this.icon,
+    required this.label,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(24, 8, 24, 8),
+        child: Row(
+          children: [
+            Container(
+              width: 44,
+              height: 44,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: AppColors.whiteAlpha(0.06),
+                border: Border.all(color: AppColors.whiteAlpha(0.1)),
+              ),
+              child: Icon(icon, size: 20, color: AppColors.white),
+            ),
+            const SizedBox(width: 14),
+            Text(
+              label,
+              style: const TextStyle(
+                color: AppColors.white,
+                fontSize: 15,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Prompts for a single line of text (playlist name) in a glass sheet, returning
+/// the trimmed value or null if dismissed. Autofocuses the field.
+Future<String?> showNameSheet(
+  BuildContext context, {
+  required String title,
+  String initial = '',
+  required String actionLabel,
+}) {
+  return showModalBottomSheet<String>(
+    context: context,
+    backgroundColor: Colors.transparent,
+    isScrollControlled: true,
+    builder: (_) =>
+        _NameSheet(title: title, initial: initial, actionLabel: actionLabel),
+  );
+}
+
+class _NameSheet extends StatefulWidget {
+  const _NameSheet({
+    required this.title,
+    required this.initial,
+    required this.actionLabel,
+  });
+
+  final String title;
+  final String initial;
+  final String actionLabel;
+
+  @override
+  State<_NameSheet> createState() => _NameSheetState();
+}
+
+class _NameSheetState extends State<_NameSheet> {
+  late final TextEditingController _controller = TextEditingController(
+    text: widget.initial,
+  );
+  final _focus = FocusNode();
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _focus.requestFocus());
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    _focus.dispose();
+    super.dispose();
+  }
+
+  void _submit() {
+    final text = _controller.text.trim();
+    if (text.isEmpty) return;
+    Navigator.of(context).pop(text);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return GlassSheet(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(24, 8, 24, 24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Align(
+              alignment: Alignment.centerLeft,
+              child: Text(
+                widget.title,
+                style: const TextStyle(
+                  color: AppColors.white,
+                  fontSize: 18,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+            Container(
+              height: 52,
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: AppColors.whiteAlpha(0.06),
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: AppColors.whiteAlpha(0.08)),
+              ),
+              child: TextField(
+                controller: _controller,
+                focusNode: _focus,
+                cursorColor: AppColors.accentA,
+                textInputAction: TextInputAction.done,
+                textCapitalization: TextCapitalization.words,
+                onSubmitted: (_) => _submit(),
+                style: const TextStyle(
+                  color: AppColors.white,
+                  fontSize: 15,
+                  fontWeight: FontWeight.w600,
+                ),
+                decoration: InputDecoration(
+                  isCollapsed: true,
+                  border: InputBorder.none,
+                  hintText: 'Playlist name',
+                  hintStyle: TextStyle(
+                    color: AppColors.whiteAlpha(0.4),
+                    fontSize: 15,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+            GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: _submit,
+              child: Container(
+                height: 50,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  gradient: AppColors.accentGradient,
+                  borderRadius: BorderRadius.circular(25),
+                ),
+                child: Text(
+                  widget.actionLabel,
+                  style: const TextStyle(
+                    color: AppColors.white,
+                    fontSize: 15,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Opens the sheet to add/remove [songId] to/from playlists. Tapping a playlist
+/// toggles membership (a check marks the ones it's in); "New playlist" creates
+/// one and drops the song straight in.
+Future<void> showAddToPlaylistSheet(BuildContext context, int songId) {
+  return showModalBottomSheet<void>(
+    context: context,
+    backgroundColor: Colors.transparent,
+    isScrollControlled: true,
+    builder: (_) => _AddToPlaylistSheet(songId: songId),
+  );
+}
+
+class _AddToPlaylistSheet extends ConsumerWidget {
+  const _AddToPlaylistSheet({required this.songId});
+
+  final int songId;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final playlists = ref.watch(playlistsProvider);
+    return GlassSheet(
+      maxHeightFactor: 0.7,
+      header: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Padding(
+            padding: EdgeInsets.fromLTRB(24, 10, 24, 6),
+            child: Align(
+              alignment: Alignment.centerLeft,
+              child: Text(
+                'Add to playlist',
+                style: TextStyle(
+                  color: AppColors.white,
+                  fontSize: 18,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ),
+          ),
+          SheetActionTile(
+            icon: Icons.add_rounded,
+            label: 'New playlist',
+            onTap: () async {
+              final notifier = ref.read(playlistsProvider.notifier);
+              final name = await showNameSheet(
+                context,
+                title: 'New playlist',
+                actionLabel: 'Create',
+              );
+              if (name == null) return;
+              final playlist = notifier.create(name);
+              notifier.addSong(playlist.id, songId);
+              if (context.mounted) Navigator.of(context).pop();
+            },
+          ),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 20),
+            child: Divider(height: 12, color: AppColors.whiteAlpha(0.08)),
+          ),
+        ],
+      ),
+      child: playlists.isEmpty
+          ? Padding(
+              padding: const EdgeInsets.fromLTRB(24, 8, 24, 28),
+              child: Text(
+                'No playlists yet. Create one above.',
+                style: TextStyle(
+                  color: AppColors.whiteAlpha(0.5),
+                  fontSize: 14,
+                ),
+              ),
+            )
+          : ListView.builder(
+              shrinkWrap: true,
+              physics: const ClampingScrollPhysics(),
+              padding: const EdgeInsets.fromLTRB(12, 2, 12, 12),
+              itemCount: playlists.length,
+              itemBuilder: (context, i) {
+                final playlist = playlists[i];
+                final selected = playlist.songIds.contains(songId);
+                return _PlaylistPickRow(
+                  playlist: playlist,
+                  selected: selected,
+                  onTap: () {
+                    final notifier = ref.read(playlistsProvider.notifier);
+                    if (selected) {
+                      notifier.removeSong(playlist.id, songId);
+                    } else {
+                      notifier.addSong(playlist.id, songId);
+                    }
+                  },
+                );
+              },
+            ),
+    );
+  }
+}
+
+class _PlaylistPickRow extends ConsumerWidget {
+  const _PlaylistPickRow({
+    required this.playlist,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final Playlist playlist;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final songs = ref.watch(playlistSongsProvider(playlist.id));
+    final count = playlist.songIds.length;
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        child: Row(
+          children: [
+            PlaylistCover(songs: songs, size: 46, radius: 12),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    playlist.name,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: AppColors.white,
+                      fontSize: 15,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const SizedBox(height: 3),
+                  Text(
+                    '$count ${count == 1 ? 'song' : 'songs'}',
+                    style: TextStyle(
+                      color: AppColors.whiteAlpha(0.45),
+                      fontSize: 12.5,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 12),
+            Icon(
+              selected
+                  ? Icons.check_circle_rounded
+                  : Icons.add_circle_outline_rounded,
+              color: selected ? AppColors.accentA : AppColors.whiteAlpha(0.4),
+              size: 26,
+            ),
+          ],
         ),
       ),
     );

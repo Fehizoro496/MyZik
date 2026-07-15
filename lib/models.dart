@@ -132,3 +132,35 @@ String _albumArtist(List<Song> songs) {
 }
 
 String _songCountLabel(int count) => '$count ${count == 1 ? 'song' : 'songs'}';
+
+/// A user-created playlist: an ordered list of [Song.id]s under a name. Stores
+/// ids (not full [Song]s) like liked songs, so a playlist survives a library
+/// rescan and never duplicates track data.
+class Playlist {
+  const Playlist({
+    required this.id,
+    required this.name,
+    this.songIds = const [],
+  });
+
+  final String id;
+  final String name;
+  final List<int> songIds;
+
+  Playlist copyWith({String? name, List<int>? songIds}) => Playlist(
+    id: id,
+    name: name ?? this.name,
+    songIds: songIds ?? this.songIds,
+  );
+
+  Map<String, dynamic> toJson() => {'id': id, 'name': name, 'songIds': songIds};
+
+  factory Playlist.fromJson(Map<String, dynamic> json) => Playlist(
+    id: json['id'] as String,
+    name: json['name'] as String,
+    songIds: [
+      for (final v in (json['songIds'] as List? ?? const []))
+        (v as num).toInt(),
+    ],
+  );
+}
