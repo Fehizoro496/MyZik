@@ -127,23 +127,25 @@ void main() {
     expect(container.read(playbackProvider).repeatMode, PlaybackRepeatMode.all);
   });
 
-  test('reorderQueue moves an upcoming track and keeps the current one',
-      () async {
-    final (container, songs) = await _bootstrap();
-    final notifier = container.read(playbackProvider.notifier);
+  test(
+    'reorderQueue moves an upcoming track and keeps the current one',
+    () async {
+      final (container, songs) = await _bootstrap();
+      final notifier = container.read(playbackProvider.notifier);
 
-    await notifier.playSong(songs[0]); // queue ids [1, 2, 3], current at 0
-    // Move the last track (id 3, index 2) up to index 1.
-    notifier.reorderQueue(2, 1);
+      await notifier.playSong(songs[0]); // queue ids [1, 2, 3], current at 0
+      // Move the last track (id 3, index 2) up to index 1.
+      notifier.reorderQueue(2, 1);
 
-    final state = container.read(playbackProvider);
-    expect(state.queue.map((s) => s.id).toList(), [1, 3, 2]);
-    expect(state.currentIndex, 0); // current (id 1) is untouched
+      final state = container.read(playbackProvider);
+      expect(state.queue.map((s) => s.id).toList(), [1, 3, 2]);
+      expect(state.currentIndex, 0); // current (id 1) is untouched
 
-    // next now follows the reordered queue: index 0 -> 1 -> id 3.
-    await notifier.next();
-    expect(container.read(playbackProvider).current?.id, 3);
-  });
+      // next now follows the reordered queue: index 0 -> 1 -> id 3.
+      await notifier.next();
+      expect(container.read(playbackProvider).current?.id, 3);
+    },
+  );
 
   test('OS media buttons drive the queue through the audio handler', () async {
     final (container, songs) = await _bootstrap();

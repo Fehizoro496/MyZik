@@ -9,8 +9,9 @@ import 'package:my_zik/main.dart';
 import 'package:my_zik/providers/shared_preferences_provider.dart';
 
 void main() {
-  testWidgets('Home screen renders and navigates to Now Playing',
-      (WidgetTester tester) async {
+  testWidgets('Home screen renders and navigates to Now Playing', (
+    WidgetTester tester,
+  ) async {
     // Use a phone-sized surface so the app renders edge-to-edge (no frame).
     tester.view.physicalSize = const Size(390, 844);
     tester.view.devicePixelRatio = 1.0;

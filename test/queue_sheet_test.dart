@@ -34,8 +34,9 @@ class _FakeRepo implements MusicRepository {
 }
 
 void main() {
-  testWidgets('queue button opens a sheet listing the play queue',
-      (tester) async {
+  testWidgets('queue button opens a sheet listing the play queue', (
+    tester,
+  ) async {
     tester.view.physicalSize = const Size(390, 844);
     tester.view.devicePixelRatio = 1.0;
     addTearDown(tester.view.resetPhysicalSize);
@@ -133,10 +134,11 @@ void main() {
     await gesture.up();
     await tester.pumpAndSettle();
 
-    expect(
-      container.read(playbackProvider).queue.map((s) => s.id).toList(),
-      [1, 3, 2],
-    );
+    expect(container.read(playbackProvider).queue.map((s) => s.id).toList(), [
+      1,
+      3,
+      2,
+    ]);
     // The playing track (id 1) is still current.
     expect(container.read(playbackProvider).currentIndex, 0);
 

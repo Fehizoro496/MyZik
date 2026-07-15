@@ -31,8 +31,9 @@ class _FakeRepo implements MusicRepository {
 }
 
 void main() {
-  testWidgets('search filters the library and queues the results',
-      (tester) async {
+  testWidgets('search filters the library and queues the results', (
+    tester,
+  ) async {
     tester.view.physicalSize = const Size(390, 844);
     tester.view.devicePixelRatio = 1.0;
     addTearDown(tester.view.resetPhysicalSize);

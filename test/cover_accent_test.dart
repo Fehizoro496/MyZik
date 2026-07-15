@@ -20,8 +20,9 @@ class _ArtRepo implements MusicRepository {
   @override
   Future<bool> ensurePermission() async => true;
   @override
-  Future<List<Song>> fetchSongs() async =>
-      const [Song(id: 1, title: 'A', artist: 'x')];
+  Future<List<Song>> fetchSongs() async => const [
+    Song(id: 1, title: 'A', artist: 'x'),
+  ];
   @override
   Future<Uint8List?> artworkFor(int id) async => bytes;
 }
