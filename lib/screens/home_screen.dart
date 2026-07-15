@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_iconly/flutter_iconly.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../models.dart';
 import '../providers/library_provider.dart';
 import '../providers/navigation_provider.dart';
 import '../providers/playback_provider.dart';
@@ -17,8 +16,6 @@ class HomeScreen extends ConsumerStatefulWidget {
 }
 
 class _HomeScreenState extends ConsumerState<HomeScreen> {
-  int _category = 0;
-
   @override
   Widget build(BuildContext context) {
     final library = ref.watch(libraryProvider);

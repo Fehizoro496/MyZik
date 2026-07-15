@@ -1,6 +1,14 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-enum AppScreen { home, nowPlaying, myMusic, liked, search, settings }
+enum AppScreen {
+  home,
+  nowPlaying,
+  myMusic,
+  liked,
+  search,
+  settings,
+  collection,
+}
 
 /// The screen currently shown by [PlayerShell]. Pure in-memory UI state — not
 /// persisted, always starts back on [AppScreen.home].

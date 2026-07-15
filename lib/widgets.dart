@@ -139,75 +139,116 @@ class SongArtwork extends ConsumerWidget {
   }
 }
 
-/// A pill filter/category chip. Active chips use the accent gradient.
-class CategoryChip extends StatelessWidget {
-  const CategoryChip({
+/// A floating, frosted segmented tab control: a glass capsule that hovers over
+/// the content (which scrolls behind it), split into equal segments with a
+/// gradient highlight that slides to the active one. Shares the MiniPlayer /
+/// NavBar glass recipe — same backdrop blur, tint and rim — so the app's
+/// floating surfaces read as one material. Used to switch between library
+/// views (Songs / Albums / Artists / …).
+class SegmentedTabs extends StatelessWidget {
+  const SegmentedTabs({
     super.key,
-    required this.label,
-    required this.active,
-    this.onTap,
-  });
-
-  final String label;
-  final bool active;
-  final VoidCallback? onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 11),
-        decoration: BoxDecoration(
-          gradient: active ? AppColors.accentGradient : null,
-          color: active ? null : AppColors.whiteAlpha(0.05),
-          borderRadius: BorderRadius.circular(22),
-          border: Border.all(color: AppColors.whiteAlpha(0.08)),
-        ),
-        child: Text(
-          label,
-          style: TextStyle(
-            color: active ? AppColors.white : AppColors.whiteAlpha(0.7),
-            fontSize: 14,
-            fontWeight: FontWeight.w600,
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-/// A horizontally-scrolling row of [CategoryChip]s with a selected index.
-class CategoryChips extends StatelessWidget {
-  const CategoryChips({
-    super.key,
-    required this.categories,
+    required this.tabs,
     required this.selected,
     required this.onSelected,
-    this.padding = const EdgeInsets.symmetric(horizontal: 22),
   });
 
-  final List<Category> categories;
+  final List<String> tabs;
   final int selected;
   final ValueChanged<int> onSelected;
-  final EdgeInsets padding;
 
   @override
   Widget build(BuildContext context) {
-    return SingleChildScrollView(
-      scrollDirection: Axis.horizontal,
-      padding: padding,
-      child: Row(
-        children: [
-          for (var i = 0; i < categories.length; i++) ...[
-            CategoryChip(
-              label: categories[i].label,
-              active: i == selected,
-              onTap: () => onSelected(i),
-            ),
-            if (i != categories.length - 1) const SizedBox(width: 10),
-          ],
+    final count = tabs.length;
+    return DecoratedBox(
+      // Soft drop shadow so the capsule lifts off the list scrolling underneath.
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(26),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.4),
+            blurRadius: 28,
+            offset: const Offset(0, 12),
+          ),
         ],
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(26),
+        child: BackdropFilter(
+          // Same blur as the MiniPlayer — this is what makes the content behind
+          // it read as frosted glass rather than a flat panel.
+          filter: ImageFilter.blur(sigmaX: 24, sigmaY: 24),
+          child: Container(
+            height: 50,
+            padding: const EdgeInsets.all(5),
+            decoration: BoxDecoration(
+              // Same tint + alpha as the NavBar / MiniPlayer frosted panels.
+              color: const Color.fromRGBO(22, 22, 30, 0.5),
+              borderRadius: BorderRadius.circular(26),
+              border: Border.all(color: AppColors.whiteAlpha(0.08)),
+            ),
+            child: Stack(
+              children: [
+                // Sliding gradient highlight behind the active segment. Aligned
+                // so its 1/count-wide box lands exactly over segment [selected].
+                AnimatedAlign(
+                  duration: const Duration(milliseconds: 260),
+                  curve: Curves.easeOutCubic,
+                  alignment: count == 1
+                      ? Alignment.center
+                      : Alignment(-1 + 2 * selected / (count - 1), 0),
+                  child: FractionallySizedBox(
+                    widthFactor: 1 / count,
+                    heightFactor: 1,
+                    child: DecoratedBox(
+                      decoration: BoxDecoration(
+                        gradient: AppColors.accentGradient,
+                        borderRadius: BorderRadius.circular(21),
+                        boxShadow: [
+                          BoxShadow(
+                            color: AppColors.accentA.withValues(alpha: 0.45),
+                            blurRadius: 14,
+                            offset: const Offset(0, 4),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+                Row(
+                  children: [
+                    for (var i = 0; i < count; i++)
+                      Expanded(
+                        child: GestureDetector(
+                          behavior: HitTestBehavior.opaque,
+                          onTap: () => onSelected(i),
+                          child: Center(
+                            child: AnimatedDefaultTextStyle(
+                              duration: const Duration(milliseconds: 200),
+                              style: TextStyle(
+                                color: i == selected
+                                    ? AppColors.white
+                                    : AppColors.whiteAlpha(0.6),
+                                fontSize: 13,
+                                fontWeight: i == selected
+                                    ? FontWeight.w700
+                                    : FontWeight.w600,
+                              ),
+                              child: Text(
+                                tabs[i],
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }

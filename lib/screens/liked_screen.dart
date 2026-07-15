@@ -19,8 +19,6 @@ class LikedScreen extends ConsumerStatefulWidget {
 }
 
 class _LikedScreenState extends ConsumerState<LikedScreen> {
-  int _category = 0;
-
   @override
   Widget build(BuildContext context) {
     final likedIds = ref.watch(likedProvider);

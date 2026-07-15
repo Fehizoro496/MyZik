@@ -6,6 +6,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'providers/audio_handler.dart';
 import 'providers/navigation_provider.dart';
 import 'providers/shared_preferences_provider.dart';
+import 'screens/collection_screen.dart';
 import 'screens/home_screen.dart';
 import 'screens/my_music_screen.dart';
 import 'screens/now_playing_screen.dart';
@@ -73,6 +74,8 @@ class PlayerShell extends ConsumerWidget {
         return const SearchScreen();
       case AppScreen.settings:
         return const SettingsScreen();
+      case AppScreen.collection:
+        return const CollectionScreen();
     }
   }
 

@@ -1,11 +1,5 @@
 import 'package:flutter/material.dart';
 
-/// A filter/category chip.
-class Category {
-  const Category(this.label);
-  final String label;
-}
-
 /// A single audio track. Source-agnostic on purpose: the device (on_audio_query)
 /// and the future desktop repository both map their native rows into this, so
 /// nothing plugin-specific leaks into the controller or the UI.
@@ -59,28 +53,82 @@ class AppArt {
   ];
 }
 
-/// Static UI filter chips (not backed by the library).
-class MusicCategories {
-  const MusicCategories._();
+/// Whether a [MusicCollection] groups an album or an artist — drives the
+/// cover shape (rounded square vs. circle) and the labels in the detail view.
+enum CollectionKind { album, artist }
 
-  static const List<Category> home = [
-    Category('All'),
-    Category('New Release'),
-    Category('Trending'),
-    Category('Top Charts'),
-  ];
+/// A group of tracks derived from the flat library: all the songs of one album
+/// or one artist. Built on the fly by [albumsFrom] / [artistsFrom] since the
+/// library has no first-class album/artist entities.
+class MusicCollection {
+  const MusicCollection({
+    required this.kind,
+    required this.title,
+    required this.subtitle,
+    required this.songs,
+  });
 
-  static const List<Category> myMusic = [
-    Category('All'),
-    Category('Playlists'),
-    Category('Liked Songs'),
-    Category('Downloaded'),
-  ];
+  final CollectionKind kind;
 
-  static const List<Category> liked = [
-    Category('Songs'),
-    Category('Albums'),
-    Category('Artists'),
-    Category('Playlists'),
-  ];
+  /// Album name or artist name.
+  final String title;
+
+  /// Album's artist (or "Various artists") for albums; the track count for
+  /// artists.
+  final String subtitle;
+
+  final List<Song> songs;
+
+  /// Representative track used for the cover artwork.
+  Song get cover => songs.first;
+
+  bool get isArtist => kind == CollectionKind.artist;
 }
+
+/// Groups [songs] by album, sorted alphabetically. Tracks with no album tag
+/// fall under a single "Unknown album" bucket.
+List<MusicCollection> albumsFrom(List<Song> songs) {
+  final byAlbum = <String, List<Song>>{};
+  for (final s in songs) {
+    byAlbum.putIfAbsent(s.album ?? 'Unknown album', () => <Song>[]).add(s);
+  }
+  final albums = [
+    for (final e in byAlbum.entries)
+      MusicCollection(
+        kind: CollectionKind.album,
+        title: e.key,
+        subtitle: _albumArtist(e.value),
+        songs: e.value,
+      ),
+  ];
+  albums.sort((a, b) => a.title.toLowerCase().compareTo(b.title.toLowerCase()));
+  return albums;
+}
+
+/// Groups [songs] by artist, sorted alphabetically.
+List<MusicCollection> artistsFrom(List<Song> songs) {
+  final byArtist = <String, List<Song>>{};
+  for (final s in songs) {
+    byArtist.putIfAbsent(s.artist, () => <Song>[]).add(s);
+  }
+  final artists = [
+    for (final e in byArtist.entries)
+      MusicCollection(
+        kind: CollectionKind.artist,
+        title: e.key,
+        subtitle: _songCountLabel(e.value.length),
+        songs: e.value,
+      ),
+  ];
+  artists.sort(
+    (a, b) => a.title.toLowerCase().compareTo(b.title.toLowerCase()),
+  );
+  return artists;
+}
+
+String _albumArtist(List<Song> songs) {
+  final artists = songs.map((s) => s.artist).toSet();
+  return artists.length == 1 ? artists.first : 'Various artists';
+}
+
+String _songCountLabel(int count) => '$count ${count == 1 ? 'song' : 'songs'}';
