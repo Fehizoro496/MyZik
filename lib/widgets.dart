@@ -1,9 +1,9 @@
 import 'dart:ui';
 
 import 'package:flutter/material.dart';
-import 'package:flutter_iconly/flutter_iconly.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'icons.dart';
 import 'models.dart';
 import 'providers/library_provider.dart';
 import 'providers/liked_provider.dart';
@@ -363,7 +363,7 @@ class _TrackMenuButton extends ConsumerWidget {
       PopupMenuItem(
         value: 'like',
         child: PopoverMenuRow(
-          icon: liked ? IconlyBold.heart : IconlyLight.heart,
+          icon: liked ? AppIcons.heartFilled : AppIcons.heart,
           label: liked ? 'Remove from liked' : 'Add to liked',
         ),
       ),
@@ -415,33 +415,33 @@ class NavBar extends ConsumerWidget {
                     _tab(
                       screen,
                       goTo,
-                      icon: IconlyLight.home,
-                      activeIcon: IconlyBold.home,
+                      icon: AppIcons.home,
+                      activeIcon: AppIcons.homeFilled,
                       target: AppScreen.home,
                     ),
                     _tab(
                       screen,
                       goTo,
-                      icon: IconlyLight.category,
-                      activeIcon: IconlyBold.category,
+                      icon: AppIcons.category,
+                      activeIcon: AppIcons.categoryFilled,
                       target: AppScreen.myMusic,
                     ),
                     // _action(
-                    //   IconlyLight.swap,
+                    //   AppIcons.swap,
                     //   () => goTo(AppScreen.nowPlaying),
                     // ),
                     _tab(
                       screen,
                       goTo,
-                      icon: IconlyLight.heart,
-                      activeIcon: IconlyBold.heart,
+                      icon: AppIcons.heart,
+                      activeIcon: AppIcons.heartFilled,
                       target: AppScreen.liked,
                     ),
                     _tab(
                       screen,
                       goTo,
-                      icon: IconlyLight.download,
-                      activeIcon: IconlyBold.download,
+                      icon: AppIcons.download,
+                      activeIcon: AppIcons.downloadFilled,
                       target: AppScreen.discover,
                     ),
                   ],

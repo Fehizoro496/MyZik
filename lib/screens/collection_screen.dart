@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_iconly/flutter_iconly.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../icons.dart';
 import '../models.dart';
 import '../providers/collection_provider.dart';
 import '../providers/navigation_provider.dart';
@@ -29,7 +29,7 @@ class CollectionScreen extends ConsumerWidget {
               child: Row(
                 children: [
                   GlassIconButton(
-                    icon: IconlyLight.arrowLeft2,
+                    icon: AppIcons.back,
                     size: 44,
                     iconSize: 22,
                     onTap: () => ref.read(navigationProvider.notifier).back(),

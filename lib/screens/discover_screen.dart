@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_iconly/flutter_iconly.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../icons.dart';
 import '../models.dart';
 import '../providers/navigation_provider.dart';
 import '../theme.dart';
@@ -137,7 +137,7 @@ class _DiscoverScreenState extends ConsumerState<DiscoverScreen> {
                   child: Row(
                     children: [
                       GlassIconButton(
-                        icon: IconlyLight.arrowLeft2,
+                        icon: AppIcons.back,
                         size: 44,
                         iconSize: 22,
                         onTap: () =>
@@ -224,7 +224,7 @@ class _DiscoverScreenState extends ConsumerState<DiscoverScreen> {
       ),
       child: Row(
         children: [
-          Icon(IconlyLight.search, size: 20, color: AppColors.whiteAlpha(0.5)),
+          Icon(AppIcons.search, size: 20, color: AppColors.whiteAlpha(0.5)),
           const SizedBox(width: 10),
           Expanded(
             child: TextField(
@@ -393,7 +393,7 @@ class _DiscoverScreenState extends ConsumerState<DiscoverScreen> {
               color: AppColors.whiteAlpha(0.06),
               border: Border.all(color: AppColors.whiteAlpha(0.1)),
             ),
-            child: Icon(IconlyLight.download, size: 20, color: AppColors.white),
+            child: Icon(AppIcons.download, size: 20, color: AppColors.white),
           ),
         );
     }
@@ -405,7 +405,7 @@ class _DiscoverScreenState extends ConsumerState<DiscoverScreen> {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(IconlyLight.search, size: 46, color: AppColors.whiteAlpha(0.3)),
+          Icon(AppIcons.search, size: 46, color: AppColors.whiteAlpha(0.3)),
           const SizedBox(height: 16),
           Text(
             'Nothing matched "${_query.trim()}".',

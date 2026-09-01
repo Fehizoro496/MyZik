@@ -3,9 +3,9 @@ import 'dart:typed_data';
 import 'dart:ui';
 
 import 'package:flutter/material.dart';
-import 'package:flutter_iconly/flutter_iconly.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../icons.dart';
 import '../models.dart';
 import '../providers/library_provider.dart';
 import '../providers/liked_provider.dart';
@@ -56,7 +56,7 @@ class NowPlayingScreen extends ConsumerWidget {
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
                           GlassIconButton(
-                            icon: IconlyLight.arrowLeft2,
+                            icon: AppIcons.back,
                             size: 44,
                             iconSize: 22,
                             onTap: () =>
@@ -74,8 +74,8 @@ class NowPlayingScreen extends ConsumerWidget {
                               const SizedBox(width: 10),
                               GlassIconButton(
                                 icon: ref.watch(isLikedProvider(track.id))
-                                    ? IconlyBold.heart
-                                    : IconlyLight.heart,
+                                    ? AppIcons.heartFilled
+                                    : AppIcons.heart,
                                 iconColor: ref.watch(isLikedProvider(track.id))
                                     ? AppColors.liked
                                     : AppColors.white,
@@ -251,7 +251,7 @@ class NowPlayingScreen extends ConsumerWidget {
               child: Align(
                 alignment: Alignment.centerLeft,
                 child: GlassIconButton(
-                  icon: IconlyLight.arrowLeft2,
+                  icon: AppIcons.back,
                   size: 44,
                   iconSize: 22,
                   onTap: () => ref.read(navigationProvider.notifier).back(),
@@ -376,8 +376,8 @@ class NowPlayingScreen extends ConsumerWidget {
                 color: AppColors.whiteAlpha(0.85),
               ),
               _toggleControl(
-                // Iconly has no repeat/loop glyph, so this one stays on
-                // Material to keep repeat-one distinguishable and readable.
+                // Stays on Material: its rounded repeat/repeat-one pair reads
+                // as more clearly distinct at this size than the Iconsax one.
                 icon: playback.repeatMode == PlaybackRepeatMode.one
                     ? Icons.repeat_one_rounded
                     : Icons.repeat_rounded,

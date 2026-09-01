@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_iconly/flutter_iconly.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../icons.dart';
 import '../models.dart';
 import '../providers/collection_provider.dart';
 import '../providers/library_provider.dart';
@@ -47,7 +47,7 @@ class _MyMusicScreenState extends ConsumerState<MyMusicScreen> {
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       GlassIconButton(
-                        icon: IconlyLight.arrowLeft2,
+                        icon: AppIcons.back,
                         size: 44,
                         iconSize: 22,
                         onTap: () =>
@@ -62,7 +62,7 @@ class _MyMusicScreenState extends ConsumerState<MyMusicScreen> {
                         ),
                       ),
                       GlassIconButton(
-                        icon: IconlyLight.search,
+                        icon: AppIcons.search,
                         onTap: () => ref
                             .read(navigationProvider.notifier)
                             .goTo(AppScreen.search),
@@ -166,7 +166,7 @@ class _MyMusicScreenState extends ConsumerState<MyMusicScreen> {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(IconlyLight.folder, size: 48, color: AppColors.whiteAlpha(0.4)),
+          Icon(AppIcons.folder, size: 48, color: AppColors.whiteAlpha(0.4)),
           const SizedBox(height: 16),
           Text(
             message,
@@ -317,7 +317,7 @@ class _ArtistsList extends StatelessWidget {
                 ),
               ),
               Icon(
-                IconlyLight.arrowRight2,
+                AppIcons.chevronRight,
                 size: 20,
                 color: AppColors.whiteAlpha(0.35),
               ),
@@ -502,7 +502,7 @@ class _PlaylistRow extends ConsumerWidget {
             ),
           ),
           Icon(
-            IconlyLight.arrowRight2,
+            AppIcons.chevronRight,
             size: 20,
             color: AppColors.whiteAlpha(0.35),
           ),

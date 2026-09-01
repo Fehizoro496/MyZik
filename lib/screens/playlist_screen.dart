@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_iconly/flutter_iconly.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../icons.dart';
 import '../models.dart';
 import '../providers/library_provider.dart';
 import '../providers/navigation_provider.dart';
@@ -34,7 +34,7 @@ class PlaylistScreen extends ConsumerWidget {
               child: Row(
                 children: [
                   GlassIconButton(
-                    icon: IconlyLight.arrowLeft2,
+                    icon: AppIcons.back,
                     size: 44,
                     iconSize: 22,
                     onTap: () => ref.read(navigationProvider.notifier).back(),
@@ -548,7 +548,7 @@ class _AddSongsSheetState extends ConsumerState<_AddSongsSheet> {
       ),
       child: Row(
         children: [
-          Icon(IconlyLight.search, size: 19, color: AppColors.whiteAlpha(0.5)),
+          Icon(AppIcons.search, size: 19, color: AppColors.whiteAlpha(0.5)),
           const SizedBox(width: 10),
           Expanded(
             child: TextField(

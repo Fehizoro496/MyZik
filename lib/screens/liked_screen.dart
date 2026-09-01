@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_iconly/flutter_iconly.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../icons.dart';
 import '../models.dart';
 import '../providers/library_provider.dart';
 import '../providers/liked_provider.dart';
@@ -40,7 +40,7 @@ class _LikedScreenState extends ConsumerState<LikedScreen> {
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       GlassIconButton(
-                        icon: IconlyLight.arrowLeft2,
+                        icon: AppIcons.back,
                         size: 44,
                         iconSize: 22,
                         onTap: () =>
@@ -55,7 +55,7 @@ class _LikedScreenState extends ConsumerState<LikedScreen> {
                         ),
                       ),
                       GlassIconButton(
-                        icon: IconlyLight.search,
+                        icon: AppIcons.search,
                         size: 44,
                         onTap: () => ref
                             .read(navigationProvider.notifier)
@@ -143,7 +143,7 @@ class _LikedScreenState extends ConsumerState<LikedScreen> {
                 color: AppColors.whiteAlpha(0.18),
               ),
               child: const Icon(
-                IconlyBold.heart,
+                AppIcons.heartFilled,
                 size: 26,
                 color: AppColors.white,
               ),
@@ -181,7 +181,7 @@ class _LikedScreenState extends ConsumerState<LikedScreen> {
                 color: Color(0xFF0B1220),
               ),
               child: const Icon(
-                IconlyBold.play,
+                AppIcons.playFilled,
                 size: 20,
                 color: AppColors.white,
               ),
@@ -199,7 +199,7 @@ class _LikedScreenState extends ConsumerState<LikedScreen> {
       padding: const EdgeInsets.only(top: 60),
       child: Column(
         children: [
-          Icon(IconlyLight.heart, size: 48, color: AppColors.whiteAlpha(0.3)),
+          Icon(AppIcons.heart, size: 48, color: AppColors.whiteAlpha(0.3)),
           const SizedBox(height: 16),
           Text(
             'No liked songs yet.\nTap the heart on any track to add it here.',

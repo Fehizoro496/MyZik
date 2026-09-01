@@ -35,7 +35,10 @@ dependencies:
   # Use with the CupertinoIcons class for iOS style icons.
   cupertino_icons: ^1.0.8
   google_fonts: ^8.1.0
-  flutter_iconly: ^1.0.2
+  # Iconsax icon set (Linear + Bold styles), replacing the unmaintained
+  # flutter_iconly which extended IconData - impossible since IconData
+  # became a final class in Flutter 3.44.
+  iconsax_flutter: ^1.0.1
 
   # Queries the device's on-device audio library (Android/iOS only). Kept
   # behind the MusicRepository abstraction so desktop can plug in later.

@@ -2,9 +2,9 @@ import 'dart:typed_data';
 import 'dart:ui';
 
 import 'package:flutter/material.dart';
-import 'package:flutter_iconly/flutter_iconly.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../icons.dart';
 import '../models.dart';
 import '../providers/collection_provider.dart';
 import '../providers/library_provider.dart';
@@ -49,7 +49,7 @@ class SongDetailScreen extends ConsumerWidget {
                   child: Row(
                     children: [
                       GlassIconButton(
-                        icon: IconlyLight.arrowLeft2,
+                        icon: AppIcons.back,
                         size: 44,
                         iconSize: 22,
                         onTap: () =>
@@ -191,7 +191,7 @@ class SongDetailScreen extends ConsumerWidget {
                   .playSong(song, context: library),
             ),
             _pill(
-              icon: liked ? IconlyBold.heart : IconlyLight.heart,
+              icon: liked ? AppIcons.heartFilled : AppIcons.heart,
               label: liked ? 'Liked' : 'Like',
               iconColor: liked ? AppColors.liked : AppColors.white,
               onTap: () => ref.read(likedProvider.notifier).toggle(song.id),
@@ -353,7 +353,7 @@ class _InfoRow extends StatelessWidget {
               Padding(
                 padding: const EdgeInsets.only(left: 8),
                 child: Icon(
-                  IconlyLight.arrowRight2,
+                  AppIcons.chevronRight,
                   size: 18,
                   color: AppColors.whiteAlpha(0.4),
                 ),

@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_iconly/flutter_iconly.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../icons.dart';
 import '../providers/library_provider.dart';
 import '../providers/navigation_provider.dart';
 import '../providers/playback_provider.dart';
@@ -163,7 +163,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             backgroundImage: AssetImage('assets/images/avatar.png'),
           ),
           GlassIconButton(
-            icon: IconlyLight.search,
+            icon: AppIcons.search,
             onTap: () =>
                 ref.read(navigationProvider.notifier).goTo(AppScreen.search),
           ),
@@ -263,26 +263,26 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                         color: Color(0xFF0B1220),
                       ),
                       child: const Icon(
-                        IconlyBold.play,
+                        AppIcons.playFilled,
                         size: 20,
                         color: AppColors.white,
                       ),
                     ),
                     const SizedBox(width: 16),
                     Icon(
-                      IconlyLight.heart,
+                      AppIcons.heart,
                       size: 20,
                       color: AppColors.whiteAlpha(0.9),
                     ),
                     const SizedBox(width: 16),
                     Icon(
-                      IconlyLight.download,
+                      AppIcons.download,
                       size: 20,
                       color: AppColors.whiteAlpha(0.9),
                     ),
                     const SizedBox(width: 16),
                     Icon(
-                      IconlyLight.moreCircle,
+                      AppIcons.more,
                       size: 22,
                       color: AppColors.whiteAlpha(0.9),
                     ),
