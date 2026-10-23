@@ -141,7 +141,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
               child: Padding(
                 padding: const EdgeInsets.only(left: 8),
                 child: Icon(
-                  Icons.close_rounded,
+                  AppIcons.close,
                   size: 20,
                   color: AppColors.whiteAlpha(0.5),
                 ),

@@ -362,7 +362,7 @@ class _PlaylistsTab extends ConsumerWidget {
                     gradient: AppColors.accentGradient,
                   ),
                   child: const Icon(
-                    Icons.add_rounded,
+                    AppIcons.add,
                     color: AppColors.white,
                     size: 24,
                   ),
@@ -407,7 +407,7 @@ class _PlaylistsTab extends ConsumerWidget {
             child: Column(
               children: [
                 Icon(
-                  Icons.queue_music_rounded,
+                  AppIcons.queue,
                   size: 46,
                   color: AppColors.whiteAlpha(0.3),
                 ),

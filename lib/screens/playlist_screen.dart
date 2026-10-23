@@ -53,7 +53,7 @@ class PlaylistScreen extends ConsumerWidget {
                   if (playlist != null)
                     Builder(
                       builder: (buttonContext) => GlassIconButton(
-                        icon: Icons.more_horiz_rounded,
+                        icon: AppIcons.moreHoriz,
                         size: 44,
                         iconSize: 22,
                         onTap: () => _showMenu(buttonContext, ref, playlist),
@@ -146,7 +146,7 @@ class PlaylistScreen extends ConsumerWidget {
                 borderRadius: BorderRadius.circular(16),
               ),
               child: const Icon(
-                Icons.delete_rounded,
+                AppIcons.deleteFilled,
                 color: AppColors.white,
                 size: 22,
               ),
@@ -162,7 +162,7 @@ class PlaylistScreen extends ConsumerWidget {
                       bottom: 8,
                     ),
                     child: Icon(
-                      Icons.drag_handle_rounded,
+                      AppIcons.dragHandle,
                       size: 22,
                       color: AppColors.whiteAlpha(0.4),
                     ),
@@ -180,7 +180,7 @@ class PlaylistScreen extends ConsumerWidget {
                         onTap: () =>
                             _showTrackMenu(buttonContext, ref, playlist, song),
                         child: Icon(
-                          Icons.more_vert_rounded,
+                          AppIcons.moreVert,
                           size: 20,
                           color: AppColors.whiteAlpha(0.8),
                         ),
@@ -232,7 +232,7 @@ class PlaylistScreen extends ConsumerWidget {
             mainAxisSize: MainAxisSize.min,
             children: [
               _actionPill(
-                icon: Icons.play_arrow_rounded,
+                icon: AppIcons.playFilled,
                 label: 'Play',
                 filled: true,
                 onTap: songs.isEmpty
@@ -243,7 +243,7 @@ class PlaylistScreen extends ConsumerWidget {
               ),
               const SizedBox(width: 12),
               _actionPill(
-                icon: Icons.add_rounded,
+                icon: AppIcons.add,
                 label: 'Add songs',
                 filled: false,
                 onTap: () => _showAddSongs(context, playlist.id),
@@ -307,17 +307,11 @@ class PlaylistScreen extends ConsumerWidget {
     final selected = await showPopoverMenu<String>(buttonContext, const [
       PopupMenuItem(
         value: 'rename',
-        child: PopoverMenuRow(
-          icon: Icons.edit_rounded,
-          label: 'Rename playlist',
-        ),
+        child: PopoverMenuRow(icon: AppIcons.edit, label: 'Rename playlist'),
       ),
       PopupMenuItem(
         value: 'delete',
-        child: PopoverMenuRow(
-          icon: Icons.delete_outline_rounded,
-          label: 'Delete playlist',
-        ),
+        child: PopoverMenuRow(icon: AppIcons.delete, label: 'Delete playlist'),
       ),
     ]);
     switch (selected) {
@@ -347,22 +341,19 @@ class PlaylistScreen extends ConsumerWidget {
     final selected = await showPopoverMenu<String>(buttonContext, const [
       PopupMenuItem(
         value: 'details',
-        child: PopoverMenuRow(
-          icon: Icons.info_outline_rounded,
-          label: 'Song details',
-        ),
+        child: PopoverMenuRow(icon: AppIcons.info, label: 'Song details'),
       ),
       PopupMenuItem(
         value: 'add',
         child: PopoverMenuRow(
-          icon: Icons.playlist_add_rounded,
+          icon: AppIcons.playlistAdd,
           label: 'Add to playlist',
         ),
       ),
       PopupMenuItem(
         value: 'remove',
         child: PopoverMenuRow(
-          icon: Icons.playlist_remove_rounded,
+          icon: AppIcons.playlistRemove,
           label: 'Remove from playlist',
         ),
       ),
@@ -520,9 +511,7 @@ class _AddSongsSheetState extends ConsumerState<_AddSongsSheet> {
                         ),
                         const SizedBox(width: 12),
                         Icon(
-                          added
-                              ? Icons.check_circle_rounded
-                              : Icons.add_circle_outline_rounded,
+                          added ? AppIcons.checkCircle : AppIcons.addCircle,
                           color: added
                               ? AppColors.accentA
                               : AppColors.whiteAlpha(0.4),
@@ -583,7 +572,7 @@ class _AddSongsSheetState extends ConsumerState<_AddSongsSheet> {
               child: Padding(
                 padding: const EdgeInsets.only(left: 8),
                 child: Icon(
-                  Icons.close_rounded,
+                  AppIcons.close,
                   size: 19,
                   color: AppColors.whiteAlpha(0.5),
                 ),

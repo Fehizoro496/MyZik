@@ -250,7 +250,7 @@ class _DiscoverScreenState extends ConsumerState<DiscoverScreen> {
               child: Padding(
                 padding: const EdgeInsets.only(left: 8),
                 child: Icon(
-                  Icons.close_rounded,
+                  AppIcons.close,
                   size: 20,
                   color: AppColors.whiteAlpha(0.5),
                 ),
@@ -420,16 +420,12 @@ class _DiscoverScreenState extends ConsumerState<DiscoverScreen> {
     final Widget child;
     if (saved) {
       child = const Icon(
-        Icons.download_done_rounded,
+        AppIcons.downloaded,
         size: 20,
         color: AppColors.accentA,
       );
     } else if (failed) {
-      child = const Icon(
-        Icons.refresh_rounded,
-        size: 20,
-        color: Color(0xFFFF8A9B),
-      );
+      child = const Icon(AppIcons.retry, size: 20, color: Color(0xFFFF8A9B));
     } else if (download != null) {
       child = Padding(
         padding: const EdgeInsets.all(10),
@@ -481,11 +477,7 @@ class _DiscoverScreenState extends ConsumerState<DiscoverScreen> {
           color: AppColors.whiteAlpha(0.06),
           border: Border.all(color: AppColors.whiteAlpha(0.08)),
         ),
-        child: Icon(
-          Icons.close_rounded,
-          size: 20,
-          color: AppColors.whiteAlpha(0.8),
-        ),
+        child: Icon(AppIcons.close, size: 20, color: AppColors.whiteAlpha(0.8)),
       ),
     );
   }
@@ -512,17 +504,13 @@ class _DiscoverScreenState extends ConsumerState<DiscoverScreen> {
                 strokeWidth: 2,
                 color: AppColors.accentA,
               )
-            : const Icon(
-                Icons.play_arrow_rounded,
-                size: 24,
-                color: AppColors.white,
-              ),
+            : const Icon(AppIcons.playFilled, size: 24, color: AppColors.white),
       ),
     );
   }
 
   Widget _searchPrompt() => _message(
-    icon: Icons.ondemand_video_rounded,
+    icon: AppIcons.video,
     title: 'Search YouTube',
     detail:
         'Find a video and play its audio directly in MyZik, or download it '
@@ -530,7 +518,7 @@ class _DiscoverScreenState extends ConsumerState<DiscoverScreen> {
   );
 
   Widget _searchError() => _message(
-    icon: Icons.wifi_off_rounded,
+    icon: AppIcons.offline,
     title: 'Search failed',
     detail: 'Check your connection and try again.',
     action: TextButton(

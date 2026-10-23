@@ -187,7 +187,7 @@ class SongDetailScreen extends ConsumerWidget {
           runSpacing: 12,
           children: [
             _pill(
-              icon: Icons.play_arrow_rounded,
+              icon: AppIcons.playFilled,
               label: 'Play',
               filled: true,
               onTap: () => ref
@@ -201,13 +201,13 @@ class SongDetailScreen extends ConsumerWidget {
               onTap: () => ref.read(likedProvider.notifier).toggle(song.id),
             ),
             _pill(
-              icon: Icons.playlist_add_rounded,
+              icon: AppIcons.playlistAdd,
               label: 'Add to playlist',
               onTap: () => showAddToPlaylistSheet(context, song.id),
             ),
             if (download != null)
               _pill(
-                icon: Icons.delete_outline_rounded,
+                icon: AppIcons.delete,
                 label: 'Remove download',
                 onTap: () => _confirmRemoveDownload(context, ref, download),
               ),

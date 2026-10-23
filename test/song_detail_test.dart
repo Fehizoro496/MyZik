@@ -8,6 +8,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'package:my_zik/icons.dart';
 import 'package:my_zik/data/music_repository.dart';
 import 'package:my_zik/main.dart';
 import 'package:my_zik/models.dart';
@@ -70,8 +71,8 @@ void main() {
     await tester.pumpAndSettle();
 
     // Open the first track's ⋮ menu and pick "Song details".
-    expect(find.byIcon(Icons.more_vert_rounded), findsNWidgets(2));
-    await tester.tap(find.byIcon(Icons.more_vert_rounded).first);
+    expect(find.byIcon(AppIcons.moreVert), findsNWidgets(2));
+    await tester.tap(find.byIcon(AppIcons.moreVert).first);
     await tester.pumpAndSettle();
     await tester.tap(find.text('Song details'));
     await tester.pumpAndSettle();

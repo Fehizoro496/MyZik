@@ -87,7 +87,7 @@ class AlbumArt extends StatelessWidget {
       ),
       child: showGlyph
           ? Icon(
-              Icons.music_note_rounded,
+              AppIcons.musicNote,
               size: size * 0.34,
               color: AppColors.whiteAlpha(0.85),
             )
@@ -335,7 +335,7 @@ class _TrackMenuButton extends ConsumerWidget {
         behavior: HitTestBehavior.opaque,
         onTap: () => _openMenu(buttonContext, ref),
         child: Icon(
-          Icons.more_vert_rounded,
+          AppIcons.moreVert,
           size: 20,
           color: AppColors.whiteAlpha(0.8),
         ),
@@ -348,15 +348,12 @@ class _TrackMenuButton extends ConsumerWidget {
     final selected = await showPopoverMenu<String>(buttonContext, [
       const PopupMenuItem(
         value: 'details',
-        child: PopoverMenuRow(
-          icon: Icons.info_outline_rounded,
-          label: 'Song details',
-        ),
+        child: PopoverMenuRow(icon: AppIcons.info, label: 'Song details'),
       ),
       const PopupMenuItem(
         value: 'add',
         child: PopoverMenuRow(
-          icon: Icons.playlist_add_rounded,
+          icon: AppIcons.playlistAdd,
           label: 'Add to playlist',
         ),
       ),
@@ -565,9 +562,7 @@ class MiniPlayer extends ConsumerWidget {
                       border: Border.all(color: AppColors.whiteAlpha(0.1)),
                     ),
                     child: Icon(
-                      playback.playing
-                          ? Icons.pause_rounded
-                          : Icons.play_arrow_rounded,
+                      playback.playing ? AppIcons.pause : AppIcons.playFilled,
                       size: 18,
                       color: AppColors.white,
                     ),
@@ -720,11 +715,7 @@ class PlaylistCover extends ConsumerWidget {
         borderRadius: BorderRadius.circular(radius),
       ),
       child: songs.isEmpty
-          ? Icon(
-              Icons.queue_music_rounded,
-              size: size * 0.42,
-              color: AppColors.white,
-            )
+          ? Icon(AppIcons.queue, size: size * 0.42, color: AppColors.white)
           : null,
     );
   }
@@ -1113,7 +1104,7 @@ class _AddToPlaylistSheet extends ConsumerWidget {
             ),
           ),
           SheetActionTile(
-            icon: Icons.add_rounded,
+            icon: AppIcons.add,
             label: 'New playlist',
             onTap: () async {
               final notifier = ref.read(playlistsProvider.notifier);
@@ -1223,9 +1214,7 @@ class _PlaylistPickRow extends ConsumerWidget {
             ),
             const SizedBox(width: 12),
             Icon(
-              selected
-                  ? Icons.check_circle_rounded
-                  : Icons.add_circle_outline_rounded,
+              selected ? AppIcons.checkCircle : AppIcons.addCircle,
               color: selected ? AppColors.accentA : AppColors.whiteAlpha(0.4),
               size: 26,
             ),

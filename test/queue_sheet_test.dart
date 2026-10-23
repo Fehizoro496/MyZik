@@ -8,6 +8,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'package:my_zik/icons.dart';
 import 'package:my_zik/data/music_repository.dart';
 import 'package:my_zik/models.dart';
 import 'package:my_zik/providers/library_provider.dart';
@@ -65,10 +66,10 @@ void main() {
     await tester.pumpAndSettle();
 
     // The header queue button is now visible; the sheet is not yet open.
-    expect(find.byIcon(Icons.queue_music_rounded), findsOneWidget);
+    expect(find.byIcon(AppIcons.queue), findsOneWidget);
     expect(find.text('NOW PLAYING'), findsNothing);
 
-    await tester.tap(find.byIcon(Icons.queue_music_rounded));
+    await tester.tap(find.byIcon(AppIcons.queue));
     await tester.pumpAndSettle();
 
     // Sheet is open: hero shows the current track, the up-next tracks are
@@ -78,7 +79,7 @@ void main() {
     expect(find.text('Starlit Reverie'), findsNWidgets(2));
     expect(find.text('Midnight Confessions'), findsOneWidget); // up next
     expect(find.text('Lost in the Echo'), findsOneWidget); // up next
-    expect(find.byIcon(Icons.drag_handle_rounded), findsNWidgets(2));
+    expect(find.byIcon(AppIcons.dragHandle), findsNWidgets(2));
 
     // Tapping a queued track jumps to it (preserving the queue) and dismisses
     // the sheet.
@@ -119,12 +120,12 @@ void main() {
     await container.read(playbackProvider.notifier).playSong(songs[0]);
     await tester.pumpAndSettle();
 
-    await tester.tap(find.byIcon(Icons.queue_music_rounded));
+    await tester.tap(find.byIcon(AppIcons.queue));
     await tester.pumpAndSettle();
 
     // Queue starts [1, 2, 3]; up next is [2, 3]. Drag the first handle down
     // past the second row to move id 2 below id 3.
-    final handle = find.byIcon(Icons.drag_handle_rounded).first;
+    final handle = find.byIcon(AppIcons.dragHandle).first;
     final gesture = await tester.startGesture(tester.getCenter(handle));
     await tester.pump(const Duration(milliseconds: 50));
     await gesture.moveBy(const Offset(0, 30));

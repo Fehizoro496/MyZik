@@ -136,11 +136,7 @@ class CollectionScreen extends ConsumerWidget {
             child: const Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Icon(
-                  Icons.play_arrow_rounded,
-                  color: AppColors.white,
-                  size: 22,
-                ),
+                Icon(AppIcons.playFilled, color: AppColors.white, size: 22),
                 SizedBox(width: 6),
                 Text(
                   'Play',

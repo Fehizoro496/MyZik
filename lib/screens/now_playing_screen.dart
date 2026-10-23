@@ -66,7 +66,7 @@ class NowPlayingScreen extends ConsumerWidget {
                             mainAxisSize: MainAxisSize.min,
                             children: [
                               GlassIconButton(
-                                icon: Icons.queue_music_rounded,
+                                icon: AppIcons.queue,
                                 size: 44,
                                 iconSize: 22,
                                 onTap: () => _showQueue(context, ref),
@@ -352,25 +352,23 @@ class NowPlayingScreen extends ConsumerWidget {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               _toggleControl(
-                icon: Icons.shuffle_rounded,
+                icon: AppIcons.shuffle,
                 active: playback.shuffle,
                 onTap: notifier.toggleShuffle,
               ),
               _iconControl(
-                Icons.skip_previous_rounded,
+                AppIcons.skipPrevious,
                 notifier.previous,
                 size: 30,
                 color: AppColors.whiteAlpha(0.85),
               ),
               _iconControl(
-                playback.playing
-                    ? Icons.pause_rounded
-                    : Icons.play_arrow_rounded,
+                playback.playing ? AppIcons.pause : AppIcons.playFilled,
                 notifier.togglePlay,
                 size: 48,
               ),
               _iconControl(
-                Icons.skip_next_rounded,
+                AppIcons.skipNext,
                 notifier.next,
                 size: 30,
                 color: AppColors.whiteAlpha(0.85),
@@ -379,8 +377,8 @@ class NowPlayingScreen extends ConsumerWidget {
                 // Stays on Material: its rounded repeat/repeat-one pair reads
                 // as more clearly distinct at this size than the Iconsax one.
                 icon: playback.repeatMode == PlaybackRepeatMode.one
-                    ? Icons.repeat_one_rounded
-                    : Icons.repeat_rounded,
+                    ? AppIcons.repeatOne
+                    : AppIcons.repeat,
                 active: playback.repeatMode != PlaybackRepeatMode.off,
                 onTap: notifier.cycleRepeatMode,
               ),
@@ -720,7 +718,7 @@ class _UpNextRow extends StatelessWidget {
               child: Padding(
                 padding: const EdgeInsets.only(right: 12, top: 8, bottom: 8),
                 child: Icon(
-                  Icons.drag_handle_rounded,
+                  AppIcons.dragHandle,
                   size: 22,
                   color: AppColors.whiteAlpha(0.4),
                 ),

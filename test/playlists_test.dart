@@ -9,6 +9,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'package:my_zik/icons.dart';
 import 'package:my_zik/data/music_repository.dart';
 import 'package:my_zik/main.dart';
 import 'package:my_zik/models.dart';
@@ -136,8 +137,8 @@ void main() {
     await tester.tap(find.text('Road trip'));
     await tester.pumpAndSettle();
     expect(find.byType(PlaylistScreen), findsOneWidget);
-    expect(find.byIcon(Icons.more_vert_rounded), findsNWidgets(2));
-    await tester.tap(find.byIcon(Icons.more_vert_rounded).first);
+    expect(find.byIcon(AppIcons.moreVert), findsNWidgets(2));
+    await tester.tap(find.byIcon(AppIcons.moreVert).first);
     await tester.pumpAndSettle();
     await tester.tap(find.text('Remove from playlist'));
     await tester.pumpAndSettle();
