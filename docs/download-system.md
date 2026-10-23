@@ -3,9 +3,11 @@
 État : proposition. `DiscoverScreen` possède désormais une première version
 autonome : recherche YouTube avec `youtube_explode_dart`, lecture immédiate du
 meilleur flux audio avec `just_audio`, et téléchargement pour l'écoute hors ligne
-(`downloadsProvider`). Cette version écrit dans le dossier privé de l'app, sans
-MediaStore ni écriture de tags : les titres téléchargés sont fusionnés dans
-`libraryProvider` par l'app elle-même. Le présent document décrit toujours le
+(`downloadsProvider`). Les transferts passent par `background_downloader`
+(WorkManager) : ils continuent app fermée, reprennent après une coupure et
+affichent une notification de progression. Cette version écrit dans le dossier
+privé de l'app, sans MediaStore ni écriture de tags : les titres téléchargés
+sont fusionnés dans `libraryProvider` par l'app elle-même. Le présent document décrit toujours le
 système complet visé (sources multiples, `Music/` public, tags, paroles).
 
 ## 1. Périmètre
