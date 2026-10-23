@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../data/download_engine.dart';
 import '../data/youtube_repository.dart';
 import '../icons.dart';
 import '../models.dart';
@@ -261,7 +262,7 @@ class _DiscoverScreenState extends ConsumerState<DiscoverScreen> {
   }
 
   Widget _results(AsyncValue<List<YouTubeTrack>>? search) {
-    if (search == null) return _searchPrompt();
+    if (search == null) return _downloadsOrPrompt();
     return search.when(
       loading: () => const Center(
         child: CircularProgressIndicator(color: AppColors.accentA),
@@ -297,7 +298,44 @@ class _DiscoverScreenState extends ConsumerState<DiscoverScreen> {
     );
   }
 
-  Widget _resultRow(YouTubeTrack track) {
+  /// With no query: in-flight and failed downloads, so they can be followed,
+  /// retried or dismissed after leaving the search that started them.
+  Widget _downloadsOrPrompt() {
+    final active = ref.watch(downloadsProvider.select((d) => d.active));
+    if (active.isEmpty) return _searchPrompt();
+    final downloads = active.values.toList();
+    return ListView.separated(
+      padding: const EdgeInsets.fromLTRB(24, 0, 24, 170),
+      physics: const BouncingScrollPhysics(),
+      itemCount: downloads.length + 1,
+      itemBuilder: (context, index) {
+        if (index == 0) {
+          return Padding(
+            padding: const EdgeInsets.only(bottom: 4),
+            child: Text(
+              'Downloads',
+              style: TextStyle(
+                color: AppColors.whiteAlpha(0.5),
+                fontSize: 13,
+                fontWeight: FontWeight.w700,
+                letterSpacing: 0.3,
+              ),
+            ),
+          );
+        }
+        return _resultRow(downloads[index - 1].track, manage: true);
+      },
+      separatorBuilder: (_, index) => SizedBox(height: index == 0 ? 14 : 20),
+    );
+  }
+
+  /// One search result, or with [manage] one entry of the downloads list,
+  /// whose trailing action cancels or dismisses the download instead of
+  /// playing it.
+  Widget _resultRow(YouTubeTrack track, {bool manage = false}) {
+    final download = ref.watch(
+      downloadsProvider.select((d) => d.active[track.videoId]),
+    );
     final resolving = _resolvingId == track.videoId;
     return Row(
       children: [
@@ -335,7 +373,15 @@ class _DiscoverScreenState extends ConsumerState<DiscoverScreen> {
               ),
               const SizedBox(height: 4),
               Text(
-                '${track.artist} · ${_durationLabel(track.duration)}',
+                switch (download?.phase) {
+                  DownloadPhase.queued => 'Waiting to download…',
+                  DownloadPhase.running =>
+                    'Downloading · ${(download!.progress * 100).floor()}%',
+                  DownloadPhase.waiting =>
+                    'Interrupted · resumes when back online',
+                  DownloadPhase.failed => 'Download failed',
+                  _ => '${track.artist} · ${_durationLabel(track.duration)}',
+                },
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: TextStyle(
@@ -349,20 +395,28 @@ class _DiscoverScreenState extends ConsumerState<DiscoverScreen> {
         const SizedBox(width: 12),
         _downloadButton(track),
         const SizedBox(width: 10),
-        _playButton(track, resolving),
+        if (manage && download != null)
+          _dismissButton(track, download)
+        else
+          _playButton(track, resolving),
       ],
     );
   }
 
-  /// Idle → progress ring while downloading → check mark once saved. Removing
-  /// a download lives on the song's detail page.
+  /// Idle → progress ring while downloading → check mark once saved, or a
+  /// retry arrow after a failure. Removing a download lives on the song's
+  /// detail page.
   Widget _downloadButton(YouTubeTrack track) {
     final saved = ref.watch(
       downloadsProvider.select((d) => d.saved.containsKey(track.videoId)),
     );
-    final progress = ref.watch(
-      downloadsProvider.select((d) => d.progress[track.videoId]),
+    final download = ref.watch(
+      downloadsProvider.select((d) => d.active[track.videoId]),
     );
+    final failed = download?.isFailed ?? false;
+    final progress = download?.phase == DownloadPhase.running
+        ? download!.progress
+        : 0.0;
     final Widget child;
     if (saved) {
       child = const Icon(
@@ -370,7 +424,13 @@ class _DiscoverScreenState extends ConsumerState<DiscoverScreen> {
         size: 20,
         color: AppColors.accentA,
       );
-    } else if (progress != null) {
+    } else if (failed) {
+      child = const Icon(
+        Icons.refresh_rounded,
+        size: 20,
+        color: Color(0xFFFF8A9B),
+      );
+    } else if (download != null) {
       child = Padding(
         padding: const EdgeInsets.all(10),
         child: CircularProgressIndicator(
@@ -391,7 +451,9 @@ class _DiscoverScreenState extends ConsumerState<DiscoverScreen> {
     return GestureDetector(
       key: ValueKey('youtube-download-${track.videoId}'),
       behavior: HitTestBehavior.opaque,
-      onTap: saved || progress != null ? null : () => _download(track),
+      onTap: saved || (download != null && !failed)
+          ? null
+          : () => _download(track),
       child: Container(
         width: 42,
         height: 42,
@@ -401,6 +463,29 @@ class _DiscoverScreenState extends ConsumerState<DiscoverScreen> {
           border: Border.all(color: AppColors.whiteAlpha(0.08)),
         ),
         child: Center(child: child),
+      ),
+    );
+  }
+
+  /// Cancels an in-flight download, or clears a failed one from the list.
+  Widget _dismissButton(YouTubeTrack track, ActiveDownload download) {
+    return GestureDetector(
+      key: ValueKey('youtube-dismiss-${track.videoId}'),
+      behavior: HitTestBehavior.opaque,
+      onTap: () => ref.read(downloadsProvider.notifier).cancel(track.videoId),
+      child: Container(
+        width: 42,
+        height: 42,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          color: AppColors.whiteAlpha(0.06),
+          border: Border.all(color: AppColors.whiteAlpha(0.08)),
+        ),
+        child: Icon(
+          Icons.close_rounded,
+          size: 20,
+          color: AppColors.whiteAlpha(0.8),
+        ),
       ),
     );
   }

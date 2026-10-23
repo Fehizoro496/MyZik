@@ -47,18 +47,15 @@ class YouTubeTrack {
   final String thumbnailUrl;
 }
 
-/// An audio-only stream opened for download.
-class YouTubeAudioStream {
-  const YouTubeAudioStream({
-    required this.extension,
-    required this.totalBytes,
-    required this.bytes,
-  });
+/// A resolved audio-only stream, as needed to save it to a file.
+class YouTubeAudioSource {
+  const YouTubeAudioSource({required this.url, required this.extension});
+
+  /// Short-lived (a few hours) direct URL.
+  final Uri url;
 
   /// File extension matching the container (`m4a` or `webm`).
   final String extension;
-  final int totalBytes;
-  final Stream<List<int>> bytes;
 }
 
 abstract class YouTubeRepository {
@@ -67,9 +64,9 @@ abstract class YouTubeRepository {
   /// Resolves a fresh, short-lived URL for the best audio-only stream.
   Future<Uri> resolveAudio(String videoId);
 
-  /// Opens the same best audio-only stream as [resolveAudio] for saving it
-  /// to disk.
-  Future<YouTubeAudioStream> openAudio(String videoId);
+  /// Resolves the same best audio-only stream as [resolveAudio], with the
+  /// file extension to save it under.
+  Future<YouTubeAudioSource> resolveAudioSource(String videoId);
 
   void close();
 }
@@ -105,16 +102,13 @@ class YoutubeExplodeRepository implements YouTubeRepository {
       (await _bestAudio(videoId)).url;
 
   @override
-  Future<YouTubeAudioStream> openAudio(String videoId) async {
+  Future<YouTubeAudioSource> resolveAudioSource(String videoId) async {
     final info = await _bestAudio(videoId);
-    return YouTubeAudioStream(
+    return YouTubeAudioSource(
+      url: info.url,
       extension: info.container == StreamContainer.mp4
           ? 'm4a'
           : info.container.name,
-      totalBytes: info.size.totalBytes,
-      // Fetched in ranged chunks by the library, which googlevideo requires
-      // for long downloads.
-      bytes: _client.videos.streams.get(info),
     );
   }
 

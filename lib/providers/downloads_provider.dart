@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path_provider/path_provider.dart';
 
+import '../data/download_engine.dart';
 import '../data/youtube_repository.dart';
 import '../models.dart';
 import 'library_provider.dart';
@@ -105,14 +106,41 @@ class DownloadedTrack {
   };
 }
 
+/// A download that hasn't landed in the library yet.
+class ActiveDownload {
+  const ActiveDownload({
+    required this.track,
+    required this.phase,
+    this.progress = 0,
+  });
+
+  final YouTubeTrack track;
+
+  /// Never [DownloadPhase.complete] or [DownloadPhase.canceled]: those leave
+  /// [DownloadsState.active].
+  final DownloadPhase phase;
+
+  /// 0 to 1.
+  final double progress;
+
+  bool get isFailed => phase == DownloadPhase.failed;
+
+  ActiveDownload copyWith({DownloadPhase? phase, double? progress}) =>
+      ActiveDownload(
+        track: track,
+        phase: phase ?? this.phase,
+        progress: progress ?? this.progress,
+      );
+}
+
 class DownloadsState {
-  const DownloadsState({this.saved = const {}, this.progress = const {}});
+  const DownloadsState({this.saved = const {}, this.active = const {}});
 
   /// Completed downloads by video id, in download order.
   final Map<String, DownloadedTrack> saved;
 
-  /// In-flight downloads by video id, from 0 to 1.
-  final Map<String, double> progress;
+  /// Queued, running, interrupted and failed downloads by video id.
+  final Map<String, ActiveDownload> active;
 
   /// Library songs for [saved].
   List<Song> get songs => [for (final track in saved.values) track.song];
@@ -123,18 +151,39 @@ class DownloadsState {
     }
     return null;
   }
+
+  DownloadsState copyWith({
+    Map<String, DownloadedTrack>? saved,
+    Map<String, ActiveDownload>? active,
+  }) =>
+      DownloadsState(saved: saved ?? this.saved, active: active ?? this.active);
 }
 
-/// Downloads YouTube audio into [downloadsDirectoryProvider] and keeps the
-/// list of saved tracks in shared preferences. [libraryProvider] merges them
-/// into the library so they play offline like any local file.
+final downloadEngineProvider = Provider<DownloadEngine>(
+  (ref) => BackgroundDownloadEngine(),
+);
+
+/// Downloads YouTube audio into [downloadsDirectoryProvider] through the
+/// [DownloadEngine], so transfers keep running in the background, survive the
+/// app being closed and resume after a dropped connection. Saved tracks are
+/// kept in shared preferences; [libraryProvider] merges them into the library
+/// so they play offline like any local file.
 class DownloadsNotifier extends Notifier<DownloadsState> {
   /// Completes once saved downloads are read back from disk. Never throws.
   late Future<void> ready;
 
+  /// Completes once the engine is listened to and caught up. Never throws.
+  late Future<void> engineReady;
+
+  DownloadEngine get _engine => ref.read(downloadEngineProvider);
+
   @override
   DownloadsState build() {
     ready = Future.microtask(_restore).catchError((Object _) {});
+    // Attached separately: the library only waits for [ready] and must not
+    // hang on the native plugin. Saved downloads stay playable offline even
+    // if the engine fails to start.
+    engineReady = ready.then((_) => _attachEngine()).catchError((Object _) {});
     return const DownloadsState();
   }
 
@@ -154,75 +203,148 @@ class DownloadsNotifier extends Notifier<DownloadsState> {
         // Ignore a corrupt entry rather than losing every download.
       }
     }
-    state = DownloadsState(
-      saved: {...saved, ...state.saved},
-      progress: state.progress,
-    );
+    state = state.copyWith(saved: {...saved, ...state.saved});
   }
 
-  /// Saves [track]'s audio and artwork. Throws when the download fails; no
-  /// partial file is left behind.
+  /// Subscribes to the engine, then catches up on downloads that progressed
+  /// or finished while the app was closed.
+  Future<void> _attachEngine() async {
+    final engine = _engine;
+    final subscription = engine.events.listen(_onEvent);
+    ref.onDispose(subscription.cancel);
+    await engine.start();
+    for (final event in await engine.pending()) {
+      await _onEvent(event);
+    }
+  }
+
+  Future<void> _onEvent(DownloadEvent event) async {
+    final id = event.id;
+    if (state.saved.containsKey(id)) {
+      // Already in the library (e.g. replayed after a restart).
+      if (event.phase == DownloadPhase.complete) await _engine.forget(id);
+      return;
+    }
+    final current = state.active[id];
+    final track = current?.track ?? _trackFromMeta(event.metaData);
+    if (track == null) return;
+
+    switch (event.phase) {
+      case DownloadPhase.complete:
+        await _finalize(id, track, event.metaData);
+      case DownloadPhase.canceled:
+        _setActive(id, null);
+        await _engine.forget(id);
+      case final DownloadPhase phase?:
+        _setActive(
+          id,
+          (current ?? ActiveDownload(track: track, phase: phase)).copyWith(
+            phase: phase,
+            progress: event.progress,
+          ),
+        );
+      case null:
+        final progress = event.progress;
+        if (progress == null) return;
+        // Rebuild listeners at most once per percent.
+        if (current != null &&
+            current.phase == DownloadPhase.running &&
+            (progress * 100).floor() == (current.progress * 100).floor()) {
+          return;
+        }
+        _setActive(
+          id,
+          (current ??
+                  ActiveDownload(track: track, phase: DownloadPhase.running))
+              .copyWith(phase: DownloadPhase.running, progress: progress),
+        );
+    }
+  }
+
+  /// Moves a completed download into [DownloadsState.saved].
+  Future<void> _finalize(
+    String id,
+    YouTubeTrack track,
+    String? metaData,
+  ) async {
+    final dir = await ref.read(downloadsDirectoryProvider.future);
+    final audioFile = _decodeMeta(metaData)?['audioFile'] as String?;
+    if (audioFile == null || !File(_join(dir, audioFile)).existsSync()) {
+      _setActive(id, ActiveDownload(track: track, phase: DownloadPhase.failed));
+      return;
+    }
+    final artworkName = _artworkName(id);
+    final saved = DownloadedTrack(
+      videoId: id,
+      title: track.title,
+      artist: track.artist,
+      duration: track.duration,
+      audioFile: audioFile,
+      artworkFile: File(_join(dir, artworkName)).existsSync()
+          ? artworkName
+          : null,
+    ).inDirectory(dir.path);
+    state = DownloadsState(
+      saved: {...state.saved, id: saved},
+      active: {...state.active}..remove(id),
+    );
+    _persist();
+    await _engine.forget(id);
+  }
+
+  /// Starts (or retries) downloading [track]. Throws when the download could
+  /// not be started, leaving it in the failed state so it can be retried.
   Future<void> download(YouTubeTrack track) async {
     final id = track.videoId;
-    if (state.saved.containsKey(id) || state.progress.containsKey(id)) return;
-    _setProgress(id, 0);
+    final current = state.active[id];
+    if (state.saved.containsKey(id) || (current != null && !current.isFailed)) {
+      return;
+    }
+    _setActive(id, ActiveDownload(track: track, phase: DownloadPhase.queued));
 
-    File? part;
     try {
+      await _engine.ensureNotificationPermission();
+      // The cover is small: fetch it now, while the app is in the foreground,
+      // so a download finishing in the background needs nothing else.
       final dir = await ref.read(downloadsDirectoryProvider.future);
-      final audio = await ref.read(youtubeRepositoryProvider).openAudio(id);
-      final audioFile = '$id.${audio.extension}';
-      part = File('${dir.path}${Platform.pathSeparator}$audioFile.part');
-
-      final sink = part.openWrite();
-      var received = 0;
-      try {
-        await for (final chunk in audio.bytes) {
-          sink.add(chunk);
-          received += chunk.length;
-          if (audio.totalBytes > 0) {
-            final value = (received / audio.totalBytes).clamp(0.0, 1.0);
-            // Rebuild listeners at most once per percent.
-            if ((value * 100).floor() >
-                ((state.progress[id] ?? 0) * 100).floor()) {
-              _setProgress(id, value);
-            }
-          }
-        }
-      } finally {
-        await sink.close();
-      }
-      // Only a complete file gets the final name.
-      await part.rename('${dir.path}${Platform.pathSeparator}$audioFile');
-
-      final artworkFile = await _saveArtwork(dir, track);
-      final saved = DownloadedTrack(
-        videoId: id,
-        title: track.title,
-        artist: track.artist,
-        duration: track.duration,
-        audioFile: audioFile,
-        artworkFile: artworkFile,
-      ).inDirectory(dir.path);
-
-      state = DownloadsState(
-        saved: {...state.saved, id: saved},
-        progress: {...state.progress}..remove(id),
+      await _saveArtwork(dir, track);
+      // Resolved on every attempt: stream URLs expire after a few hours.
+      final source = await ref
+          .read(youtubeRepositoryProvider)
+          .resolveAudioSource(id);
+      final audioFile = '$id.${source.extension}';
+      final enqueued = await _engine.enqueue(
+        DownloadJob(
+          id: id,
+          url: source.url,
+          filename: audioFile,
+          displayName: track.title,
+          metaData: jsonEncode({
+            ..._trackToJson(track),
+            'audioFile': audioFile,
+          }),
+          headers: const {'User-Agent': youtubeStreamUserAgent},
+        ),
       );
-      _persist();
+      if (!enqueued) throw StateError('download could not be enqueued');
     } catch (_) {
-      if (part != null && part.existsSync()) await part.delete();
-      state = DownloadsState(
-        saved: state.saved,
-        progress: {...state.progress}..remove(id),
-      );
+      _setActive(id, ActiveDownload(track: track, phase: DownloadPhase.failed));
       rethrow;
     }
   }
 
+  /// Stops an in-flight download, or dismisses a failed one.
+  Future<void> cancel(String videoId) async {
+    final current = state.active[videoId];
+    if (current == null) return;
+    _setActive(videoId, null);
+    if (!current.isFailed) await _engine.cancel(videoId);
+    await _engine.forget(videoId);
+  }
+
   /// Saves the (de-letterboxed) cover next to the audio so the player keeps
   /// its artwork offline. Artwork is optional: failures are ignored.
-  Future<String?> _saveArtwork(Directory dir, YouTubeTrack track) async {
+  Future<void> _saveArtwork(Directory dir, YouTubeTrack track) async {
     try {
       final bytes = await ref.read(
         coverArtProvider((
@@ -230,14 +352,12 @@ class DownloadsNotifier extends Notifier<DownloadsState> {
           url: track.thumbnailUrl,
         )).future,
       );
-      if (bytes == null) return null;
-      final name = '${track.videoId}.cover';
+      if (bytes == null) return;
       await File(
-        '${dir.path}${Platform.pathSeparator}$name',
+        _join(dir, _artworkName(track.videoId)),
       ).writeAsBytes(bytes, flush: true);
-      return name;
     } catch (_) {
-      return null;
+      // Keep downloading without artwork.
     }
   }
 
@@ -245,10 +365,7 @@ class DownloadsNotifier extends Notifier<DownloadsState> {
   Future<void> remove(String videoId) async {
     final track = state.saved[videoId];
     if (track == null) return;
-    state = DownloadsState(
-      saved: {...state.saved}..remove(videoId),
-      progress: state.progress,
-    );
+    state = state.copyWith(saved: {...state.saved}..remove(videoId));
     _persist();
     for (final file in [track.audioFile, track.artworkFile]) {
       if (file == null) continue;
@@ -261,17 +378,58 @@ class DownloadsNotifier extends Notifier<DownloadsState> {
     }
   }
 
-  void _setProgress(String id, double value) {
-    state = DownloadsState(
-      saved: state.saved,
-      progress: {...state.progress, id: value},
-    );
+  void _setActive(String id, ActiveDownload? download) {
+    final active = {...state.active};
+    if (download == null) {
+      active.remove(id);
+    } else {
+      active[id] = download;
+    }
+    state = state.copyWith(active: active);
   }
 
   void _persist() {
     ref.read(sharedPreferencesProvider).setStringList(_kDownloads, [
       for (final track in state.saved.values) jsonEncode(track.toJson()),
     ]);
+  }
+
+  static String _artworkName(String videoId) => '$videoId.cover';
+
+  static String _join(Directory dir, String file) =>
+      '${dir.path}${Platform.pathSeparator}$file';
+
+  static Map<String, dynamic> _trackToJson(YouTubeTrack track) => {
+    'videoId': track.videoId,
+    'title': track.title,
+    'artist': track.artist,
+    'durationMs': track.duration.inMilliseconds,
+    'thumbnailUrl': track.thumbnailUrl,
+  };
+
+  static Map<String, dynamic>? _decodeMeta(String? metaData) {
+    if (metaData == null || metaData.isEmpty) return null;
+    try {
+      return jsonDecode(metaData) as Map<String, dynamic>;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  static YouTubeTrack? _trackFromMeta(String? metaData) {
+    final json = _decodeMeta(metaData);
+    if (json == null) return null;
+    try {
+      return YouTubeTrack(
+        videoId: json['videoId'] as String,
+        title: json['title'] as String,
+        artist: json['artist'] as String,
+        duration: Duration(milliseconds: json['durationMs'] as int),
+        thumbnailUrl: json['thumbnailUrl'] as String,
+      );
+    } catch (_) {
+      return null;
+    }
   }
 }
 

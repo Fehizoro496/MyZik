@@ -63,6 +63,11 @@ dependencies:
   youtube_explode_dart: ^3.1.0
   path_provider: ^2.1.6
 
+  # Background downloads (WorkManager on Android): keep running when the app
+  # is closed, resume after a dropped connection, show progress notifications.
+  # 9.6+ requires Flutter 3.47.
+  background_downloader: ^9.5.9
+
 dev_dependencies:
   flutter_test:
     sdk: flutter
