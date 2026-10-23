@@ -25,7 +25,7 @@ class NowPlayingScreen extends ConsumerWidget {
       return _empty(ref);
     }
     final notifier = ref.read(playbackProvider.notifier);
-    final artwork = ref.watch(artworkProvider(track.id)).asData?.value;
+    final artwork = ref.watch(coverArtProvider(track.coverKey)).asData?.value;
     return Container(
       color: const Color(0xFF0A0A0C),
       child: Stack(
@@ -462,7 +462,7 @@ class _QueueSheet extends ConsumerWidget {
         (hero ?? current)?.artGradient.first ?? AppColors.accentA;
     final accent = hero == null
         ? fallbackAccent
-        : ref.watch(coverAccentProvider(hero.id)).asData?.value ??
+        : ref.watch(coverAccentProvider(hero.coverKey)).asData?.value ??
               fallbackAccent;
 
     return ClipRRect(

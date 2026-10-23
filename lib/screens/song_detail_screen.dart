@@ -27,12 +27,12 @@ class SongDetailScreen extends ConsumerWidget {
     final song = ref.watch(selectedSongProvider);
     final artwork = song == null
         ? null
-        : ref.watch(artworkProvider(song.id)).asData?.value;
+        : ref.watch(coverArtProvider(song.coverKey)).asData?.value;
     // Dominant colour of the cover (falls back to the placeholder gradient
     // while it's still being extracted or when the track has no artwork).
     final accent = song == null
         ? null
-        : ref.watch(coverAccentProvider(song.id)).asData?.value ??
+        : ref.watch(coverAccentProvider(song.coverKey)).asData?.value ??
               song.artGradient.first;
     return DecoratedBox(
       decoration: const BoxDecoration(color: AppColors.musicBackground),

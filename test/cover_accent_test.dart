@@ -50,7 +50,9 @@ void main() {
     );
     addTearDown(container.dispose);
 
-    final color = await container.read(coverAccentProvider(1).future);
+    final color = await container.read(
+      coverAccentProvider((id: 1, url: null)).future,
+    );
     expect(color, isNotNull);
     expect(color!.r, greaterThan(0.7)); // red channel dominant (0..1)
     expect(color.g, lessThan(0.35));
@@ -63,6 +65,9 @@ void main() {
     );
     addTearDown(container.dispose);
 
-    expect(await container.read(coverAccentProvider(1).future), isNull);
+    expect(
+      await container.read(coverAccentProvider((id: 1, url: null)).future),
+      isNull,
+    );
   });
 }

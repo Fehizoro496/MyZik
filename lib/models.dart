@@ -30,6 +30,10 @@ class Song {
   /// their embedded MediaStore artwork instead.
   final String? artworkUrl;
 
+  /// Key for [coverArtProvider]/[coverAccentProvider]: the remote artwork URL
+  /// when there is one, otherwise the MediaStore id.
+  CoverKey get coverKey => (id: id, url: artworkUrl);
+
   /// Deterministic gradient placeholder for the album art, keyed off [id] so a
   /// given track always gets the same colors until real artwork is wired in.
   List<Color> get artGradient =>
@@ -41,6 +45,11 @@ class Song {
     return '$m:${(s % 60).toString().padLeft(2, '0')}';
   }
 }
+
+/// Identifies a song's cover regardless of where it comes from. A record so
+/// Riverpod families get value equality (two [Song] instances for the same
+/// stream share the cached cover).
+typedef CoverKey = ({int id, String? url});
 
 /// Album-art gradient palette used as a placeholder before real cover artwork
 /// is loaded.

@@ -96,9 +96,9 @@ class AlbumArt extends StatelessWidget {
   }
 }
 
-/// Real album art for a [Song], loaded lazily from the library via
-/// [artworkProvider]. Falls back to the song's gradient placeholder while
-/// loading or when the track has no embedded cover. Keeps the artwork query
+/// Real album art for a [Song] (MediaStore cover or remote artwork), loaded
+/// lazily via [coverArtProvider]. Falls back to the song's gradient placeholder
+/// while loading or when the track has no cover. Keeps the artwork query
 /// out of the [Song] model so the UI stays source-agnostic.
 class SongArtwork extends ConsumerWidget {
   const SongArtwork({
@@ -122,26 +122,7 @@ class SongArtwork extends ConsumerWidget {
       radius: radius,
       circle: circle,
     );
-    final remoteUrl = song.artworkUrl;
-    if (remoteUrl != null) {
-      final image = Image.network(
-        remoteUrl,
-        width: size,
-        height: size,
-        fit: BoxFit.cover,
-        gaplessPlayback: true,
-        errorBuilder: (_, _, _) => placeholder,
-      );
-      return circle
-          ? ClipOval(
-              child: SizedBox(width: size, height: size, child: image),
-            )
-          : ClipRRect(
-              borderRadius: BorderRadius.circular(radius),
-              child: image,
-            );
-    }
-    final artwork = ref.watch(artworkProvider(song.id));
+    final artwork = ref.watch(coverArtProvider(song.coverKey));
     final bytes = artwork.asData?.value;
     if (bytes == null) return placeholder;
     final image = Image.memory(
@@ -710,7 +691,7 @@ class PlaylistCover extends ConsumerWidget {
     final covers = <Song>[];
     for (final song in songs.take(probeLimit)) {
       if (covers.length == 4) break;
-      if (ref.watch(artworkProvider(song.id)).asData?.value != null) {
+      if (ref.watch(coverArtProvider(song.coverKey)).asData?.value != null) {
         covers.add(song);
       }
     }
@@ -821,7 +802,7 @@ class _CoverTile extends ConsumerWidget {
         ),
       ),
     );
-    final bytes = ref.watch(artworkProvider(song.id)).asData?.value;
+    final bytes = ref.watch(coverArtProvider(song.coverKey)).asData?.value;
     if (bytes == null) return placeholder;
     return Image.memory(
       bytes,

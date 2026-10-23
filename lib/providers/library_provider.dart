@@ -1,6 +1,6 @@
-import 'dart:typed_data';
 import 'dart:ui' as ui;
 
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../data/music_repository.dart';
@@ -18,17 +18,82 @@ final artworkProvider = FutureProvider.family<Uint8List?, int>((ref, id) {
   return ref.watch(musicRepositoryProvider).artworkFor(id);
 });
 
-/// The perceived dominant colour of a song's cover, used as a per-track accent
-/// (e.g. the queue sheet's glow and tint). Null when the track has no embedded
-/// artwork — callers then fall back to the placeholder gradient. Cached per id.
-final coverAccentProvider = FutureProvider.family<ui.Color?, int>((
+/// Encoded cover bytes for any song: downloaded (and de-letterboxed) for
+/// streamed tracks, read from MediaStore for local ones. Use this rather than
+/// [artworkProvider] in UI so remote tracks get the same treatment.
+final coverArtProvider = FutureProvider.family<Uint8List?, CoverKey>((
   ref,
-  id,
+  key,
 ) async {
-  final bytes = await ref.watch(artworkProvider(id).future);
+  final url = key.url;
+  if (url == null) return ref.watch(artworkProvider(key.id).future);
+  try {
+    final data = await NetworkAssetBundle(Uri.parse(url)).load(url);
+    return _cropLetterbox(data.buffer.asUint8List());
+  } catch (_) {
+    return null;
+  }
+});
+
+/// The perceived dominant colour of a song's cover, used as a per-track accent
+/// (e.g. the queue sheet's glow and tint). Null when the track has no artwork —
+/// callers then fall back to the placeholder gradient. Cached per cover.
+final coverAccentProvider = FutureProvider.family<ui.Color?, CoverKey>((
+  ref,
+  key,
+) async {
+  final bytes = await ref.watch(coverArtProvider(key).future);
   if (bytes == null) return null;
   return _dominantColor(bytes);
 });
+
+/// YouTube's `hqdefault` thumbnails are 4:3 frames around a 16:9 video, i.e.
+/// with black bands above and below. Cropped circles and the blurred player
+/// background would show them, so cut the image down to its 16:9 band when
+/// both bands are (near-)black. Returns [bytes] untouched otherwise.
+Future<Uint8List> _cropLetterbox(Uint8List bytes) async {
+  final codec = await ui.instantiateImageCodec(bytes);
+  final image = (await codec.getNextFrame()).image;
+  try {
+    final w = image.width, h = image.height;
+    final band = ((h - w * 9 / 16) / 2).floor();
+    if (band < 4) return bytes;
+    final data = await image.toByteData(format: ui.ImageByteFormat.rawRgba);
+    if (data == null) return bytes;
+    final pixels = data.buffer.asUint8List();
+
+    bool isDark(int fromRow, int toRow) {
+      var sum = 0, n = 0;
+      for (var y = fromRow; y < toRow; y++) {
+        for (var x = 0; x < w; x += 4) {
+          final i = (y * w + x) * 4;
+          sum += pixels[i] + pixels[i + 1] + pixels[i + 2];
+          n += 3;
+        }
+      }
+      return n > 0 && sum / n < 16;
+    }
+
+    // Sample just inside each band to tolerate a soft edge at the boundary.
+    final probe = band - 2;
+    if (!isDark(0, probe) || !isDark(h - probe, h)) return bytes;
+
+    final recorder = ui.PictureRecorder();
+    final cropH = h - 2 * band;
+    ui.Canvas(recorder).drawImageRect(
+      image,
+      ui.Rect.fromLTWH(0, band.toDouble(), w.toDouble(), cropH.toDouble()),
+      ui.Rect.fromLTWH(0, 0, w.toDouble(), cropH.toDouble()),
+      ui.Paint()..filterQuality = ui.FilterQuality.medium,
+    );
+    final cropped = await recorder.endRecording().toImage(w, cropH);
+    final png = await cropped.toByteData(format: ui.ImageByteFormat.png);
+    cropped.dispose();
+    return png?.buffer.asUint8List() ?? bytes;
+  } finally {
+    image.dispose();
+  }
+}
 
 /// Extracts the dominant colour from encoded image [bytes]. Downscales to a
 /// 32×32 thumbnail, buckets pixels by a coarse quantisation, and returns the
