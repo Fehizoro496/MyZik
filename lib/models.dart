@@ -11,6 +11,7 @@ class Song {
     this.album,
     this.duration = Duration.zero,
     this.uri,
+    this.artworkUrl,
   });
 
   /// Stable identifier from the source (e.g. MediaStore id) — used for artwork
@@ -24,6 +25,10 @@ class Song {
   /// Playable location (content:// uri or file path). Used by the audio engine
   /// in the playback pass; may be null for sample data.
   final String? uri;
+
+  /// Remote artwork for streamed tracks. Local tracks keep this null and use
+  /// their embedded MediaStore artwork instead.
+  final String? artworkUrl;
 
   /// Deterministic gradient placeholder for the album art, keyed off [id] so a
   /// given track always gets the same colors until real artwork is wired in.

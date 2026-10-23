@@ -122,6 +122,25 @@ class SongArtwork extends ConsumerWidget {
       radius: radius,
       circle: circle,
     );
+    final remoteUrl = song.artworkUrl;
+    if (remoteUrl != null) {
+      final image = Image.network(
+        remoteUrl,
+        width: size,
+        height: size,
+        fit: BoxFit.cover,
+        gaplessPlayback: true,
+        errorBuilder: (_, _, _) => placeholder,
+      );
+      return circle
+          ? ClipOval(
+              child: SizedBox(width: size, height: size, child: image),
+            )
+          : ClipRRect(
+              borderRadius: BorderRadius.circular(radius),
+              child: image,
+            );
+    }
     final artwork = ref.watch(artworkProvider(song.id));
     final bytes = artwork.asData?.value;
     if (bytes == null) return placeholder;

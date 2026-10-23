@@ -59,6 +59,9 @@ dependencies:
   # playback).
   shared_preferences: ^2.3.3
 
+  # Searches YouTube and resolves playable audio streams entirely on-device.
+  youtube_explode_dart: ^3.1.0
+
 dev_dependencies:
   flutter_test:
     sdk: flutter

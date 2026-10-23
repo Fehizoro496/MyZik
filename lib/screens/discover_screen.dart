@@ -1,17 +1,19 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../data/youtube_repository.dart';
 import '../icons.dart';
 import '../models.dart';
 import '../providers/navigation_provider.dart';
+import '../providers/playback_provider.dart';
+import '../providers/youtube_provider.dart';
 import '../theme.dart';
 import '../widgets.dart';
 
-/// "Discover": search the web for tracks and download them (audio + lyrics).
-///
-/// UI only — the results below are placeholder data and the download buttons
-/// just simulate progress. The real search / download service is wired in
-/// later; this screen defines the interface it will drive.
+/// Searches YouTube on-device and hands a freshly resolved audio stream to the
+/// existing just_audio player. Nothing is downloaded or persisted.
 class DiscoverScreen extends ConsumerStatefulWidget {
   const DiscoverScreen({super.key});
 
@@ -19,111 +21,97 @@ class DiscoverScreen extends ConsumerStatefulWidget {
   ConsumerState<DiscoverScreen> createState() => _DiscoverScreenState();
 }
 
-enum _DownloadStatus { idle, downloading, done }
-
-/// A placeholder search result from "the internet".
-class _OnlineTrack {
-  const _OnlineTrack({
-    required this.id,
-    required this.title,
-    required this.artist,
-    required this.duration,
-    required this.gradient,
-    this.hasLyrics = true,
-  });
-
-  final String id;
-  final String title;
-  final String artist;
-  final String duration;
-  final List<Color> gradient;
-  final bool hasLyrics;
-}
-
 class _DiscoverScreenState extends ConsumerState<DiscoverScreen> {
   final _controller = TextEditingController();
+  Timer? _debounce;
   String _query = '';
-  final Map<String, _DownloadStatus> _status = {};
-
-  static final _catalog = <_OnlineTrack>[
-    _OnlineTrack(
-      id: 'o1',
-      title: 'Neon Skyline',
-      artist: 'Aurora Vale',
-      duration: '3:42',
-      gradient: AppArt.gradients[0],
-    ),
-    _OnlineTrack(
-      id: 'o2',
-      title: 'Paper Moon',
-      artist: 'The Lantern Club',
-      duration: '4:05',
-      gradient: AppArt.gradients[1],
-    ),
-    _OnlineTrack(
-      id: 'o3',
-      title: 'Velvet Rain',
-      artist: 'Mira Sol',
-      duration: '2:58',
-      gradient: AppArt.gradients[2],
-      hasLyrics: false,
-    ),
-    _OnlineTrack(
-      id: 'o4',
-      title: 'Golden Hour',
-      artist: 'KAI',
-      duration: '3:20',
-      gradient: AppArt.gradients[3],
-    ),
-    _OnlineTrack(
-      id: 'o5',
-      title: 'Midnight Tram',
-      artist: 'Odette',
-      duration: '3:51',
-      gradient: AppArt.gradients[4],
-    ),
-    _OnlineTrack(
-      id: 'o6',
-      title: 'Sea of Static',
-      artist: 'Halcyon',
-      duration: '4:33',
-      gradient: AppArt.gradients[5],
-    ),
-  ];
+  String? _resolvingId;
+  String? _playError;
 
   @override
   void dispose() {
+    _debounce?.cancel();
     _controller.dispose();
     super.dispose();
   }
 
-  List<_OnlineTrack> _results() {
-    final q = _query.trim().toLowerCase();
-    if (q.isEmpty) return _catalog;
-    return _catalog
-        .where(
-          (t) =>
-              t.title.toLowerCase().contains(q) ||
-              t.artist.toLowerCase().contains(q),
-        )
-        .toList();
+  void _onQueryChanged(String value) {
+    _debounce?.cancel();
+    final query = value.trim();
+    if (query.isEmpty) {
+      setState(() {
+        _query = '';
+        _playError = null;
+      });
+      return;
+    }
+    _debounce = Timer(const Duration(milliseconds: 450), () {
+      if (!mounted) return;
+      setState(() {
+        _query = query;
+        _playError = null;
+      });
+    });
   }
 
-  // Placeholder for the future download service: flip through the visual
-  // states so the interface reads as a real download.
-  void _download(String id) {
-    if ((_status[id] ?? _DownloadStatus.idle) != _DownloadStatus.idle) return;
-    setState(() => _status[id] = _DownloadStatus.downloading);
-    Future.delayed(const Duration(milliseconds: 1500), () {
-      if (!mounted) return;
-      setState(() => _status[id] = _DownloadStatus.done);
+  void _submitSearch(String value) {
+    _debounce?.cancel();
+    setState(() {
+      _query = value.trim();
+      _playError = null;
     });
+  }
+
+  Future<void> _play(YouTubeTrack track) async {
+    if (_resolvingId != null) return;
+    setState(() {
+      _resolvingId = track.videoId;
+      _playError = null;
+    });
+
+    try {
+      final streamUrl = await ref
+          .read(youtubeRepositoryProvider)
+          .resolveAudio(track.videoId);
+      if (!mounted) return;
+      final song = Song(
+        id: _stableId(track.videoId),
+        title: track.title,
+        artist: track.artist,
+        duration: track.duration,
+        uri: streamUrl.toString(),
+        artworkUrl: track.thumbnailUrl,
+      );
+      await ref
+          .read(playbackProvider.notifier)
+          .playSong(song, throwOnLoadError: true);
+    } catch (error, stackTrace) {
+      debugPrint('Discover: failed to play ${track.videoId}: $error');
+      debugPrintStack(stackTrace: stackTrace);
+      if (!mounted) return;
+      setState(() {
+        _playError =
+            'Impossible de lire cette vidéo. Réessaie ou choisis un autre résultat.';
+      });
+    } finally {
+      if (mounted) setState(() => _resolvingId = null);
+    }
+  }
+
+  int _stableId(String value) {
+    var hash = 0x811c9dc5;
+    for (final codeUnit in value.codeUnits) {
+      hash = ((hash ^ codeUnit) * 0x01000193) & 0x7fffffff;
+    }
+    return hash;
   }
 
   @override
   Widget build(BuildContext context) {
-    final hasQuery = _query.trim().isNotEmpty;
-    final results = _results();
+    final search = _query.isEmpty
+        ? null
+        : ref.watch(youtubeSearchProvider(_query));
+
     return DecoratedBox(
       decoration: const BoxDecoration(color: AppColors.musicBackground),
       child: Stack(
@@ -160,36 +148,19 @@ class _DiscoverScreenState extends ConsumerState<DiscoverScreen> {
                   padding: const EdgeInsets.fromLTRB(24, 6, 24, 16),
                   child: _searchField(),
                 ),
-                Expanded(
-                  child: results.isEmpty
-                      ? _noResults()
-                      : ListView.separated(
-                          padding: const EdgeInsets.fromLTRB(24, 0, 24, 170),
-                          physics: const BouncingScrollPhysics(),
-                          itemCount: results.length + 1,
-                          itemBuilder: (context, i) {
-                            if (i == 0) {
-                              return Padding(
-                                padding: const EdgeInsets.only(bottom: 4),
-                                child: Text(
-                                  hasQuery
-                                      ? '${results.length} ${results.length == 1 ? 'result' : 'results'}'
-                                      : 'Trending now',
-                                  style: TextStyle(
-                                    color: AppColors.whiteAlpha(0.5),
-                                    fontSize: 13,
-                                    fontWeight: FontWeight.w700,
-                                    letterSpacing: 0.3,
-                                  ),
-                                ),
-                              );
-                            }
-                            return _resultRow(results[i - 1]);
-                          },
-                          separatorBuilder: (_, i) =>
-                              SizedBox(height: i == 0 ? 14 : 20),
-                        ),
-                ),
+                if (_playError != null)
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(24, 0, 24, 12),
+                    child: Text(
+                      _playError!,
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(
+                        color: Color(0xFFFF8A9B),
+                        fontSize: 13,
+                      ),
+                    ),
+                  ),
+                Expanded(child: _results(search)),
               ],
             ),
           ),
@@ -228,8 +199,10 @@ class _DiscoverScreenState extends ConsumerState<DiscoverScreen> {
           const SizedBox(width: 10),
           Expanded(
             child: TextField(
+              key: const Key('youtube-search-field'),
               controller: _controller,
-              onChanged: (v) => setState(() => _query = v),
+              onChanged: _onQueryChanged,
+              onSubmitted: _submitSearch,
               cursorColor: AppColors.accentA,
               textInputAction: TextInputAction.search,
               style: const TextStyle(
@@ -240,7 +213,7 @@ class _DiscoverScreenState extends ConsumerState<DiscoverScreen> {
               decoration: InputDecoration(
                 isCollapsed: true,
                 border: InputBorder.none,
-                hintText: 'Search songs, artists, lyrics…',
+                hintText: 'Search YouTube…',
                 hintStyle: TextStyle(
                   color: AppColors.whiteAlpha(0.4),
                   fontSize: 15,
@@ -249,12 +222,12 @@ class _DiscoverScreenState extends ConsumerState<DiscoverScreen> {
               ),
             ),
           ),
-          if (_query.isNotEmpty)
+          if (_controller.text.isNotEmpty)
             GestureDetector(
               behavior: HitTestBehavior.opaque,
               onTap: () {
                 _controller.clear();
-                setState(() => _query = '');
+                _onQueryChanged('');
               },
               child: Padding(
                 padding: const EdgeInsets.only(left: 8),
@@ -270,11 +243,63 @@ class _DiscoverScreenState extends ConsumerState<DiscoverScreen> {
     );
   }
 
-  Widget _resultRow(_OnlineTrack track) {
-    final status = _status[track.id] ?? _DownloadStatus.idle;
+  Widget _results(AsyncValue<List<YouTubeTrack>>? search) {
+    if (search == null) return _searchPrompt();
+    return search.when(
+      loading: () => const Center(
+        child: CircularProgressIndicator(color: AppColors.accentA),
+      ),
+      error: (_, _) => _searchError(),
+      data: (tracks) {
+        if (tracks.isEmpty) return _noResults();
+        return ListView.separated(
+          padding: const EdgeInsets.fromLTRB(24, 0, 24, 170),
+          physics: const BouncingScrollPhysics(),
+          itemCount: tracks.length + 1,
+          itemBuilder: (context, index) {
+            if (index == 0) {
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 4),
+                child: Text(
+                  '${tracks.length} ${tracks.length == 1 ? 'result' : 'results'}',
+                  style: TextStyle(
+                    color: AppColors.whiteAlpha(0.5),
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 0.3,
+                  ),
+                ),
+              );
+            }
+            return _resultRow(tracks[index - 1]);
+          },
+          separatorBuilder: (_, index) =>
+              SizedBox(height: index == 0 ? 14 : 20),
+        );
+      },
+    );
+  }
+
+  Widget _resultRow(YouTubeTrack track) {
+    final resolving = _resolvingId == track.videoId;
     return Row(
       children: [
-        AlbumArt(gradient: track.gradient, size: 54, radius: 14),
+        ClipRRect(
+          borderRadius: BorderRadius.circular(14),
+          child: Image.network(
+            track.thumbnailUrl,
+            width: 54,
+            height: 54,
+            fit: BoxFit.cover,
+            errorBuilder: (_, _, _) => AlbumArt(
+              gradient:
+                  AppArt.gradients[_stableId(track.videoId) %
+                      AppArt.gradients.length],
+              size: 54,
+              radius: 14,
+            ),
+          ),
+        ),
         const SizedBox(width: 14),
         Expanded(
           child: Column(
@@ -292,128 +317,114 @@ class _DiscoverScreenState extends ConsumerState<DiscoverScreen> {
                 ),
               ),
               const SizedBox(height: 4),
-              Row(
-                children: [
-                  Flexible(
-                    child: Text(
-                      '${track.artist} · ${track.duration}',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        color: AppColors.whiteAlpha(0.5),
-                        fontSize: 13,
-                      ),
-                    ),
-                  ),
-                  if (track.hasLyrics) ...[
-                    const SizedBox(width: 8),
-                    _lyricsChip(),
-                  ],
-                ],
+              Text(
+                '${track.artist} · ${_durationLabel(track.duration)}',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  color: AppColors.whiteAlpha(0.5),
+                  fontSize: 13,
+                ),
               ),
             ],
           ),
         ),
         const SizedBox(width: 12),
-        _downloadButton(status, () => _download(track.id)),
+        _playButton(track, resolving),
       ],
     );
   }
 
-  Widget _lyricsChip() {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-      decoration: BoxDecoration(
-        color: AppColors.whiteAlpha(0.07),
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(
-            Icons.lyrics_outlined,
-            size: 12,
-            color: AppColors.whiteAlpha(0.6),
-          ),
-          const SizedBox(width: 4),
-          Text(
-            'Lyrics',
-            style: TextStyle(
-              color: AppColors.whiteAlpha(0.6),
-              fontSize: 10.5,
-              fontWeight: FontWeight.w700,
-              letterSpacing: 0.2,
-            ),
-          ),
-        ],
+  Widget _playButton(YouTubeTrack track, bool resolving) {
+    return GestureDetector(
+      key: ValueKey('youtube-play-${track.videoId}'),
+      behavior: HitTestBehavior.opaque,
+      onTap: resolving ? null : () => _play(track),
+      child: Container(
+        width: 42,
+        height: 42,
+        padding: resolving ? const EdgeInsets.all(11) : EdgeInsets.zero,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          gradient: resolving ? null : AppColors.accentGradient,
+          color: resolving ? AppColors.whiteAlpha(0.06) : null,
+          border: resolving
+              ? Border.all(color: AppColors.whiteAlpha(0.08))
+              : null,
+        ),
+        child: resolving
+            ? const CircularProgressIndicator(
+                strokeWidth: 2,
+                color: AppColors.accentA,
+              )
+            : const Icon(
+                Icons.play_arrow_rounded,
+                size: 24,
+                color: AppColors.white,
+              ),
       ),
     );
   }
 
-  Widget _downloadButton(_DownloadStatus status, VoidCallback onTap) {
-    switch (status) {
-      case _DownloadStatus.downloading:
-        return Container(
-          width: 42,
-          height: 42,
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            color: AppColors.whiteAlpha(0.06),
-            border: Border.all(color: AppColors.whiteAlpha(0.08)),
-          ),
-          padding: const EdgeInsets.all(11),
-          child: const CircularProgressIndicator(
-            strokeWidth: 2,
-            color: AppColors.accentA,
-          ),
-        );
-      case _DownloadStatus.done:
-        return Container(
-          width: 42,
-          height: 42,
-          decoration: const BoxDecoration(
-            shape: BoxShape.circle,
-            gradient: AppColors.accentGradient,
-          ),
-          child: const Icon(
-            Icons.download_done_rounded,
-            size: 20,
-            color: AppColors.white,
-          ),
-        );
-      case _DownloadStatus.idle:
-        return GestureDetector(
-          behavior: HitTestBehavior.opaque,
-          onTap: onTap,
-          child: Container(
-            width: 42,
-            height: 42,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: AppColors.whiteAlpha(0.06),
-              border: Border.all(color: AppColors.whiteAlpha(0.1)),
-            ),
-            child: Icon(AppIcons.download, size: 20, color: AppColors.white),
-          ),
-        );
-    }
-  }
+  Widget _searchPrompt() => _message(
+    icon: Icons.ondemand_video_rounded,
+    title: 'Search YouTube',
+    detail: 'Find a video and play its audio directly in MyZik.',
+  );
 
-  Widget _noResults() {
+  Widget _searchError() => _message(
+    icon: Icons.wifi_off_rounded,
+    title: 'Search failed',
+    detail: 'Check your connection and try again.',
+    action: TextButton(
+      onPressed: () => ref.invalidate(youtubeSearchProvider(_query)),
+      child: const Text('Retry'),
+    ),
+  );
+
+  Widget _noResults() => _message(
+    icon: AppIcons.search,
+    title: 'No results',
+    detail: 'Nothing matched "$_query".',
+  );
+
+  Widget _message({
+    required IconData icon,
+    required String title,
+    required String detail,
+    Widget? action,
+  }) {
     return Padding(
       padding: const EdgeInsets.fromLTRB(40, 0, 40, 170),
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(AppIcons.search, size: 46, color: AppColors.whiteAlpha(0.3)),
+          Icon(icon, size: 46, color: AppColors.whiteAlpha(0.3)),
           const SizedBox(height: 16),
           Text(
-            'Nothing matched "${_query.trim()}".',
+            title,
+            textAlign: TextAlign.center,
+            style: const TextStyle(
+              color: AppColors.white,
+              fontSize: 16,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            detail,
             textAlign: TextAlign.center,
             style: TextStyle(color: AppColors.whiteAlpha(0.55), fontSize: 14),
           ),
+          if (action != null) ...[const SizedBox(height: 10), action],
         ],
       ),
     );
+  }
+
+  String _durationLabel(Duration duration) {
+    final minutes = duration.inMinutes;
+    final seconds = duration.inSeconds % 60;
+    return '$minutes:${seconds.toString().padLeft(2, '0')}';
   }
 }

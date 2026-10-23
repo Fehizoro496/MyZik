@@ -5,6 +5,7 @@ import 'dart:math';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:just_audio/just_audio.dart';
 
+import '../data/youtube_repository.dart';
 import '../models.dart';
 import 'audio_handler.dart';
 import 'library_provider.dart';
@@ -108,7 +109,10 @@ class PlaybackNotifier extends Notifier<PlaybackState> {
 
   @override
   PlaybackState build() {
-    _player = AudioPlayer();
+    _player = AudioPlayer(
+      userAgent: youtubeStreamUserAgent,
+      useProxyForRequestHeaders: false,
+    );
     ref.onDispose(() {
       _persistTimer?.cancel();
       _player.dispose();
@@ -198,7 +202,12 @@ class PlaybackNotifier extends Notifier<PlaybackState> {
   /// "top songs"). Defaults to the whole library when no context is given. This
   /// is what scopes next/previous to the right set of tracks; [playQueueIndex]
   /// is used instead when jumping within the existing queue.
-  Future<void> playSong(Song song, {List<Song>? context}) async {
+  Future<void> playSong(
+    Song song, {
+    List<Song>? context,
+    bool throwOnLoadError = false,
+  }) async {
+    final previousState = state;
     final source = context ?? ref.read(libraryProvider).songs;
     final inSource = source.contains(song);
     final queue = inSource ? List<Song>.of(source) : <Song>[song];
@@ -211,6 +220,20 @@ class PlaybackNotifier extends Notifier<PlaybackState> {
       shuffle: state.shuffle,
       repeatMode: state.repeatMode,
     );
+    if (throwOnLoadError) {
+      try {
+        await _load(song, play: true, throwOnError: true);
+      } catch (_) {
+        state = previousState;
+        rethrow;
+      }
+      // Keep the source screen visible while a remote URL is being prepared;
+      // only navigate after ExoPlayer has accepted it.
+      ref.read(navigationProvider.notifier).goTo(AppScreen.nowPlaying);
+      _persistSongId(song.id);
+      return;
+    }
+
     ref.read(navigationProvider.notifier).goTo(AppScreen.nowPlaying);
     _persistSongId(song.id);
     await _load(song, play: true);
@@ -253,14 +276,22 @@ class PlaybackNotifier extends Notifier<PlaybackState> {
 
   /// Load [song]'s file into the player (and optionally start it). Sample /
   /// desktop data has no uri yet, so this is a no-op there.
-  Future<void> _load(Song song, {required bool play}) async {
+  Future<void> _load(
+    Song song, {
+    required bool play,
+    bool throwOnError = false,
+  }) async {
     final uri = song.uri;
     if (uri == null) return;
     try {
       await _player.setAudioSource(AudioSource.uri(Uri.parse(uri)));
-      if (play) await _player.play();
-    } catch (_) {
-      // Ignore unsupported/unreadable sources; keep the UI responsive.
+      // just_audio's play() future completes when playback ends, not when it
+      // starts. Do not keep UI actions pending for the duration of the track.
+      if (play) unawaited(_player.play());
+    } catch (error, stackTrace) {
+      if (throwOnError) Error.throwWithStackTrace(error, stackTrace);
+      // Local library entries may become unreadable after a rescan. Keep the
+      // existing best-effort behaviour for those callers.
     }
   }
 
@@ -302,9 +333,11 @@ class PlaybackNotifier extends Notifier<PlaybackState> {
         artist: song.artist,
         album: song.album,
         duration: song.duration,
+        artUri: song.artworkUrl == null ? null : Uri.parse(song.artworkUrl!),
       );
-      // Cover art arrives asynchronously; re-publish the item with it once ready.
-      _publishArtwork(song);
+      // Local cover art arrives asynchronously; remote tracks already expose
+      // a network artwork URI that audio_service can publish directly.
+      if (song.artworkUrl == null) _publishArtwork(song);
     }
   }
 
