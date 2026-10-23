@@ -7,6 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../icons.dart';
 import '../models.dart';
 import '../providers/collection_provider.dart';
+import '../providers/downloads_provider.dart';
 import '../providers/library_provider.dart';
 import '../providers/liked_provider.dart';
 import '../providers/navigation_provider.dart';
@@ -132,6 +133,9 @@ class SongDetailScreen extends ConsumerWidget {
     final hasArtist = library.any((s) => s.artist == song.artist);
     final hasAlbum =
         song.album != null && library.any((s) => s.album == song.album);
+    final download = ref.watch(
+      downloadsProvider.select((d) => d.bySongId(song.id)),
+    );
 
     return ListView(
       padding: const EdgeInsets.fromLTRB(24, 8, 24, 40),
@@ -201,6 +205,12 @@ class SongDetailScreen extends ConsumerWidget {
               label: 'Add to playlist',
               onTap: () => showAddToPlaylistSheet(context, song.id),
             ),
+            if (download != null)
+              _pill(
+                icon: Icons.delete_outline_rounded,
+                label: 'Remove download',
+                onTap: () => _confirmRemoveDownload(context, ref, download),
+              ),
           ],
         ),
         const SizedBox(height: 28),
@@ -275,6 +285,36 @@ class SongDetailScreen extends ConsumerWidget {
         ),
       ),
     );
+  }
+
+  Future<void> _confirmRemoveDownload(
+    BuildContext context,
+    WidgetRef ref,
+    DownloadedTrack download,
+  ) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Remove download?'),
+        content: Text(
+          '"${download.title}" will be deleted from this phone. You can '
+          'download it again from Discover.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Remove'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    await ref.read(downloadsProvider.notifier).remove(download.videoId);
+    ref.read(navigationProvider.notifier).back();
   }
 
   void _openAlbum(WidgetRef ref, Song song) {

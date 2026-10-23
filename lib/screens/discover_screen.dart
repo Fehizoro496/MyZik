@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../data/youtube_repository.dart';
 import '../icons.dart';
 import '../models.dart';
+import '../providers/downloads_provider.dart';
 import '../providers/navigation_provider.dart';
 import '../providers/playback_provider.dart';
 import '../providers/youtube_provider.dart';
@@ -13,7 +14,8 @@ import '../theme.dart';
 import '../widgets.dart';
 
 /// Searches YouTube on-device and hands a freshly resolved audio stream to the
-/// existing just_audio player. Nothing is downloaded or persisted.
+/// existing just_audio player. Results can also be downloaded for offline
+/// playback; a downloaded result plays from its local file.
 class DiscoverScreen extends ConsumerStatefulWidget {
   const DiscoverScreen({super.key});
 
@@ -70,12 +72,20 @@ class _DiscoverScreenState extends ConsumerState<DiscoverScreen> {
     });
 
     try {
+      final saved = ref.read(downloadsProvider).saved[track.videoId];
+      if (saved != null) {
+        // Works offline: no stream to resolve.
+        await ref
+            .read(playbackProvider.notifier)
+            .playSong(saved.song, throwOnLoadError: true);
+        return;
+      }
       final streamUrl = await ref
           .read(youtubeRepositoryProvider)
           .resolveAudio(track.videoId);
       if (!mounted) return;
       final song = Song(
-        id: _stableId(track.videoId),
+        id: youtubeSongId(track.videoId),
         title: track.title,
         artist: track.artist,
         duration: track.duration,
@@ -98,12 +108,19 @@ class _DiscoverScreenState extends ConsumerState<DiscoverScreen> {
     }
   }
 
-  int _stableId(String value) {
-    var hash = 0x811c9dc5;
-    for (final codeUnit in value.codeUnits) {
-      hash = ((hash ^ codeUnit) * 0x01000193) & 0x7fffffff;
+  Future<void> _download(YouTubeTrack track) async {
+    setState(() => _playError = null);
+    try {
+      await ref.read(downloadsProvider.notifier).download(track);
+    } catch (error, stackTrace) {
+      debugPrint('Discover: failed to download ${track.videoId}: $error');
+      debugPrintStack(stackTrace: stackTrace);
+      if (!mounted) return;
+      setState(() {
+        _playError =
+            'Impossible de télécharger « ${track.title} ». Vérifie ta connexion et réessaie.';
+      });
     }
-    return hash;
   }
 
   @override
@@ -293,7 +310,7 @@ class _DiscoverScreenState extends ConsumerState<DiscoverScreen> {
             fit: BoxFit.cover,
             errorBuilder: (_, _, _) => AlbumArt(
               gradient:
-                  AppArt.gradients[_stableId(track.videoId) %
+                  AppArt.gradients[youtubeSongId(track.videoId).abs() %
                       AppArt.gradients.length],
               size: 54,
               radius: 14,
@@ -330,8 +347,61 @@ class _DiscoverScreenState extends ConsumerState<DiscoverScreen> {
           ),
         ),
         const SizedBox(width: 12),
+        _downloadButton(track),
+        const SizedBox(width: 10),
         _playButton(track, resolving),
       ],
+    );
+  }
+
+  /// Idle → progress ring while downloading → check mark once saved. Removing
+  /// a download lives on the song's detail page.
+  Widget _downloadButton(YouTubeTrack track) {
+    final saved = ref.watch(
+      downloadsProvider.select((d) => d.saved.containsKey(track.videoId)),
+    );
+    final progress = ref.watch(
+      downloadsProvider.select((d) => d.progress[track.videoId]),
+    );
+    final Widget child;
+    if (saved) {
+      child = const Icon(
+        Icons.download_done_rounded,
+        size: 20,
+        color: AppColors.accentA,
+      );
+    } else if (progress != null) {
+      child = Padding(
+        padding: const EdgeInsets.all(10),
+        child: CircularProgressIndicator(
+          // Indeterminate until the first bytes arrive.
+          value: progress > 0 ? progress : null,
+          strokeWidth: 2,
+          color: AppColors.accentA,
+          backgroundColor: AppColors.whiteAlpha(0.1),
+        ),
+      );
+    } else {
+      child = Icon(
+        AppIcons.download,
+        size: 20,
+        color: AppColors.whiteAlpha(0.8),
+      );
+    }
+    return GestureDetector(
+      key: ValueKey('youtube-download-${track.videoId}'),
+      behavior: HitTestBehavior.opaque,
+      onTap: saved || progress != null ? null : () => _download(track),
+      child: Container(
+        width: 42,
+        height: 42,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          color: AppColors.whiteAlpha(0.06),
+          border: Border.all(color: AppColors.whiteAlpha(0.08)),
+        ),
+        child: Center(child: child),
+      ),
     );
   }
 
@@ -369,7 +439,9 @@ class _DiscoverScreenState extends ConsumerState<DiscoverScreen> {
   Widget _searchPrompt() => _message(
     icon: Icons.ondemand_video_rounded,
     title: 'Search YouTube',
-    detail: 'Find a video and play its audio directly in MyZik.',
+    detail:
+        'Find a video and play its audio directly in MyZik, or download it '
+        'to listen offline.',
   );
 
   Widget _searchError() => _message(

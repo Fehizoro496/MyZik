@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'dart:ui' as ui;
 
 import 'package:flutter/services.dart';
@@ -5,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../data/music_repository.dart';
 import '../models.dart';
+import 'downloads_provider.dart';
 
 /// Source of the track library for this platform. A single instance is
 /// shared by every provider that needs to read it.
@@ -18,8 +20,9 @@ final artworkProvider = FutureProvider.family<Uint8List?, int>((ref, id) {
   return ref.watch(musicRepositoryProvider).artworkFor(id);
 });
 
-/// Encoded cover bytes for any song: downloaded (and de-letterboxed) for
-/// streamed tracks, read from MediaStore for local ones. Use this rather than
+/// Encoded cover bytes for any song: read from MediaStore for local tracks,
+/// from disk for downloaded ones, and fetched (and de-letterboxed) for
+/// streamed ones. Use this rather than
 /// [artworkProvider] in UI so remote tracks get the same treatment.
 final coverArtProvider = FutureProvider.family<Uint8List?, CoverKey>((
   ref,
@@ -28,8 +31,11 @@ final coverArtProvider = FutureProvider.family<Uint8List?, CoverKey>((
   final url = key.url;
   if (url == null) return ref.watch(artworkProvider(key.id).future);
   try {
-    final data = await NetworkAssetBundle(Uri.parse(url)).load(url);
-    return _cropLetterbox(data.buffer.asUint8List());
+    final uri = Uri.parse(url);
+    final bytes = uri.isScheme('file')
+        ? await File(uri.toFilePath()).readAsBytes()
+        : (await NetworkAssetBundle(uri).load(url)).buffer.asUint8List();
+    return _cropLetterbox(bytes);
   } catch (_) {
     return null;
   }
@@ -175,30 +181,66 @@ class LibraryState {
 /// Reads the on-device audio library via [MusicRepository]. Always re-scanned
 /// on app start (the device's media store is the source of truth, so nothing
 /// here is persisted) but callers can retry via [load] (e.g. after granting
-/// permission).
+/// permission). Tracks saved by [downloadsProvider] are appended to the
+/// device's songs and follow its changes.
 class LibraryNotifier extends Notifier<LibraryState> {
+  List<Song> _deviceSongs = const [];
+  bool _disposed = false;
+
   @override
   LibraryState build() {
+    // [load] awaits the repository; the container may be gone by then.
+    ref.onDispose(() => _disposed = true);
+    ref.listen(downloadsProvider.select((d) => d.saved), (_, _) {
+      if (state.status == LibraryStatus.loading) return;
+      final songs = _withDownloads(_deviceSongs);
+      state = state.copyWith(
+        songs: songs,
+        status: switch (state.status) {
+          LibraryStatus.ready || LibraryStatus.empty =>
+            songs.isEmpty ? LibraryStatus.empty : LibraryStatus.ready,
+          final status => status,
+        },
+      );
+    });
     Future.microtask(load);
     return const LibraryState(status: LibraryStatus.loading);
   }
 
+  List<Song> _withDownloads(List<Song> device) => [
+    ...device,
+    ...ref.read(downloadsProvider).songs,
+  ];
+
   Future<void> load() async {
     state = state.copyWith(status: LibraryStatus.loading);
     final repo = ref.read(musicRepositoryProvider);
+    // Wait for saved downloads so the first published library (which playback
+    // resume relies on) already contains them.
+    await ref.read(downloadsProvider.notifier).ready;
     try {
       final granted = await repo.ensurePermission();
+      if (_disposed) return;
       if (!granted) {
-        state = state.copyWith(status: LibraryStatus.permissionDenied);
+        state = LibraryState(
+          status: LibraryStatus.permissionDenied,
+          songs: _withDownloads(const []),
+        );
         return;
       }
-      final loaded = await repo.fetchSongs();
+      _deviceSongs = await repo.fetchSongs();
+      if (_disposed) return;
+      final loaded = _withDownloads(_deviceSongs);
       state = LibraryState(
         status: loaded.isEmpty ? LibraryStatus.empty : LibraryStatus.ready,
         songs: loaded,
       );
     } catch (_) {
-      state = state.copyWith(status: LibraryStatus.error);
+      if (_disposed) return;
+      state = LibraryState(
+        status: LibraryStatus.error,
+        songs: _withDownloads(const []),
+      );
     }
   }
 }

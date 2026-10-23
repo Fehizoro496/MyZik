@@ -38,6 +38,10 @@ class _FakeYouTubeRepository implements YouTubeRepository {
   }
 
   @override
+  Future<YouTubeAudioStream> openAudio(String videoId) async =>
+      throw UnimplementedError();
+
+  @override
   void close() {}
 }
 

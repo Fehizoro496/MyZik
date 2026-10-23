@@ -1,10 +1,12 @@
 # Système de téléchargement — conception
 
-État : proposition pour le téléchargement. `DiscoverScreen` possède désormais un
-prototype autonome distinct : recherche YouTube avec `youtube_explode_dart`,
-résolution à la demande du meilleur flux audio et lecture immédiate avec
-`just_audio`. Aucun fichier n'est téléchargé ou ajouté à la bibliothèque par ce
-prototype. Le présent document décrit toujours le futur système de téléchargement.
+État : proposition. `DiscoverScreen` possède désormais une première version
+autonome : recherche YouTube avec `youtube_explode_dart`, lecture immédiate du
+meilleur flux audio avec `just_audio`, et téléchargement pour l'écoute hors ligne
+(`downloadsProvider`). Cette version écrit dans le dossier privé de l'app, sans
+MediaStore ni écriture de tags : les titres téléchargés sont fusionnés dans
+`libraryProvider` par l'app elle-même. Le présent document décrit toujours le
+système complet visé (sources multiples, `Music/` public, tags, paroles).
 
 ## 1. Périmètre
 

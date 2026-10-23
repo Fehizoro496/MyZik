@@ -61,6 +61,7 @@ dependencies:
 
   # Searches YouTube and resolves playable audio streams entirely on-device.
   youtube_explode_dart: ^3.1.0
+  path_provider: ^2.1.6
 
 dev_dependencies:
   flutter_test:

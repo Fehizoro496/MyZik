@@ -47,11 +47,29 @@ class YouTubeTrack {
   final String thumbnailUrl;
 }
 
+/// An audio-only stream opened for download.
+class YouTubeAudioStream {
+  const YouTubeAudioStream({
+    required this.extension,
+    required this.totalBytes,
+    required this.bytes,
+  });
+
+  /// File extension matching the container (`m4a` or `webm`).
+  final String extension;
+  final int totalBytes;
+  final Stream<List<int>> bytes;
+}
+
 abstract class YouTubeRepository {
   Future<List<YouTubeTrack>> search(String query, {int limit = 20});
 
   /// Resolves a fresh, short-lived URL for the best audio-only stream.
   Future<Uri> resolveAudio(String videoId);
+
+  /// Opens the same best audio-only stream as [resolveAudio] for saving it
+  /// to disk.
+  Future<YouTubeAudioStream> openAudio(String videoId);
 
   void close();
 }
@@ -83,7 +101,24 @@ class YoutubeExplodeRepository implements YouTubeRepository {
   }
 
   @override
-  Future<Uri> resolveAudio(String videoId) async {
+  Future<Uri> resolveAudio(String videoId) async =>
+      (await _bestAudio(videoId)).url;
+
+  @override
+  Future<YouTubeAudioStream> openAudio(String videoId) async {
+    final info = await _bestAudio(videoId);
+    return YouTubeAudioStream(
+      extension: info.container == StreamContainer.mp4
+          ? 'm4a'
+          : info.container.name,
+      totalBytes: info.size.totalBytes,
+      // Fetched in ranged chunks by the library, which googlevideo requires
+      // for long downloads.
+      bytes: _client.videos.streams.get(info),
+    );
+  }
+
+  Future<AudioOnlyStreamInfo> _bestAudio(String videoId) async {
     StreamManifest manifest;
     try {
       manifest = await _client.videos.streams.getManifest(
@@ -95,7 +130,7 @@ class YoutubeExplodeRepository implements YouTubeRepository {
       // Fall back to the library's own client selection.
       manifest = await _client.videos.streams.getManifest(videoId);
     }
-    return manifest.audioOnly.withHighestBitrate().url;
+    return manifest.audioOnly.withHighestBitrate();
   }
 
   @override
