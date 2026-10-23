@@ -450,16 +450,7 @@ class _DiscoverScreenState extends ConsumerState<DiscoverScreen> {
       onTap: saved || (download != null && !failed)
           ? null
           : () => _download(track),
-      child: Container(
-        width: 42,
-        height: 42,
-        decoration: BoxDecoration(
-          shape: BoxShape.circle,
-          color: AppColors.whiteAlpha(0.06),
-          border: Border.all(color: AppColors.whiteAlpha(0.08)),
-        ),
-        child: Center(child: child),
-      ),
+      child: SizedBox(width: 42, height: 42, child: Center(child: child)),
     );
   }
 
@@ -469,14 +460,9 @@ class _DiscoverScreenState extends ConsumerState<DiscoverScreen> {
       key: ValueKey('youtube-dismiss-${track.videoId}'),
       behavior: HitTestBehavior.opaque,
       onTap: () => ref.read(downloadsProvider.notifier).cancel(track.videoId),
-      child: Container(
+      child: SizedBox(
         width: 42,
         height: 42,
-        decoration: BoxDecoration(
-          shape: BoxShape.circle,
-          color: AppColors.whiteAlpha(0.06),
-          border: Border.all(color: AppColors.whiteAlpha(0.08)),
-        ),
         child: Icon(AppIcons.close, size: 20, color: AppColors.whiteAlpha(0.8)),
       ),
     );

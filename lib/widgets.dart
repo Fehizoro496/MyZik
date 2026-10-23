@@ -13,7 +13,8 @@ import 'providers/playlists_provider.dart';
 import 'providers/song_detail_provider.dart';
 import 'theme.dart';
 
-/// A frosted, translucent circular icon button used throughout the design.
+/// A bare icon button used throughout the design, with a fixed square tap
+/// target.
 class GlassIconButton extends StatelessWidget {
   const GlassIconButton({
     super.key,
@@ -34,20 +35,11 @@ class GlassIconButton extends StatelessWidget {
   Widget build(BuildContext context) {
     return GestureDetector(
       onTap: onTap,
-      child: ClipOval(
-        child: BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
-          child: Container(
-            width: size,
-            height: size,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: AppColors.whiteAlpha(0.06),
-              border: Border.all(color: AppColors.whiteAlpha(0.1)),
-            ),
-            child: Icon(icon, size: iconSize, color: iconColor),
-          ),
-        ),
+      behavior: HitTestBehavior.opaque,
+      child: SizedBox(
+        width: size,
+        height: size,
+        child: Icon(icon, size: iconSize, color: iconColor),
       ),
     );
   }
@@ -553,14 +545,9 @@ class MiniPlayer extends ConsumerWidget {
                 GestureDetector(
                   onTap: notifier.togglePlay,
                   behavior: HitTestBehavior.opaque,
-                  child: Container(
+                  child: SizedBox(
                     width: 36,
                     height: 36,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      color: AppColors.whiteAlpha(0.08),
-                      border: Border.all(color: AppColors.whiteAlpha(0.1)),
-                    ),
                     child: Icon(
                       playback.playing ? AppIcons.pause : AppIcons.playFilled,
                       size: 18,
@@ -895,14 +882,9 @@ class SheetActionTile extends StatelessWidget {
         padding: const EdgeInsets.fromLTRB(24, 8, 24, 8),
         child: Row(
           children: [
-            Container(
+            SizedBox(
               width: 44,
               height: 44,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: AppColors.whiteAlpha(0.06),
-                border: Border.all(color: AppColors.whiteAlpha(0.1)),
-              ),
               child: Icon(icon, size: 20, color: AppColors.white),
             ),
             const SizedBox(width: 14),
