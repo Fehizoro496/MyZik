@@ -13,6 +13,7 @@ import '../providers/navigation_provider.dart';
 import '../providers/playback_provider.dart';
 import '../theme.dart';
 import '../widgets.dart';
+import 'lyrics_view.dart';
 
 class NowPlayingScreen extends ConsumerWidget {
   const NowPlayingScreen({super.key});
@@ -148,7 +149,7 @@ class NowPlayingScreen extends ConsumerWidget {
                                   ),
                                 ),
                                 const SizedBox(height: 22),
-                                _lyrics(),
+                                LyricsPreview(song: track),
                                 const Spacer(),
                                 _progressAndControls(playback, notifier),
                                 const SizedBox(height: 10),
@@ -273,37 +274,6 @@ class NowPlayingScreen extends ConsumerWidget {
             ),
           ],
         ),
-      ),
-    );
-  }
-
-  Widget _lyrics() {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 30),
-      child: Column(
-        children: [
-          Text(
-            'Whispers in the midnight breeze,',
-            textAlign: TextAlign.center,
-            style: TextStyle(color: AppColors.whiteAlpha(0.3), fontSize: 15),
-          ),
-          const SizedBox(height: 8),
-          const Text(
-            'Carrying dreams across the seas,',
-            textAlign: TextAlign.center,
-            style: TextStyle(
-              color: AppColors.white,
-              fontSize: 18,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            'I close my eyes, let go, and drift away.',
-            textAlign: TextAlign.center,
-            style: TextStyle(color: AppColors.whiteAlpha(0.3), fontSize: 15),
-          ),
-        ],
       ),
     );
   }

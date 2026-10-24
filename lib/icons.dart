@@ -53,6 +53,10 @@ class AppIcons {
 
   static const IconData musicNote = CupertinoIcons.music_note;
   static const IconData queue = CupertinoIcons.music_note_list;
+
+  /// Lyrics panel empty state.
+  static const IconData lyrics = CupertinoIcons.quote_bubble;
+
   static const IconData dragHandle = CupertinoIcons.line_horizontal_3;
 
   static const IconData add = CupertinoIcons.add;

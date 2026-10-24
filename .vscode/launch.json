@@ -1,0 +1,13 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      // --dart-define-from-file=.env comes from dart.flutterRunAdditionalArgs
+      // in settings.json, so every launch picks up the Groq key.
+      "name": "MyZik",
+      "request": "launch",
+      "type": "dart",
+      "program": "lib/main.dart"
+    }
+  ]
+}

@@ -1,3 +1,6 @@
 {
-  "dart.flutterSdkPath": ".fvm/versions/stable"
+  "dart.flutterSdkPath": ".fvm/versions/stable",
+  // Compiles the secrets from .env (GROQ_API_KEY) into every run started from
+  // VS Code: F5, the Run/Debug CodeLens above main(), etc.
+  "dart.flutterRunAdditionalArgs": ["--dart-define-from-file=.env"]
 }

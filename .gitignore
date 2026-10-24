@@ -46,3 +46,5 @@ app.*.map.json
 
 # FVM Version Cache
 .fvm/
+# Local secrets (compiled in with --dart-define-from-file=.env)
+.env

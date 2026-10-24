@@ -439,6 +439,9 @@ class PlaybackNotifier extends Notifier<PlaybackState> {
     _player.seek(state.duration * fraction.clamp(0.0, 1.0));
   }
 
+  /// Move the playhead to an absolute [position] (tapping a lyrics line).
+  void seek(Duration position) => _player.seek(position);
+
   void _persistSongId(int id) {
     ref.read(sharedPreferencesProvider).setInt(_kLastSongId, id);
     ref.read(sharedPreferencesProvider).setInt(_kLastPositionMs, 0);
