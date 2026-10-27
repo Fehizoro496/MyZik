@@ -128,6 +128,56 @@ List<LyricLine> parseLrc(String lrc) {
   return lines;
 }
 
+/// Timed lines from an LRC file, ready to edit and save: sorted, and one line
+/// per timestamp (the first wins when several share one, as saved lyrics
+/// need strictly increasing times). Empty when the file has no timestamps.
+List<LyricLine> importLrc(String lrc) {
+  final lines = <LyricLine>[];
+  for (final line in parseLrc(lrc)) {
+    if (lines.isNotEmpty && lines.last.time == line.time) continue;
+    lines.add(line);
+  }
+  return lines;
+}
+
+/// Writes [lines] as LRC, the inverse of [parseLrc]: optional ID tags, then
+/// one `[mm:ss.xx]` line each. Instrumental breaks (empty text) become bare
+/// timestamps.
+String formatLrc(
+  List<LyricLine> lines, {
+  String? title,
+  String? artist,
+  String? album,
+  Duration? length,
+}) {
+  String stamp(Duration time) {
+    final centiseconds = (time.inMilliseconds / 10).round();
+    final minutes = centiseconds ~/ 6000;
+    final seconds = (centiseconds % 6000) ~/ 100;
+    final hundredths = centiseconds % 100;
+    return '${minutes.toString().padLeft(2, '0')}:'
+        '${seconds.toString().padLeft(2, '0')}.'
+        '${hundredths.toString().padLeft(2, '0')}';
+  }
+
+  final out = StringBuffer();
+  void tag(String name, String? value) {
+    final clean = value?.replaceAll(RegExp(r'[\[\]\r\n]'), '').trim();
+    if (clean != null && clean.isNotEmpty) out.writeln('[$name:$clean]');
+  }
+
+  tag('ti', title);
+  tag('ar', artist);
+  tag('al', album);
+  if (length != null && length > Duration.zero) {
+    tag('length', stamp(length).substring(0, 5));
+  }
+  for (final line in lines) {
+    out.writeln('[${stamp(line.time)}]${line.text}');
+  }
+  return out.toString();
+}
+
 /// Thrown when lyrics can't be looked up (LRCLIB or Groq unreachable);
 /// [message] is shown to the user as-is.
 class LyricsException implements Exception {

@@ -28,6 +28,59 @@ void main() {
     });
   });
 
+  group('LRC export and import', () {
+    test('formatLrc writes tags and round-trips through parseLrc', () {
+      const lines = [
+        LyricLine(Duration(milliseconds: 1000), 'First'),
+        LyricLine(Duration(milliseconds: 12500), ''),
+        LyricLine(Duration(minutes: 1, milliseconds: 2345), 'Third'),
+      ];
+      final lrc = formatLrc(
+        lines,
+        title: 'Song [Live]',
+        artist: 'Artist',
+        length: const Duration(minutes: 3, seconds: 12),
+      );
+      expect(
+        lrc,
+        '[ti:Song Live]\n'
+        '[ar:Artist]\n'
+        '[length:03:12]\n'
+        '[00:01.00]First\n'
+        '[00:12.50]\n'
+        '[01:02.35]Third\n',
+      );
+      expect(parseLrc(lrc).map((l) => (l.time.inMilliseconds, l.text)), [
+        (1000, 'First'),
+        (12500, ''),
+        (62350, 'Third'),
+      ]);
+    });
+
+    test('formatLrc carries rounded hundredths into the next minute', () {
+      final lrc = formatLrc(const [
+        LyricLine(Duration(milliseconds: 59996), 'Edge'),
+      ]);
+      expect(lrc, '[01:00.00]Edge\n');
+    });
+
+    test('importLrc keeps one line per timestamp, in order', () {
+      final lines = importLrc('''
+[ar:Someone]
+[00:20.00]Second
+[00:10.00][00:30.00]Chorus
+[00:10.00]Duplicate time
+plain line without a timestamp
+''');
+      expect(lines.map((l) => (l.time.inSeconds, l.text)), [
+        (10, 'Chorus'),
+        (20, 'Second'),
+        (30, 'Chorus'),
+      ]);
+      expect(importLrc('Just words\nNo timings'), isEmpty);
+    });
+  });
+
   test('indexAt finds the line being sung', () {
     final lyrics = Lyrics(
       source: LyricsSource.lrclib,

@@ -1,6 +1,8 @@
 import 'dart:async';
+import 'dart:io';
 import 'dart:math';
 
+import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -253,6 +255,103 @@ class _DesktopLyricsEditorState extends ConsumerState<DesktopLyricsEditor> {
     } finally {
       if (mounted) setState(() => _saving = false);
     }
+  }
+
+  static const _lrcFiles = XTypeGroup(
+    label: 'LRC lyrics',
+    extensions: ['lrc', 'txt'],
+  );
+
+  /// Replaces the lyrics with an LRC file: its timed lines, or its text when
+  /// it has no timestamps. Undoable.
+  Future<void> _importLrc() async {
+    final file = await openFile(acceptedTypeGroups: const [_lrcFiles]);
+    if (file == null || !mounted) return;
+    final String content;
+    try {
+      content = await file.readAsString();
+    } catch (_) {
+      _say('Could not read ${file.name}.', error: true);
+      return;
+    }
+    if (!mounted) return;
+    final lines = importLrc(content);
+    if (lines.any((line) => line.text.isNotEmpty)) {
+      _apply(
+        rowsOf(Lyrics(source: LyricsSource.manual, lines: lines)),
+        failure: 'Could not import ${file.name}.',
+      );
+      _say(
+        'Imported ${lines.where((l) => l.text.isNotEmpty).length} timed '
+        'lines from ${file.name}.',
+      );
+      return;
+    }
+    // No timestamps: plain lyrics, minus LRC tags like [ar:Artist].
+    final plain = normalizeLyricsText(
+      content
+          .split('\n')
+          .where((line) => !RegExp(r'^\s*\[[a-z]+:.*\]\s*$').hasMatch(line))
+          .join('\n'),
+    );
+    if (lyricLinesOf(plain).isEmpty) {
+      _say('${file.name} holds no lyrics.', error: true);
+      return;
+    }
+    _retimeDebounce?.cancel();
+    setState(() {
+      _history.add((rows: _rows, text: _text.text));
+      _rows = null;
+      _selected.clear();
+      _textOfRows = plain;
+      _text.text = plain;
+      _dirty = true;
+      _message = 'Imported the text of ${file.name}: it has no timings.';
+      _messageIsError = false;
+    });
+  }
+
+  /// The timed lines as LRC, tagged with the song's details.
+  String? get _lrc {
+    final rows = _rows;
+    if (rows == null) return null;
+    final song = widget.song;
+    return formatLrc(
+      linesOf(rows),
+      title: song.title,
+      artist: song.artist,
+      album: song.album,
+      length: song.duration,
+    );
+  }
+
+  Future<void> _exportLrc() async {
+    final lrc = _lrc;
+    if (lrc == null) return;
+    final song = widget.song;
+    final name = '${song.artist} - ${song.title}'
+        .replaceAll(RegExp(r'[<>:"/\\|?*\x00-\x1F]'), '_')
+        .trim();
+    final location = await getSaveLocation(
+      suggestedName: '$name.lrc',
+      acceptedTypeGroups: const [_lrcFiles],
+    );
+    if (location == null || !mounted) return;
+    var path = location.path;
+    if (!path.toLowerCase().endsWith('.lrc')) path = '$path.lrc';
+    try {
+      await File(path).writeAsString(lrc);
+      _say('Exported to $path.');
+    } catch (_) {
+      _say('Could not write $path.', error: true);
+    }
+  }
+
+  Future<void> _copyLrc() async {
+    final lrc = _lrc;
+    if (lrc == null) return;
+    await Clipboard.setData(ClipboardData(text: lrc));
+    _say('Copied the timed lyrics as LRC.');
   }
 
   Future<void> _close() async {
@@ -725,6 +824,32 @@ class _DesktopLyricsEditorState extends ConsumerState<DesktopLyricsEditor> {
                   ),
                 ),
               ),
+            PopupMenuButton<String>(
+              tooltip: 'LRC import and export',
+              icon: const Icon(AppIcons.moreHoriz, size: 18),
+              color: const Color(0xFF1C1C26),
+              onSelected: (action) => switch (action) {
+                'import' => _importLrc(),
+                'export' => _exportLrc(),
+                _ => _copyLrc(),
+              },
+              itemBuilder: (_) => [
+                const PopupMenuItem(
+                  value: 'import',
+                  child: Text('Import LRC…'),
+                ),
+                PopupMenuItem(
+                  value: 'export',
+                  enabled: _rows != null,
+                  child: const Text('Export LRC…'),
+                ),
+                PopupMenuItem(
+                  value: 'copy',
+                  enabled: _rows != null,
+                  child: const Text('Copy as LRC'),
+                ),
+              ],
+            ),
             IconButton(
               tooltip: 'Undo (Ctrl+Z)',
               iconSize: 18,

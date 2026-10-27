@@ -72,6 +72,9 @@ dependencies:
   pretty_dio_logger: ^1.4.0
   crypto: ^3.0.6
 
+  # Open/save dialogs to import and export LRC files in the lyrics editor.
+  file_selector: ^1.1.0
+
 dev_dependencies:
   flutter_test:
     sdk: flutter
