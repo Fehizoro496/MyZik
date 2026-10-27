@@ -63,13 +63,21 @@ Prérequis de toute la synchro : les likes, playlists et paroles sont indexés p
 
 ## Phase 2 — Bibliothèque desktop
 
-- [ ] `DesktopMusicRepository` derrière `MusicRepository` : choix d'un ou
-      plusieurs dossiers musique, scan récursif.
-- [ ] Lecture des tags et pochettes (`audio_metadata_reader`) : mp3, flac, m4a,
-      ogg.
-- [ ] Persistance des dossiers choisis, rescan manuel, cache de l'index.
-- [ ] Brancher dans `createMusicRepository` à la place de
-      `SampleMusicRepository` sur Windows.
+- [x] `DesktopMusicRepository` (`lib/data/desktop_music_repository.dart`)
+      derrière `MusicRepository` : un ou plusieurs dossiers musique, scan
+      récursif dans un isolate (dossiers imbriqués et illisibles gérés).
+- [x] Lecture des tags et pochettes (`audio_metadata_reader`) : mp3, flac,
+      m4a, ogg, opus, wav, aiff. Sans tags : titre tiré du nom de fichier,
+      « Unknown artist ». Pochettes lues à la demande.
+- [x] Persistance des dossiers choisis (`libraryFoldersProvider`), rescan
+      manuel et index sur disque (`library_index.json`) : seuls les fichiers
+      nouveaux ou modifiés (taille, date) sont relus.
+  - Dialogue « Music folders » (icône dossier à côté de LIBRARY dans la
+    barre latérale) : ajouter, retirer, rescanner.
+  - Premier lancement sans dossier : écran « Add your music ».
+- [x] Brancher dans `createMusicRepository` : Windows, macOS et Linux
+      utilisent `DesktopMusicRepository` ; `SampleMusicRepository` ne sert
+      plus qu'au web et aux tests.
 
 ## Phase 3 — Interface desktop
 
@@ -91,8 +99,7 @@ providers existants.
 
 Le studio de paroles s'ouvre depuis le panneau Paroles et depuis Now Playing en
 plein écran ; il n'a pas d'entrée dans la barre latérale. L'entrée
-Synchronisation viendra avec la phase 5. Tant que la phase 2 n'est pas faite,
-le desktop affiche la bibliothèque d'exemple.
+Synchronisation viendra avec la phase 5.
 
 ## Phase 4 — Studio de paroles
 
