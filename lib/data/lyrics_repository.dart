@@ -5,10 +5,12 @@ import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:pretty_dio_logger/pretty_dio_logger.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../models.dart';
 import 'lyrics_aligner.dart';
 import 'lyrics_structure.dart';
+import 'song_key.dart';
 
 /// Groq API key, compiled in from `.env` via
 /// `fvm flutter run --dart-define-from-file=.env`. Empty when not provided,
@@ -255,19 +257,17 @@ class LyricsRepository {
     if (askLrclib) {
       final lyrics = await _fromLrclib(song);
       if (lyrics != null) {
-        await file.writeAsString(jsonEncode(lyrics.toJson()));
+        await _writeCache(file, song, lyrics.toJson());
         return lyrics;
       }
     }
 
-    Future<void> cacheMiss({required bool web}) => file.writeAsString(
-      jsonEncode({
-        'miss': true,
-        'at': DateTime.now().millisecondsSinceEpoch,
-        'web': web,
-        'webVersion': _webSearchVersion,
-      }),
-    );
+    Future<void> cacheMiss({required bool web}) => _writeCache(file, song, {
+      'miss': true,
+      'at': DateTime.now().millisecondsSinceEpoch,
+      'web': web,
+      'webVersion': _webSearchVersion,
+    });
 
     // Recorded before calling Groq: if the call throws, the next attempt
     // goes straight to the web search without asking LRCLIB again.
@@ -284,7 +284,7 @@ class LyricsRepository {
       await cacheMiss(web: true);
       return null;
     }
-    await file.writeAsString(jsonEncode(lyrics.toJson()));
+    await _writeCache(file, song, lyrics.toJson());
     return lyrics;
   }
 
@@ -341,7 +341,7 @@ class LyricsRepository {
       edited: lyrics.edited,
     );
     final file = await _cacheFile(song);
-    await file.writeAsString(jsonEncode(saved.toJson()));
+    await _writeCache(file, song, saved.toJson());
     return saved;
   }
 
@@ -653,8 +653,45 @@ class LyricsRepository {
     final base = await _cacheDirectory();
     final dir = Directory('${base.path}${Platform.pathSeparator}lyrics');
     if (!dir.existsSync()) await dir.create(recursive: true);
-    return File('${dir.path}${Platform.pathSeparator}${song.id}.json');
+    SharedPreferences? preferences;
+    if (song.filePath != null && song.filePath!.isNotEmpty) {
+      try {
+        preferences = await SharedPreferences.getInstance();
+      } catch (_) {
+        // Cache lookup and editing remain usable in isolated tests and when
+        // preferences are temporarily unavailable; the hash is still stable.
+      }
+    }
+    final key = await SongKey.forSong(song, preferences: preferences);
+    final safeName = key.value.replaceAll(RegExp(r'[^a-zA-Z0-9._-]'), '_');
+    final target = File('${dir.path}${Platform.pathSeparator}$safeName.json');
+    final legacy = File('${dir.path}${Platform.pathSeparator}${song.id}.json');
+    if (!target.existsSync() && legacy.existsSync()) {
+      await legacy.copy(target.path);
+      await legacy.delete();
+    }
+    if (!target.existsSync()) {
+      final signature = SongKey.metadataKey(song);
+      await for (final candidate in dir.list(followLinks: false)) {
+        if (candidate is! File || candidate.path == legacy.path) continue;
+        try {
+          final record = jsonDecode(await candidate.readAsString());
+          if (record is Map && record['_songMetadata'] == signature) {
+            await candidate.copy(target.path);
+            break;
+          }
+        } catch (_) {
+          // Ignore unrelated or outdated cache files.
+        }
+      }
+    }
+    return target;
   }
+
+  Future<void> _writeCache(File file, Song song, Map<String, dynamic> record) =>
+      file.writeAsString(
+        jsonEncode({...record, '_songMetadata': SongKey.metadataKey(song)}),
+      );
 }
 
 /// Structured search hints keep noisy uploader metadata out of the first query

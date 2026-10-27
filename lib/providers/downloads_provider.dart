@@ -90,6 +90,7 @@ class DownloadedTrack {
     duration: duration,
     uri: Uri.file(audioPath).toString(),
     filePath: audioPath,
+    youtubeVideoId: videoId,
     artworkUrl: artworkFile == null
         ? null
         : Uri.file(_path(artworkFile!)).toString(),

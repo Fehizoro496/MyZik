@@ -5,8 +5,10 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../data/music_repository.dart';
+import '../data/song_key.dart';
 import '../models.dart';
 import 'downloads_provider.dart';
+import 'shared_preferences_provider.dart';
 
 /// Source of the track library for this platform. A single instance is
 /// shared by every provider that needs to read it.
@@ -192,7 +194,6 @@ class LibraryNotifier extends Notifier<LibraryState> {
     // [load] awaits the repository; the container may be gone by then.
     ref.onDispose(() => _disposed = true);
     ref.listen(downloadsProvider.select((d) => d.saved), (_, _) {
-      if (state.status == LibraryStatus.loading) return;
       final songs = _withDownloads(_deviceSongs);
       state = state.copyWith(
         songs: songs,
@@ -222,18 +223,41 @@ class LibraryNotifier extends Notifier<LibraryState> {
       final granted = await repo.ensurePermission();
       if (_disposed) return;
       if (!granted) {
+        final downloaded = _withDownloads(const []);
+        try {
+          await SongKeyMigration.run(
+            downloaded,
+            ref.read(sharedPreferencesProvider),
+          );
+        } catch (_) {}
         state = LibraryState(
           status: LibraryStatus.permissionDenied,
-          songs: _withDownloads(const []),
+          songs: downloaded,
         );
         return;
       }
       _deviceSongs = await repo.fetchSongs();
       if (_disposed) return;
       final loaded = _withDownloads(_deviceSongs);
+      try {
+        await SongKeyMigration.run(loaded, ref.read(sharedPreferencesProvider));
+      } catch (_) {}
+      if (_disposed) return;
+      // A completed background download can arrive while the initial scan is
+      // running. Re-read it after key migration so that event is not dropped.
+      final latest = _withDownloads(_deviceSongs);
+      if (latest.length != loaded.length) {
+        try {
+          await SongKeyMigration.run(
+            latest,
+            ref.read(sharedPreferencesProvider),
+          );
+        } catch (_) {}
+        if (_disposed) return;
+      }
       state = LibraryState(
-        status: loaded.isEmpty ? LibraryStatus.empty : LibraryStatus.ready,
-        songs: loaded,
+        status: latest.isEmpty ? LibraryStatus.empty : LibraryStatus.ready,
+        songs: latest,
       );
     } catch (_) {
       if (_disposed) return;

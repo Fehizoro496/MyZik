@@ -207,6 +207,17 @@ Win32Window::MessageHandler(HWND hwnd,
       return 0;
     }
 
+    case WM_GETMINMAXINFO: {
+      if (minimum_width_ > 0 && minimum_height_ > 0) {
+        auto min_max_info = reinterpret_cast<MINMAXINFO*>(lparam);
+        const double scale_factor = GetDpiForWindow(hwnd) / 96.0;
+        min_max_info->ptMinTrackSize.x = Scale(minimum_width_, scale_factor);
+        min_max_info->ptMinTrackSize.y = Scale(minimum_height_, scale_factor);
+        return 0;
+      }
+      break;
+    }
+
     case WM_ACTIVATE:
       if (child_content_ != nullptr) {
         SetFocus(child_content_);
@@ -257,6 +268,11 @@ RECT Win32Window::GetClientArea() {
 
 HWND Win32Window::GetHandle() {
   return window_handle_;
+}
+
+void Win32Window::SetMinimumSize(const Size& size) {
+  minimum_width_ = size.width;
+  minimum_height_ = size.height;
 }
 
 void Win32Window::SetQuitOnClose(bool quit_on_close) {

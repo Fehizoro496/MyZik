@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../data/song_key.dart';
 import 'shared_preferences_provider.dart';
 
 const _kLikedIds = 'liked.songIds';
@@ -25,6 +26,18 @@ class LikedNotifier extends Notifier<Set<int>> {
     if (!next.add(songId)) next.remove(songId);
     state = next;
     _prefs.setStringList(_kLikedIds, next.map((id) => id.toString()).toList());
+    final key = SongKeyMigration.keyForMediaId(_prefs, songId);
+    if (key != null) {
+      final keys = Set<String>.from(
+        _prefs.getStringList(SongKeyMigration.likedKeysPreference) ?? const [],
+      );
+      if (next.contains(songId)) {
+        keys.add(key);
+      } else {
+        keys.remove(key);
+      }
+      _prefs.setStringList(SongKeyMigration.likedKeysPreference, keys.toList());
+    }
   }
 }
 

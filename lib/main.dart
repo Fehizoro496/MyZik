@@ -1,7 +1,9 @@
 import 'package:audio_service/audio_service.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:just_audio_media_kit/just_audio_media_kit.dart';
 
 import 'providers/audio_handler.dart';
 import 'providers/navigation_provider.dart';
@@ -20,17 +22,29 @@ import 'theme.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   final prefs = await SharedPreferences.getInstance();
-  // Start the OS media session so headset/Bluetooth, lock-screen and
-  // notification transport controls are wired up before the UI builds.
-  final audioHandler = await AudioService.init(
-    builder: MyZikAudioHandler.new,
-    config: const AudioServiceConfig(
-      androidNotificationChannelId: 'com.example.my_zik.audio',
-      androidNotificationChannelName: 'Playback',
-      androidNotificationOngoing: true,
-      androidStopForegroundOnPause: true,
-    ),
-  );
+  if (!kIsWeb && defaultTargetPlatform == TargetPlatform.windows) {
+    JustAudioMediaKit.ensureInitialized(windows: true, linux: false);
+    JustAudioMediaKit.title = 'My Zik';
+  }
+
+  // Only mobile platforms have an OS media session in this app. Desktop uses
+  // the same handler API as a no-op sink until desktop controls are added.
+  final MyZikAudioHandler audioHandler;
+  if (!kIsWeb &&
+      (defaultTargetPlatform == TargetPlatform.android ||
+          defaultTargetPlatform == TargetPlatform.iOS)) {
+    audioHandler = await AudioService.init<MyZikAudioHandler>(
+      builder: MyZikAudioHandler.new,
+      config: const AudioServiceConfig(
+        androidNotificationChannelId: 'com.example.my_zik.audio',
+        androidNotificationChannelName: 'Playback',
+        androidNotificationOngoing: true,
+        androidStopForegroundOnPause: true,
+      ),
+    );
+  } else {
+    audioHandler = NoopAudioHandler();
+  }
   runApp(
     ProviderScope(
       overrides: [

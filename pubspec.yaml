@@ -42,6 +42,9 @@ dependencies:
 
   # Audio playback engine (cross-platform). Plays the real file uris.
   just_audio: ^0.9.42
+  # Windows/Linux implementation for just_audio using libmpv.
+  just_audio_media_kit: ^2.1.0
+  media_kit_libs_windows_audio: any
 
   # OS media session: lock-screen, notification and headset/Bluetooth transport
   # controls (play/pause, next/previous) wired to the playback controller.
@@ -67,6 +70,7 @@ dependencies:
   # Requests are logged in debug builds only.
   dio: ^5.11.1
   pretty_dio_logger: ^1.4.0
+  crypto: ^3.0.6
 
 dev_dependencies:
   flutter_test:

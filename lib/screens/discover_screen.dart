@@ -92,6 +92,7 @@ class _DiscoverScreenState extends ConsumerState<DiscoverScreen> {
         duration: track.duration,
         uri: streamUrl.toString(),
         artworkUrl: track.thumbnailUrl,
+        youtubeVideoId: track.videoId,
       );
       await ref
           .read(playbackProvider.notifier)

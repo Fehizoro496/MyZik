@@ -85,6 +85,28 @@ class MyZikAudioHandler extends BaseAudioHandler {
   }
 }
 
+/// Local sink used where no OS media session is registered (desktop/web).
+/// The playback provider can keep publishing to the same API without creating
+/// native controls on platforms that are not wired to them yet.
+class NoopAudioHandler extends MyZikAudioHandler {
+  @override
+  void broadcast({
+    required bool playing,
+    required Duration position,
+    required Duration bufferedPosition,
+  }) {}
+
+  @override
+  void setNowPlaying({
+    required String id,
+    required String title,
+    required String artist,
+    String? album,
+    Duration? duration,
+    Uri? artUri,
+  }) {}
+}
+
 /// The app's [MyZikAudioHandler]. Overridden in `main()` with the instance
 /// managed by [AudioService.init]; the default is a plain, unregistered handler
 /// — a harmless no-op sink used in tests where no OS session is running.

@@ -120,9 +120,8 @@ class PlaylistScreen extends ConsumerWidget {
         ],
       ),
       itemCount: songs.length,
-      onReorder: (oldIndex, newIndex) {
+      onReorderItem: (oldIndex, newIndex) {
         final ids = [for (final s in songs) s.id];
-        if (newIndex > oldIndex) newIndex -= 1;
         final moved = ids.removeAt(oldIndex);
         ids.insert(newIndex, moved);
         ref.read(playlistsProvider.notifier).reorderSongs(playlist.id, ids);

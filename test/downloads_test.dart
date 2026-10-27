@@ -142,9 +142,14 @@ void main() {
     );
     addTearDown(container.dispose);
     // Keep the library alive and let its first scan finish.
-    container.listen(libraryProvider, (_, _) {});
+    final libraryReady = Completer<void>();
+    container.listen(libraryProvider, (_, next) {
+      if (next.status != LibraryStatus.loading && !libraryReady.isCompleted) {
+        libraryReady.complete();
+      }
+    });
     await container.read(downloadsProvider.notifier).engineReady;
-    await pumpEventQueue();
+    await libraryReady.future;
     return container;
   }
 

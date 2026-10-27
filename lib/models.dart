@@ -13,6 +13,7 @@ class Song {
     this.uri,
     this.filePath,
     this.artworkUrl,
+    this.youtubeVideoId,
   });
 
   /// Stable identifier from the source (e.g. MediaStore id) — used for artwork
@@ -34,6 +35,9 @@ class Song {
   /// Remote artwork for streamed tracks. Local tracks keep this null and use
   /// their embedded MediaStore artwork instead.
   final String? artworkUrl;
+
+  /// Stable YouTube identity, present for both streams and downloaded tracks.
+  final String? youtubeVideoId;
 
   /// Key for [coverArtProvider]/[coverAccentProvider]: the remote artwork URL
   /// when there is one, otherwise the MediaStore id.
@@ -160,19 +164,31 @@ class Playlist {
     required this.id,
     required this.name,
     this.songIds = const [],
+    this.songKeys = const [],
   });
 
   final String id;
   final String name;
   final List<int> songIds;
+  final List<String> songKeys;
 
-  Playlist copyWith({String? name, List<int>? songIds}) => Playlist(
+  Playlist copyWith({
+    String? name,
+    List<int>? songIds,
+    List<String>? songKeys,
+  }) => Playlist(
     id: id,
     name: name ?? this.name,
     songIds: songIds ?? this.songIds,
+    songKeys: songKeys ?? this.songKeys,
   );
 
-  Map<String, dynamic> toJson() => {'id': id, 'name': name, 'songIds': songIds};
+  Map<String, dynamic> toJson() => {
+    'id': id,
+    'name': name,
+    'songIds': songIds,
+    'songKeys': songKeys,
+  };
 
   factory Playlist.fromJson(Map<String, dynamic> json) => Playlist(
     id: json['id'] as String,
@@ -180,6 +196,9 @@ class Playlist {
     songIds: [
       for (final v in (json['songIds'] as List? ?? const []))
         (v as num).toInt(),
+    ],
+    songKeys: [
+      for (final key in (json['songKeys'] as List? ?? const [])) key as String,
     ],
   );
 }

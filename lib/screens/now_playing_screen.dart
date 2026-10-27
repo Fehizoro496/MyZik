@@ -535,11 +535,13 @@ class _QueueSheet extends ConsumerWidget {
                                 physics: const BouncingScrollPhysics(),
                                 buildDefaultDragHandles: false,
                                 itemCount: upNext.length,
-                                onReorder: (oldIndex, newIndex) => ref
+                                onReorderItem: (oldIndex, newIndex) => ref
                                     .read(playbackProvider.notifier)
                                     .reorderQueue(
                                       base + oldIndex,
-                                      base + newIndex,
+                                      base +
+                                          newIndex +
+                                          (newIndex > oldIndex ? 1 : 0),
                                     ),
                                 itemBuilder: (context, i) => _UpNextRow(
                                   key: ValueKey(upNext[i].id),

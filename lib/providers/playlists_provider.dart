@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../data/song_key.dart';
 import '../models.dart';
 import 'library_provider.dart';
 import 'shared_preferences_provider.dart';
@@ -62,10 +63,17 @@ class PlaylistsNotifier extends Notifier<List<Playlist>> {
   /// Appends [songId] to the playlist unless it is already there (playlists are
   /// sets in disguise — no duplicate tracks).
   void addSong(String id, int songId) {
+    final key = SongKeyMigration.keyForMediaId(_prefs, songId);
     state = [
       for (final p in state)
         if (p.id == id && !p.songIds.contains(songId))
-          p.copyWith(songIds: [...p.songIds, songId])
+          p.copyWith(
+            songIds: [...p.songIds, songId],
+            songKeys: [
+              ...p.songKeys,
+              if (key != null && !p.songKeys.contains(key)) key,
+            ],
+          )
         else
           p,
     ];
@@ -73,6 +81,7 @@ class PlaylistsNotifier extends Notifier<List<Playlist>> {
   }
 
   void removeSong(String id, int songId) {
+    final key = SongKeyMigration.keyForMediaId(_prefs, songId);
     state = [
       for (final p in state)
         if (p.id == id)
@@ -80,6 +89,10 @@ class PlaylistsNotifier extends Notifier<List<Playlist>> {
             songIds: [
               for (final s in p.songIds)
                 if (s != songId) s,
+            ],
+            songKeys: [
+              for (final k in p.songKeys)
+                if (k != key) k,
             ],
           )
         else
@@ -93,6 +106,17 @@ class PlaylistsNotifier extends Notifier<List<Playlist>> {
   /// library, so not shown — are kept, appended in their previous order.
   void reorderSongs(String id, List<int> orderedIds) {
     final shown = orderedIds.toSet();
+    final mediaKeys = <String, String>{};
+    try {
+      mediaKeys.addAll(
+        Map<String, String>.from(
+          jsonDecode(
+                _prefs.getString(SongKeyMigration.mediaIdMapPreference) ?? '{}',
+              )
+              as Map,
+        ),
+      );
+    } catch (_) {}
     state = [
       for (final p in state)
         if (p.id == id)
@@ -101,6 +125,16 @@ class PlaylistsNotifier extends Notifier<List<Playlist>> {
               ...orderedIds,
               for (final s in p.songIds)
                 if (!shown.contains(s)) s,
+            ],
+            songKeys: [
+              ...orderedIds
+                  .map((songId) => mediaKeys[songId.toString()])
+                  .whereType<String>(),
+              for (final key in p.songKeys)
+                if (!orderedIds.any(
+                  (songId) => mediaKeys[songId.toString()] == key,
+                ))
+                  key,
             ],
           )
         else

@@ -36,6 +36,9 @@ class Win32Window {
   // |Show| is called. Returns true if the window was created successfully.
   bool Create(const std::wstring& title, const Point& origin, const Size& size);
 
+  // Sets a minimum window track size in logical pixels.
+  void SetMinimumSize(const Size& size);
+
   // Show the current window. Returns true if the window was successfully shown.
   bool Show();
 
@@ -91,6 +94,9 @@ class Win32Window {
   static void UpdateTheme(HWND const window);
 
   bool quit_on_close_ = false;
+
+  unsigned int minimum_width_ = 0;
+  unsigned int minimum_height_ = 0;
 
   // window handle for top level window.
   HWND window_handle_ = nullptr;

@@ -1,9 +1,12 @@
-import 'package:flutter_test/flutter_test.dart';
 import 'dart:io';
+
+import 'package:flutter_test/flutter_test.dart';
 import 'package:my_zik/data/lyrics_repository.dart';
 import 'package:my_zik/models.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
+  setUp(() => SharedPreferences.setMockInitialValues({}));
   group('parseLrc', () {
     test('parses timestamps, skips metadata and sorts', () {
       final lines = parseLrc('''
@@ -132,6 +135,40 @@ void main() {
       throwsArgumentError,
     );
   });
+
+  test(
+    'lyrics cache falls back to normalized metadata across different files',
+    () async {
+      final directory = await Directory.systemTemp.createTemp(
+        'myzik_key_match_',
+      );
+      addTearDown(() => directory.delete(recursive: true));
+      final firstAudio = File('${directory.path}/first.mp3')
+        ..writeAsBytesSync([1, 2, 3]);
+      final secondAudio = File('${directory.path}/second.mp3')
+        ..writeAsBytesSync([4, 5, 6]);
+      final repository = LyricsRepository(
+        cacheDirectory: () async => directory,
+      );
+      final first = Song(
+        id: 12,
+        title: 'A Song!',
+        artist: 'An Artist',
+        duration: const Duration(seconds: 200),
+        filePath: firstAudio.path,
+      );
+      final second = Song(
+        id: 90,
+        title: 'a song',
+        artist: 'AN ARTIST',
+        duration: const Duration(seconds: 200),
+        filePath: secondAudio.path,
+      );
+      const lyrics = Lyrics(source: LyricsSource.manual, plain: 'Saved words');
+      await repository.saveLyrics(first, lyrics);
+      expect((await repository.find(second))?.plain, 'Saved words');
+    },
+  );
 
   test('manual synchronization rejects unordered timestamps', () async {
     final directory = await Directory.systemTemp.createTemp('myzik_sync_test_');
