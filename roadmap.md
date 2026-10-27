@@ -47,8 +47,18 @@ Prérequis de toute la synchro : les likes, playlists et paroles sont indexés p
       retrouver des paroles quand les fichiers diffèrent.
 - [x] Calcul et cache des empreintes (ne pas relire les fichiers à chaque
       lancement).
-- [x] Migration automatique au premier lancement : likes, playlists et cache des
-      paroles passent de `Song.id` à `SongKey`.
+- [x] Migration automatique : likes, playlists et cache des paroles passent
+      de `Song.id` à `SongKey`.
+  - `Song.songKey` (`yt:`, `fp:` ou `meta:`) est la clé lue partout par
+    l'interface ; `LikedNotifier` et `Playlist.songKeys` ne stockent plus que
+    des clés.
+  - La bibliothèque s'affiche tout de suite avec les clés retenues au
+    lancement précédent, puis les empreintes sont vérifiées en arrière-plan :
+    une lecture et au plus une écriture du cache, aucune si rien n'a changé.
+  - Les anciens ids sans morceau correspondant restent en attente et migrent
+    quand le morceau réapparaît.
+  - Les paroles migrées gardent leurs métadonnées ; la recherche de secours
+    tolère ±2 s d'écart de durée.
 - [x] Tests de migration et de calcul d'empreinte.
 
 ## Phase 2 — Bibliothèque desktop
@@ -69,29 +79,53 @@ providers existants.
 - [x] `DesktopShell` (`lib/desktop/`) : barre latérale (Accueil, Découvrir,
       Morceaux, Albums, Artistes, Likes, Playlists), barre du haut (historique
       précédent/suivant, recherche dans la bibliothèque), barre de lecture en
-      bas, panneau Paroles / File d'attente à droite. Les entrées Studio et
-      Synchronisation viendront avec les phases 4 et 5.
+      bas, panneau Paroles / File d'attente à droite.
 - [x] Listes denses adaptées à la souris (tri, colonnes, menu contextuel,
       double-clic pour lire).
 - [x] Raccourcis globaux : Espace (lecture/pause), Ctrl+←/→ (précédent/suivant),
       Ctrl+F (recherche), Ctrl+L / Ctrl+Q (panneaux), Alt+←/→ et boutons
       latéraux de la souris (historique).
 - [x] Choix du shell selon la plateforme dans `main.dart`.
+- [x] Now Playing en plein écran (grande pochette et paroles, Échap pour
+      sortir).
 
-Tant que la phase 2 n'est pas faite, le desktop affiche la bibliothèque
-d'exemple.
+Le studio de paroles s'ouvre depuis le panneau Paroles et depuis Now Playing en
+plein écran ; il n'a pas d'entrée dans la barre latérale. L'entrée
+Synchronisation viendra avec la phase 5. Tant que la phase 2 n'est pas faite,
+le desktop affiche la bibliothèque d'exemple.
 
 ## Phase 4 — Studio de paroles
 
 Réutilise `lyrics_editing`, `lyrics_aligner` et `lyrics_structure`.
+Implémenté dans `lib/desktop/lyrics_editor.dart` (`DesktopLyricsEditor`), avec
+deux modes : *Edit & time* et *Live sync*.
 
-- [ ] Vue texte et timings côte à côte.
-- [ ] Synchronisation au clavier : Espace marque la ligne, Retour arrière
-      annule, ←/→ décale de ±50 ms, raccourci pour une pause instrumentale.
-- [ ] Vitesse de lecture réglable (0,5× à 1×) pour synchroniser plus finement.
-- [ ] Auto-sync Whisper accessible depuis le studio, avec revue du résultat.
-- [ ] Import/export LRC.
-- [ ] (Optionnel) Forme d'onde de la piste.
+- [x] Vue texte et timings côte à côte, avec un inspecteur pour les lignes
+      sélectionnées et une timeline dont les marqueurs se déplacent à la
+      souris.
+- [x] Synchronisation au clavier. Raccourcis retenus (différents du plan
+      initial) :
+  - Espace marque la ligne (*Live sync*) ou lance/met en pause (*Edit &
+    time*) ; P lance/met en pause ;
+  - Ctrl+Z annule ; B insère une pause instrumentale ;
+  - ←/→ recule/avance de 5 s ; `[` / `]` décalent la sélection de ±100 ms ;
+  - Entrée cale la ligne sur la position de lecture ; M fusionne ; Suppr
+    supprime ; F2 édite ; ↑/↓ déplacent la sélection ;
+  - Ctrl+S enregistre ; Échap quitte le champ, le mode ou l'éditeur.
+- [x] Vitesse de lecture réglable (0,5×, 0,75×, 1×), restaurée à la fermeture.
+- [x] Auto-sync Whisper accessible depuis le studio, avec le score de
+      confiance et une vérification avant enregistrement.
+- [x] Import/export LRC : menu « ⋯ » de l'éditeur (Import LRC…, Export LRC…,
+      Copy as LRC), via `file_selector`. Un fichier sans horodatage est
+      importé comme texte.
+- [x] (Optionnel) Forme d'onde de la piste, derrière les marqueurs de la
+      timeline, plus vive jusqu'à la tête de lecture. Décodée sous Windows par
+      Media Foundation (`windows/runner/waveform_channel.cpp`, canal
+      `my_zik/waveform`) ; aucune forme d'onde pour les morceaux streamés ni
+      sur les autres plateformes. Vérifiée par
+      `integration_test/waveform_test.dart` (`fvm flutter drive
+      --driver=test_driver/integration_test.dart
+      --target=integration_test/waveform_test.dart -d windows --profile`).
 
 ## Phase 5 — Synchronisation sur le réseau local
 
