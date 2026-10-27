@@ -17,38 +17,68 @@ Future<String?> showNameDialog(
   required String title,
   required String actionLabel,
   String initialValue = '',
-}) {
-  final controller = TextEditingController(text: initialValue);
-  return showDialog<String>(
-    context: context,
-    builder: (context) {
-      void submit() {
-        final name = controller.text.trim();
-        Navigator.of(context).pop(name.isEmpty ? null : name);
-      }
+}) => showDialog<String>(
+  context: context,
+  builder: (_) => _NameDialog(
+    title: title,
+    actionLabel: actionLabel,
+    initialValue: initialValue,
+  ),
+);
 
-      return AlertDialog(
-        backgroundColor: _dialogBackground,
-        title: Text(title),
-        content: SizedBox(
-          width: 360,
-          child: TextField(
-            controller: controller,
-            autofocus: true,
-            onSubmitted: (_) => submit(),
-            decoration: const InputDecoration(hintText: 'Name'),
-          ),
+/// Owns its text controller, so it lives through the closing animation.
+class _NameDialog extends StatefulWidget {
+  const _NameDialog({
+    required this.title,
+    required this.actionLabel,
+    required this.initialValue,
+  });
+
+  final String title;
+  final String actionLabel;
+  final String initialValue;
+
+  @override
+  State<_NameDialog> createState() => _NameDialogState();
+}
+
+class _NameDialogState extends State<_NameDialog> {
+  late final _controller = TextEditingController(text: widget.initialValue);
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _submit() {
+    final name = _controller.text.trim();
+    Navigator.of(context).pop(name.isEmpty ? null : name);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      backgroundColor: _dialogBackground,
+      title: Text(widget.title),
+      content: SizedBox(
+        width: 360,
+        child: TextField(
+          controller: _controller,
+          autofocus: true,
+          onSubmitted: (_) => _submit(),
+          decoration: const InputDecoration(hintText: 'Name'),
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(onPressed: submit, child: Text(actionLabel)),
-        ],
-      );
-    },
-  ).whenComplete(controller.dispose);
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(onPressed: _submit, child: Text(widget.actionLabel)),
+      ],
+    );
+  }
 }
 
 /// Toggles [song]'s membership in each playlist, or creates a new playlist
