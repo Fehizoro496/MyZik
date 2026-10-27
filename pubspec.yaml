@@ -78,6 +78,9 @@ dependencies:
 dev_dependencies:
   flutter_test:
     sdk: flutter
+  # Tests run inside the real app, e.g. native waveform decoding on Windows.
+  integration_test:
+    sdk: flutter
 
   # In-memory preferences store that tests can wrap to count writes.
   shared_preferences_platform_interface: ^2.4.2

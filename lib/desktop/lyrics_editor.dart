@@ -10,6 +10,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../data/lyrics_editing.dart';
 import '../data/lyrics_repository.dart';
 import '../data/lyrics_structure.dart';
+import '../data/waveform_repository.dart';
 import '../icons.dart';
 import '../models.dart';
 import '../providers/lyrics_provider.dart';
@@ -18,6 +19,7 @@ import '../screens/lyrics_view.dart';
 import '../theme.dart';
 import '../widgets.dart';
 import 'desktop_style.dart';
+import 'waveform_painter.dart';
 
 enum _Mode { edit, live }
 
@@ -2040,6 +2042,10 @@ class _TimelineState extends ConsumerState<_Timeline> {
     final position = isCurrent ? playback.position : Duration.zero;
     final notifier = ref.read(playbackProvider.notifier);
     final speed = notifier.speed;
+    final path = widget.song.filePath;
+    final peaks = path == null
+        ? null
+        : ref.watch(waveformProvider(path)).asData?.value;
     return Container(
       padding: const EdgeInsets.fromLTRB(24, 12, 24, 18),
       decoration: BoxDecoration(
@@ -2118,7 +2124,7 @@ class _TimelineState extends ConsumerState<_Timeline> {
           ),
           const SizedBox(height: 10),
           SizedBox(
-            height: 56,
+            height: peaks == null ? 56 : 72,
             child: LayoutBuilder(
               builder: (context, constraints) {
                 final width = constraints.maxWidth;
@@ -2145,6 +2151,23 @@ class _TimelineState extends ConsumerState<_Timeline> {
                           ),
                         ),
                       ),
+                      if (peaks != null)
+                        Positioned.fill(
+                          child: IgnorePointer(
+                            child: CustomPaint(
+                              painter: WaveformPainter(
+                                peaks: peaks,
+                                played: total <= 0
+                                    ? 0
+                                    : position.inMilliseconds / total,
+                                color: AppColors.whiteAlpha(0.16),
+                                playedColor: AppColors.accentA.withValues(
+                                  alpha: 0.6,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
                       Positioned(
                         left: 0,
                         top: 0,

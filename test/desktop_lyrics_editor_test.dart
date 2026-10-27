@@ -1,10 +1,14 @@
+import 'dart:typed_data';
+
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:my_zik/data/lyrics_repository.dart';
+import 'package:my_zik/data/waveform_repository.dart';
 import 'package:my_zik/desktop/lyrics_editor.dart';
+import 'package:my_zik/desktop/waveform_painter.dart';
 import 'package:my_zik/models.dart';
 import 'package:my_zik/providers/lyrics_provider.dart';
 import 'package:my_zik/providers/shared_preferences_provider.dart';
@@ -45,8 +49,10 @@ class _FakeLyrics extends LyricsNotifier {
 
 Future<List<Lyrics>> _pumpEditor(
   WidgetTester tester, {
+  Song song = _song,
   Lyrics? lyrics = _synced,
   bool liveSync = false,
+  List<Override> overrides = const [],
 }) async {
   tester.view.physicalSize = const Size(1440, 900);
   tester.view.devicePixelRatio = 1.0;
@@ -60,6 +66,7 @@ Future<List<Lyrics>> _pumpEditor(
       overrides: [
         sharedPreferencesProvider.overrideWithValue(prefs),
         lyricsProvider.overrideWith(() => _FakeLyrics(saved)),
+        ...overrides,
       ],
       child: MaterialApp(
         theme: ThemeData.dark(),
@@ -69,7 +76,7 @@ Future<List<Lyrics>> _pumpEditor(
               child: TextButton(
                 onPressed: () => DesktopLyricsEditor.open(
                   context,
-                  _song,
+                  song,
                   lyrics,
                   liveSync: liveSync,
                 ),
@@ -200,6 +207,39 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('next →'), findsOneWidget);
 
+    await tester.pumpWidget(const SizedBox.shrink());
+  });
+
+  testWidgets('the timeline draws the waveform of a local file', (
+    tester,
+  ) async {
+    final requested = <String>[];
+    bool isWaveform(Widget widget) =>
+        widget is CustomPaint && widget.painter is WaveformPainter;
+
+    await _pumpEditor(
+      tester,
+      song: const Song(
+        id: 8,
+        title: 'Local',
+        artist: 'Artist',
+        duration: Duration(minutes: 3),
+        filePath: r'C:\Music\local.mp3',
+      ),
+      overrides: [
+        waveformProvider.overrideWith((ref, path) async {
+          requested.add(path);
+          return Float32List.fromList([0, 0.5, 1, 0.25]);
+        }),
+      ],
+    );
+    expect(requested, [r'C:\Music\local.mp3']);
+    expect(find.byWidgetPredicate(isWaveform), findsOneWidget);
+    await tester.pumpWidget(const SizedBox.shrink());
+
+    // Streamed tracks have no file, so no waveform.
+    await _pumpEditor(tester);
+    expect(find.byWidgetPredicate(isWaveform), findsNothing);
     await tester.pumpWidget(const SizedBox.shrink());
   });
 }
