@@ -134,7 +134,7 @@ class _PlayerColumnState extends ConsumerState<_PlayerColumn> {
     final track = widget.track;
     final playback = ref.watch(playbackProvider);
     final notifier = ref.read(playbackProvider.notifier);
-    final liked = ref.watch(isLikedProvider(track.id));
+    final liked = ref.watch(isLikedProvider(track.songKey));
     final muted = TextStyle(
       color: AppColors.whiteAlpha(0.7),
       fontSize: 12,
@@ -203,7 +203,7 @@ class _PlayerColumnState extends ConsumerState<_PlayerColumn> {
                   tooltip: liked ? 'Remove from liked' : 'Add to liked',
                   iconSize: 24,
                   onPressed: () =>
-                      ref.read(likedProvider.notifier).toggle(track.id),
+                      ref.read(likedProvider.notifier).toggle(track),
                   icon: Icon(
                     liked ? AppIcons.heartFilled : AppIcons.heart,
                     color: liked ? AppColors.liked : AppColors.whiteAlpha(0.78),

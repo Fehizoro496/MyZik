@@ -857,13 +857,13 @@ class LikedPage extends ConsumerWidget {
     final liked = ref.watch(likedProvider);
     final songs = [
       for (final s in ref.watch(libraryProvider.select((s) => s.songs)))
-        if (liked.contains(s.id)) s,
+        if (liked.contains(s.songKey)) s,
     ];
     return _LibraryGate(
       child: TrackTable(
         songs: songs,
         emptyMessage: 'Songs you like appear here.',
-        onRemove: (song) => ref.read(likedProvider.notifier).toggle(song.id),
+        onRemove: (song) => ref.read(likedProvider.notifier).toggle(song),
         removeLabel: 'Remove from liked',
         header: _Hero(
           cover: Container(
@@ -996,7 +996,7 @@ class _PlaylistCard extends ConsumerWidget {
               ),
               const SizedBox(height: 2),
               Text(
-                '${playlist.songIds.length} songs',
+                '${playlist.songKeys.length} songs',
                 style: TextStyle(
                   color: AppColors.whiteAlpha(0.5),
                   fontSize: 12,
@@ -1032,7 +1032,7 @@ class PlaylistPage extends ConsumerWidget {
       songs: songs,
       emptyMessage:
           'This playlist is empty. Right-click a song to add it here.',
-      onRemove: (song) => notifier.removeSong(playlistId, song.id),
+      onRemove: (song) => notifier.removeSong(playlistId, song),
       removeLabel: 'Remove from playlist',
       header: _Hero(
         cover: PlaylistCover(songs: songs, size: 208, radius: 18),

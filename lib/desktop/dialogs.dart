@@ -81,15 +81,15 @@ class _AddToPlaylistDialog extends ConsumerWidget {
                 children: [
                   for (final playlist in playlists)
                     CheckboxListTile(
-                      value: playlist.songIds.contains(song.id),
+                      value: playlist.contains(song),
                       title: Text(playlist.name),
                       subtitle: Text(
-                        '${playlist.songIds.length} songs',
+                        '${playlist.songKeys.length} songs',
                         style: TextStyle(color: AppColors.whiteAlpha(0.45)),
                       ),
                       onChanged: (checked) => checked ?? false
-                          ? notifier.addSong(playlist.id, song.id)
-                          : notifier.removeSong(playlist.id, song.id),
+                          ? notifier.addSong(playlist.id, song)
+                          : notifier.removeSong(playlist.id, song),
                     ),
                 ],
               ),
@@ -105,7 +105,7 @@ class _AddToPlaylistDialog extends ConsumerWidget {
               actionLabel: 'Create',
             );
             if (name == null) return;
-            notifier.addSong(notifier.create(name).id, song.id);
+            notifier.addSong(notifier.create(name).id, song);
           },
         ),
         FilledButton(

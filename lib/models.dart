@@ -14,6 +14,7 @@ class Song {
     this.filePath,
     this.artworkUrl,
     this.youtubeVideoId,
+    this.contentKey,
   });
 
   /// Stable identifier from the source (e.g. MediaStore id) — used for artwork
@@ -38,6 +39,44 @@ class Song {
 
   /// Stable YouTube identity, present for both streams and downloaded tracks.
   final String? youtubeVideoId;
+
+  /// `fp:` fingerprint of the audio file, set once the library has computed
+  /// (or recalled) it. See [songKey].
+  final String? contentKey;
+
+  /// Identity of the recording across devices, under which likes, playlists
+  /// and lyrics are stored: `yt:<videoId>` for YouTube tracks, the file's
+  /// [contentKey] for local files, else `meta:` plus [metadataKey].
+  String get songKey {
+    final videoId = youtubeVideoId?.trim();
+    if (videoId != null && videoId.isNotEmpty) return 'yt:$videoId';
+    return contentKey ?? 'meta:$metadataKey';
+  }
+
+  /// Normalized `artist|title|seconds`, to recognise the same recording when
+  /// files differ (another encoding, another device).
+  String get metadataKey {
+    String normalize(String value) => value
+        .toLowerCase()
+        .replaceAll(RegExp(r'[^\p{L}\p{N}]+', unicode: true), ' ')
+        .trim()
+        .replaceAll(RegExp(r'\s+'), ' ');
+    return '${normalize(artist)}|${normalize(title)}|${duration.inSeconds}';
+  }
+
+  /// This song with its file fingerprint set to [contentKey].
+  Song withContentKey(String? contentKey) => Song(
+    id: id,
+    title: title,
+    artist: artist,
+    album: album,
+    duration: duration,
+    uri: uri,
+    filePath: filePath,
+    artworkUrl: artworkUrl,
+    youtubeVideoId: youtubeVideoId,
+    contentKey: contentKey,
+  );
 
   /// Key for [coverArtProvider]/[coverAccentProvider]: the remote artwork URL
   /// when there is one, otherwise the MediaStore id.
@@ -156,49 +195,55 @@ String _albumArtist(List<Song> songs) {
 
 String _songCountLabel(int count) => '$count ${count == 1 ? 'song' : 'songs'}';
 
-/// A user-created playlist: an ordered list of [Song.id]s under a name. Stores
-/// ids (not full [Song]s) like liked songs, so a playlist survives a library
-/// rescan and never duplicates track data.
+/// A user-created playlist: an ordered list of [Song.songKey]s under a name.
+/// Stores keys (not full [Song]s), so a playlist survives a library rescan
+/// and means the same tracks on every device.
 class Playlist {
   const Playlist({
     required this.id,
     required this.name,
-    this.songIds = const [],
     this.songKeys = const [],
+    this.songIds = const [],
   });
 
   final String id;
   final String name;
-  final List<int> songIds;
   final List<String> songKeys;
+
+  /// Device-local [Song.id]s saved before portable keys and not yet matched
+  /// to a key (their track isn't in the library). Migrated by
+  /// `SongKeyMigration` once it shows up; never shown.
+  final List<int> songIds;
+
+  bool contains(Song song) => songKeys.contains(song.songKey);
 
   Playlist copyWith({
     String? name,
-    List<int>? songIds,
     List<String>? songKeys,
+    List<int>? songIds,
   }) => Playlist(
     id: id,
     name: name ?? this.name,
-    songIds: songIds ?? this.songIds,
     songKeys: songKeys ?? this.songKeys,
+    songIds: songIds ?? this.songIds,
   );
 
   Map<String, dynamic> toJson() => {
     'id': id,
     'name': name,
-    'songIds': songIds,
     'songKeys': songKeys,
+    if (songIds.isNotEmpty) 'songIds': songIds,
   };
 
   factory Playlist.fromJson(Map<String, dynamic> json) => Playlist(
     id: json['id'] as String,
     name: json['name'] as String,
+    songKeys: [
+      for (final key in (json['songKeys'] as List? ?? const [])) key as String,
+    ],
     songIds: [
       for (final v in (json['songIds'] as List? ?? const []))
         (v as num).toInt(),
-    ],
-    songKeys: [
-      for (final key in (json['songKeys'] as List? ?? const [])) key as String,
     ],
   );
 }

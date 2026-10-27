@@ -391,7 +391,7 @@ class _Sidebar extends ConsumerWidget {
                       probeLimit: 4,
                     ),
                     label: playlist.name,
-                    subtitle: '${playlist.songIds.length} songs',
+                    subtitle: '${playlist.songKeys.length} songs',
                     selected: route.playlistId == playlist.id,
                     onTap: () => navigator.open(
                       DesktopRoute(

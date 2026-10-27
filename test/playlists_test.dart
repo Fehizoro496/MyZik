@@ -2,6 +2,7 @@
 // from the Playlists tab, adding tracks via the detail sheet and via a track's
 // long-press "add to playlist" sheet, and that playlists persist to prefs.
 
+import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
@@ -67,6 +68,9 @@ void main() {
     final ctx = tester.element(find.byType(PlayerShell));
     final container = ProviderScope.containerOf(ctx, listen: false);
     await container.read(libraryProvider.notifier).load();
+    Song songWithId(int id) =>
+        container.read(libraryProvider).songs.firstWhere((s) => s.id == id);
+    String keyOf(int id) => songWithId(id).songKey;
     container.read(navigationProvider.notifier).goTo(AppScreen.myMusic);
     await tester.pumpAndSettle();
 
@@ -97,7 +101,7 @@ void main() {
     expect(find.text('Lost in the Echo'), findsNothing);
     await tester.tap(find.text('Midnight Confessions'));
     await tester.pumpAndSettle();
-    expect(container.read(playlistsProvider).first.songIds, [2]);
+    expect(container.read(playlistsProvider).first.songKeys, [keyOf(2)]);
 
     // Persisted to prefs.
     expect(prefs.getString('playlists.v1'), isNotNull);
@@ -116,7 +120,10 @@ void main() {
     expect(find.text('Add to playlist'), findsOneWidget);
     await tester.tap(find.text('Road trip'));
     await tester.pumpAndSettle();
-    expect(container.read(playlistsProvider).first.songIds, [2, 3]);
+    expect(container.read(playlistsProvider).first.songKeys, [
+      keyOf(2),
+      keyOf(3),
+    ]);
 
     // Close the add-to-playlist sheet (tap its barrier).
     await tester.tapAt(const Offset(195, 10));
@@ -124,12 +131,16 @@ void main() {
 
     // Reordering rewrites the stored order and persists it.
     final playlistId = container.read(playlistsProvider).first.id;
-    container.read(playlistsProvider.notifier).reorderSongs(playlistId, const [
-      3,
-      2,
+    container.read(playlistsProvider.notifier).reorderSongs(playlistId, [
+      songWithId(3),
+      songWithId(2),
     ]);
-    expect(container.read(playlistsProvider).first.songIds, [3, 2]);
-    expect(prefs.getString('playlists.v1'), contains('"songIds":[3,2]'));
+    expect(container.read(playlistsProvider).first.songKeys, [
+      keyOf(3),
+      keyOf(2),
+    ]);
+    final saved = jsonDecode(prefs.getString('playlists.v1')!) as List;
+    expect((saved.single as Map)['songKeys'], [keyOf(3), keyOf(2)]);
 
     // Open the playlist and remove the first track via its ⋮ context menu.
     await tester.tap(find.text('Playlists'));
@@ -143,7 +154,7 @@ void main() {
     await tester.tap(find.text('Remove from playlist'));
     await tester.pumpAndSettle();
     // The first row was track 3 (order [3, 2]); removing it leaves [2].
-    expect(container.read(playlistsProvider).first.songIds, [2]);
+    expect(container.read(playlistsProvider).first.songKeys, [keyOf(2)]);
 
     await tester.pumpWidget(const SizedBox.shrink());
   });

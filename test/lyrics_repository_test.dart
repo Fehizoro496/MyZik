@@ -139,36 +139,46 @@ void main() {
   });
 
   test(
-    'lyrics cache falls back to normalized metadata across different files',
+    'lyrics cache falls back to the same recording under another key',
     () async {
       final directory = await Directory.systemTemp.createTemp(
         'myzik_key_match_',
       );
       addTearDown(() => directory.delete(recursive: true));
-      final firstAudio = File('${directory.path}/first.mp3')
-        ..writeAsBytesSync([1, 2, 3]);
-      final secondAudio = File('${directory.path}/second.mp3')
-        ..writeAsBytesSync([4, 5, 6]);
       final repository = LyricsRepository(
+        dio: _offlineDio(),
+        apiKey: '',
         cacheDirectory: () async => directory,
       );
-      final first = Song(
+      const first = Song(
         id: 12,
         title: 'A Song!',
         artist: 'An Artist',
-        duration: const Duration(seconds: 200),
-        filePath: firstAudio.path,
+        duration: Duration(seconds: 200),
+        contentKey: 'fp:first',
       );
-      final second = Song(
+      // Another encoding on another device: other fingerprint, durations a
+      // second apart.
+      const second = Song(
         id: 90,
         title: 'a song',
         artist: 'AN ARTIST',
-        duration: const Duration(seconds: 200),
-        filePath: secondAudio.path,
+        duration: Duration(seconds: 201),
+        contentKey: 'fp:second',
       );
       const lyrics = Lyrics(source: LyricsSource.manual, plain: 'Saved words');
       await repository.saveLyrics(first, lyrics);
       expect((await repository.find(second))?.plain, 'Saved words');
+
+      // A different recording of the same song is not a match.
+      const live = Song(
+        id: 91,
+        title: 'A Song',
+        artist: 'An Artist',
+        duration: Duration(seconds: 260),
+        contentKey: 'fp:live',
+      );
+      expect(await repository.find(live), isNull);
     },
   );
 
@@ -188,14 +198,12 @@ void main() {
   });
 
   test(
-    'lyrics migrated from a legacy cache file survive a changed audio file',
+    'lyrics migrated from a legacy cache file survive a new fingerprint',
     () async {
       final directory = await Directory.systemTemp.createTemp(
         'myzik_legacy_cache_',
       );
       addTearDown(() => directory.delete(recursive: true));
-      final audio = File('${directory.path}/song.mp3')
-        ..writeAsBytesSync(List<int>.generate(100, (i) => i));
       // Written before portable keys: named after the MediaStore id.
       File('${directory.path}/lyrics/12.json')
         ..createSync(recursive: true)
@@ -207,35 +215,37 @@ void main() {
             ).toJson(),
           ),
         );
-      // LRCLIB answers "not found", so only the cache can provide lyrics.
-      final offline = Dio()
-        ..interceptors.add(
-          InterceptorsWrapper(
-            onRequest: (options, handler) => handler.reject(
-              DioException(
-                requestOptions: options,
-                response: Response(requestOptions: options, statusCode: 404),
-              ),
-            ),
-          ),
-        );
       final repository = LyricsRepository(
-        dio: offline,
+        dio: _offlineDio(),
         apiKey: '',
         cacheDirectory: () async => directory,
       );
-      final song = Song(
+      const song = Song(
         id: 12,
         title: 'A Song',
         artist: 'An Artist',
-        duration: const Duration(seconds: 200),
-        filePath: audio.path,
+        duration: Duration(seconds: 200),
+        contentKey: 'fp:before',
       );
       expect((await repository.find(song))?.plain, 'Saved words');
+      expect(File('${directory.path}/lyrics/12.json').existsSync(), isFalse);
 
       // Retagging rewrites the head of the file, so its fingerprint changes.
-      audio.writeAsBytesSync(List<int>.generate(120, (i) => 255 - i));
-      expect((await repository.find(song))?.plain, 'Saved words');
+      final retagged = song.withContentKey('fp:after');
+      expect((await repository.find(retagged))?.plain, 'Saved words');
     },
   );
 }
+
+/// LRCLIB answers "not found", so only the cache can provide lyrics.
+Dio _offlineDio() => Dio()
+  ..interceptors.add(
+    InterceptorsWrapper(
+      onRequest: (options, handler) => handler.reject(
+        DioException(
+          requestOptions: options,
+          response: Response(requestOptions: options, statusCode: 404),
+        ),
+      ),
+    ),
+  );

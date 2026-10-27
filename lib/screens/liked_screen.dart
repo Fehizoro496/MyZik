@@ -21,10 +21,10 @@ class LikedScreen extends ConsumerStatefulWidget {
 class _LikedScreenState extends ConsumerState<LikedScreen> {
   @override
   Widget build(BuildContext context) {
-    final likedIds = ref.watch(likedProvider);
+    final likedKeys = ref.watch(likedProvider);
     final songs = ref
         .watch(libraryProvider.select((s) => s.songs))
-        .where((s) => likedIds.contains(s.id))
+        .where((s) => likedKeys.contains(s.songKey))
         .toList();
     return DecoratedBox(
       decoration: const BoxDecoration(color: AppColors.musicBackground),

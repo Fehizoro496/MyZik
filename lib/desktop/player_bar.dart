@@ -49,7 +49,7 @@ class _NowPlayingInfo extends ConsumerWidget {
         style: TextStyle(color: AppColors.whiteAlpha(0.4), fontSize: 13),
       );
     }
-    final liked = ref.watch(isLikedProvider(track.id));
+    final liked = ref.watch(isLikedProvider(track.songKey));
     return Row(
       children: [
         Tooltip(
@@ -94,7 +94,7 @@ class _NowPlayingInfo extends ConsumerWidget {
         IconButton(
           tooltip: liked ? 'Remove from liked' : 'Add to liked',
           iconSize: 18,
-          onPressed: () => ref.read(likedProvider.notifier).toggle(track.id),
+          onPressed: () => ref.read(likedProvider.notifier).toggle(track),
           icon: Icon(
             liked ? AppIcons.heartFilled : AppIcons.heart,
             color: liked ? AppColors.liked : AppColors.whiteAlpha(0.6),

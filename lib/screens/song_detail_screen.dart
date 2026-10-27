@@ -128,7 +128,7 @@ class SongDetailScreen extends ConsumerWidget {
   }
 
   Widget _content(BuildContext context, WidgetRef ref, Song song) {
-    final liked = ref.watch(isLikedProvider(song.id));
+    final liked = ref.watch(isLikedProvider(song.songKey));
     final library = ref.watch(libraryProvider.select((s) => s.songs));
     final hasArtist = library.any((s) => s.artist == song.artist);
     final hasAlbum =
@@ -198,12 +198,12 @@ class SongDetailScreen extends ConsumerWidget {
               icon: liked ? AppIcons.heartFilled : AppIcons.heart,
               label: liked ? 'Liked' : 'Like',
               iconColor: liked ? AppColors.liked : AppColors.white,
-              onTap: () => ref.read(likedProvider.notifier).toggle(song.id),
+              onTap: () => ref.read(likedProvider.notifier).toggle(song),
             ),
             _pill(
               icon: AppIcons.playlistAdd,
               label: 'Add to playlist',
-              onTap: () => showAddToPlaylistSheet(context, song.id),
+              onTap: () => showAddToPlaylistSheet(context, song),
             ),
             if (download != null)
               _pill(

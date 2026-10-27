@@ -8,6 +8,8 @@ import '../data/music_repository.dart';
 import '../data/song_key.dart';
 import '../models.dart';
 import 'downloads_provider.dart';
+import 'liked_provider.dart';
+import 'playlists_provider.dart';
 import 'shared_preferences_provider.dart';
 
 /// Source of the track library for this platform. A single instance is
@@ -213,7 +215,12 @@ class LibraryNotifier extends Notifier<LibraryState> {
     ...ref.read(downloadsProvider).songs,
   ];
 
+  /// Bumped by every [load], so a slower, older key resolution can't
+  /// overwrite a newer library.
+  int _generation = 0;
+
   Future<void> load() async {
+    final generation = ++_generation;
     state = state.copyWith(status: LibraryStatus.loading);
     final repo = ref.read(musicRepositoryProvider);
     // Wait for saved downloads so the first published library (which playback
@@ -223,48 +230,76 @@ class LibraryNotifier extends Notifier<LibraryState> {
       final granted = await repo.ensurePermission();
       if (_disposed) return;
       if (!granted) {
-        final downloaded = _withDownloads(const []);
-        try {
-          await SongKeyMigration.run(
-            downloaded,
-            ref.read(sharedPreferencesProvider),
-          );
-        } catch (_) {}
+        _deviceSongs = const [];
         state = LibraryState(
           status: LibraryStatus.permissionDenied,
-          songs: downloaded,
+          songs: _withDownloads(const []),
         );
-        return;
-      }
-      _deviceSongs = await repo.fetchSongs();
-      if (_disposed) return;
-      final loaded = _withDownloads(_deviceSongs);
-      try {
-        await SongKeyMigration.run(loaded, ref.read(sharedPreferencesProvider));
-      } catch (_) {}
-      if (_disposed) return;
-      // A completed background download can arrive while the initial scan is
-      // running. Re-read it after key migration so that event is not dropped.
-      final latest = _withDownloads(_deviceSongs);
-      if (latest.length != loaded.length) {
-        try {
-          await SongKeyMigration.run(
-            latest,
-            ref.read(sharedPreferencesProvider),
-          );
-        } catch (_) {}
+      } else {
+        _deviceSongs = _withRememberedKeys(await repo.fetchSongs());
         if (_disposed) return;
+        final songs = _withDownloads(_deviceSongs);
+        state = LibraryState(
+          status: songs.isEmpty ? LibraryStatus.empty : LibraryStatus.ready,
+          songs: songs,
+        );
       }
-      state = LibraryState(
-        status: latest.isEmpty ? LibraryStatus.empty : LibraryStatus.ready,
-        songs: latest,
-      );
     } catch (_) {
       if (_disposed) return;
       state = LibraryState(
         status: LibraryStatus.error,
         songs: _withDownloads(const []),
       );
+      return;
+    }
+    await _resolveKeys(generation);
+  }
+
+  /// Device songs carrying the file fingerprints found on the last launch,
+  /// so likes and playlists show right away; [_resolveKeys] then checks them.
+  List<Song> _withRememberedKeys(List<Song> songs) {
+    final keys = SongKeyMigration.keysByMediaId(
+      ref.read(sharedPreferencesProvider),
+    );
+    return [
+      for (final song in songs)
+        switch (keys[song.id.toString()]) {
+          final key? when key.startsWith('fp:') => song.withContentKey(key),
+          _ => song,
+        },
+    ];
+  }
+
+  /// Fingerprints the device songs (only files that changed since the last
+  /// launch are read) and moves likes and playlists saved under device ids
+  /// to portable keys. Runs after the library is shown.
+  Future<void> _resolveKeys(int generation) async {
+    final prefs = ref.read(sharedPreferencesProvider);
+    try {
+      final result = await SongKeyMigration.run(
+        _withDownloads(_deviceSongs),
+        prefs,
+      );
+      if (_disposed || generation != _generation) return;
+      final keyById = {for (final song in result.songs) song.id: song};
+      var changed = false;
+      final device = <Song>[];
+      for (final song in _deviceSongs) {
+        final keyed = keyById[song.id];
+        final updated = keyed != null && keyed.contentKey != song.contentKey;
+        if (updated) changed = true;
+        device.add(updated ? keyed : song);
+      }
+      if (changed) {
+        _deviceSongs = device;
+        state = state.copyWith(songs: _withDownloads(_deviceSongs));
+      }
+      if (result.migrated) {
+        ref.invalidate(likedProvider);
+        ref.invalidate(playlistsProvider);
+      }
+    } catch (_) {
+      // Keys stay as remembered; the next launch tries again.
     }
   }
 }

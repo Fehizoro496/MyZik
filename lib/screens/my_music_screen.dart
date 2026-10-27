@@ -467,7 +467,7 @@ class _PlaylistRow extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final songs = ref.watch(playlistSongsProvider(playlist.id));
-    final count = playlist.songIds.length;
+    final count = playlist.songKeys.length;
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
       onTap: onTap,

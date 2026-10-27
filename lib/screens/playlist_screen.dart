@@ -121,10 +121,9 @@ class PlaylistScreen extends ConsumerWidget {
       ),
       itemCount: songs.length,
       onReorderItem: (oldIndex, newIndex) {
-        final ids = [for (final s in songs) s.id];
-        final moved = ids.removeAt(oldIndex);
-        ids.insert(newIndex, moved);
-        ref.read(playlistsProvider.notifier).reorderSongs(playlist.id, ids);
+        final ordered = List<Song>.of(songs);
+        ordered.insert(newIndex, ordered.removeAt(oldIndex));
+        ref.read(playlistsProvider.notifier).reorderSongs(playlist.id, ordered);
       },
       itemBuilder: (context, i) {
         final song = songs[i];
@@ -136,7 +135,7 @@ class PlaylistScreen extends ConsumerWidget {
             direction: DismissDirection.endToStart,
             onDismissed: (_) => ref
                 .read(playlistsProvider.notifier)
-                .removeSong(playlist.id, song.id),
+                .removeSong(playlist.id, song),
             background: Container(
               alignment: Alignment.centerRight,
               padding: const EdgeInsets.only(right: 20),
@@ -201,7 +200,7 @@ class PlaylistScreen extends ConsumerWidget {
     Playlist playlist,
     List<Song> songs,
   ) {
-    final count = playlist.songIds.length;
+    final count = playlist.songKeys.length;
     return Column(
       children: [
         const SizedBox(height: 8),
@@ -363,10 +362,10 @@ class PlaylistScreen extends ConsumerWidget {
         nav.goTo(AppScreen.songDetail);
       case 'add':
         if (buttonContext.mounted) {
-          showAddToPlaylistSheet(buttonContext, song.id);
+          showAddToPlaylistSheet(buttonContext, song);
         }
       case 'remove':
-        notifier.removeSong(playlist.id, song.id);
+        notifier.removeSong(playlist.id, song);
     }
   }
 
@@ -427,7 +426,7 @@ class _AddSongsSheetState extends ConsumerState<_AddSongsSheet> {
   Widget build(BuildContext context) {
     final library = ref.watch(libraryProvider.select((s) => s.songs));
     final playlist = ref.watch(playlistByIdProvider(widget.playlistId));
-    final ids = playlist?.songIds.toSet() ?? const <int>{};
+    final keys = playlist?.songKeys.toSet() ?? const <String>{};
     final results = _filter(library);
     return GlassSheet(
       maxHeightFactor: 0.8,
@@ -463,15 +462,15 @@ class _AddSongsSheetState extends ConsumerState<_AddSongsSheet> {
               itemCount: results.length,
               itemBuilder: (context, i) {
                 final song = results[i];
-                final added = ids.contains(song.id);
+                final added = keys.contains(song.songKey);
                 return GestureDetector(
                   behavior: HitTestBehavior.opaque,
                   onTap: () {
                     final notifier = ref.read(playlistsProvider.notifier);
                     if (added) {
-                      notifier.removeSong(widget.playlistId, song.id);
+                      notifier.removeSong(widget.playlistId, song);
                     } else {
-                      notifier.addSong(widget.playlistId, song.id);
+                      notifier.addSong(widget.playlistId, song);
                     }
                   },
                   child: Padding(

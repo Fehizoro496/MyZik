@@ -74,16 +74,17 @@ class NowPlayingScreen extends ConsumerWidget {
                               ),
                               const SizedBox(width: 10),
                               GlassIconButton(
-                                icon: ref.watch(isLikedProvider(track.id))
+                                icon: ref.watch(isLikedProvider(track.songKey))
                                     ? AppIcons.heartFilled
                                     : AppIcons.heart,
-                                iconColor: ref.watch(isLikedProvider(track.id))
+                                iconColor:
+                                    ref.watch(isLikedProvider(track.songKey))
                                     ? AppColors.liked
                                     : AppColors.white,
                                 size: 44,
                                 onTap: () => ref
                                     .read(likedProvider.notifier)
-                                    .toggle(track.id),
+                                    .toggle(track),
                               ),
                             ],
                           ),

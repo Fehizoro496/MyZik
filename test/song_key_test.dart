@@ -124,6 +124,12 @@ void main() {
 
   group('streamed YouTube tracks', () {
     const videoId = 'dQw4w9WgXcQ';
+    final streamed = Song(
+      id: youtubeSongId(videoId),
+      title: 'Never Gonna Give You Up',
+      artist: 'Rick Astley',
+      youtubeVideoId: videoId,
+    );
 
     ProviderContainer makeContainer(SharedPreferences prefs) {
       final container = ProviderContainer(
@@ -139,13 +145,13 @@ void main() {
       final prefs = await SharedPreferences.getInstance();
       final liked = makeContainer(prefs).read(likedProvider.notifier);
 
-      liked.toggle(youtubeSongId(videoId));
+      liked.toggle(streamed);
       expect(
         prefs.getStringList(SongKeyMigration.likedKeysPreference),
         contains('yt:$videoId'),
       );
 
-      liked.toggle(youtubeSongId(videoId));
+      liked.toggle(streamed);
       expect(
         prefs.getStringList(SongKeyMigration.likedKeysPreference) ?? const [],
         isNot(contains('yt:$videoId')),
@@ -158,7 +164,7 @@ void main() {
       final playlists = container.read(playlistsProvider.notifier);
       final playlist = playlists.create('Mix');
 
-      playlists.addSong(playlist.id, youtubeSongId(videoId));
+      playlists.addSong(playlist.id, streamed);
 
       expect(container.read(playlistsProvider).single.songKeys, [
         'yt:$videoId',

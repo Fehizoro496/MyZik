@@ -5,7 +5,6 @@ import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:pretty_dio_logger/pretty_dio_logger.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
 import '../models.dart';
 import 'lyrics_aligner.dart';
@@ -649,40 +648,47 @@ class LyricsRepository {
     }
   }
 
+  /// The cache file for [song], named after its [Song.songKey]. When there
+  /// is none yet, adopts a file cached by an older version under the
+  /// device-local [Song.id], or one cached for the same recording under
+  /// another key (the file was re-tagged or re-encoded, or comes from another
+  /// device).
   Future<File> _cacheFile(Song song) async {
     final base = await _cacheDirectory();
     final dir = Directory('${base.path}${Platform.pathSeparator}lyrics');
     if (!dir.existsSync()) await dir.create(recursive: true);
-    SharedPreferences? preferences;
-    if (song.filePath != null && song.filePath!.isNotEmpty) {
+    final safeName = song.songKey.replaceAll(RegExp(r'[^a-zA-Z0-9._-]'), '_');
+    final target = File('${dir.path}${Platform.pathSeparator}$safeName.json');
+    if (target.existsSync()) return target;
+
+    final legacy = File('${dir.path}${Platform.pathSeparator}${song.id}.json');
+    if (legacy.existsSync()) {
       try {
-        preferences = await SharedPreferences.getInstance();
+        final record = jsonDecode(await legacy.readAsString());
+        if (record is Map<String, dynamic>) {
+          await _writeCache(target, song, record);
+          await legacy.delete();
+          return target;
+        }
       } catch (_) {
-        // Cache lookup and editing remain usable in isolated tests and when
-        // preferences are temporarily unavailable; the hash is still stable.
+        // Unreadable legacy entry: ignore it and look further.
       }
     }
-    final key = await SongKey.forSong(song, preferences: preferences);
-    final safeName = key.value.replaceAll(RegExp(r'[^a-zA-Z0-9._-]'), '_');
-    final target = File('${dir.path}${Platform.pathSeparator}$safeName.json');
-    final legacy = File('${dir.path}${Platform.pathSeparator}${song.id}.json');
-    if (!target.existsSync() && legacy.existsSync()) {
-      await legacy.copy(target.path);
-      await legacy.delete();
-    }
-    if (!target.existsSync()) {
-      final signature = SongKey.metadataKey(song);
-      await for (final candidate in dir.list(followLinks: false)) {
-        if (candidate is! File || candidate.path == legacy.path) continue;
-        try {
-          final record = jsonDecode(await candidate.readAsString());
-          if (record is Map && record['_songMetadata'] == signature) {
-            await candidate.copy(target.path);
-            break;
-          }
-        } catch (_) {
-          // Ignore unrelated or outdated cache files.
+
+    final signature = SongKey.metadataKey(song);
+    await for (final candidate in dir.list(followLinks: false)) {
+      if (candidate is! File || !candidate.path.endsWith('.json')) continue;
+      try {
+        final record = jsonDecode(await candidate.readAsString());
+        final other = record is Map ? record['_songMetadata'] : null;
+        if (other is String &&
+            record['miss'] != true &&
+            SongKey.sameRecording(other, signature)) {
+          await _writeCache(target, song, Map<String, dynamic>.from(record));
+          break;
         }
+      } catch (_) {
+        // Ignore unrelated or outdated cache files.
       }
     }
     return target;

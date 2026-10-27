@@ -83,7 +83,7 @@ class _TrackTableState extends ConsumerState<TrackTable> {
 
   Future<void> _openMenu(Offset position, Song song, List<Song> queue) async {
     setState(() => _selected = song);
-    final liked = ref.read(isLikedProvider(song.id));
+    final liked = ref.read(isLikedProvider(song.songKey));
     final overlay = Overlay.of(context).context.findRenderObject() as RenderBox;
     final selected = await showMenu<String>(
       context: context,
@@ -144,7 +144,7 @@ class _TrackTableState extends ConsumerState<TrackTable> {
       case 'playlist':
         await showAddToPlaylistDialog(context, song);
       case 'like':
-        ref.read(likedProvider.notifier).toggle(song.id);
+        ref.read(likedProvider.notifier).toggle(song);
       case 'album':
         _openCollection(albumsFrom(library), song.album!);
       case 'artist':
@@ -283,7 +283,7 @@ class _TrackTableRowState extends ConsumerState<_TrackTableRow> {
   @override
   Widget build(BuildContext context) {
     final song = widget.song;
-    final liked = ref.watch(isLikedProvider(song.id));
+    final liked = ref.watch(isLikedProvider(song.songKey));
     final accent = widget.playing ? DesktopColors.accentText : AppColors.white;
     final secondary = TextStyle(
       color: AppColors.whiteAlpha(0.66),
@@ -377,7 +377,7 @@ class _TrackTableRowState extends ConsumerState<_TrackTableRow> {
                         tooltip: liked ? 'Remove from liked' : 'Add to liked',
                         iconSize: 16,
                         onPressed: () =>
-                            ref.read(likedProvider.notifier).toggle(song.id),
+                            ref.read(likedProvider.notifier).toggle(song),
                         icon: Icon(
                           liked ? AppIcons.heartFilled : AppIcons.heart,
                           color: liked

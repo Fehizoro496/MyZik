@@ -271,8 +271,7 @@ class TrackRow extends ConsumerWidget {
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
       onTap: onTap,
-      onLongPress:
-          onLongPress ?? () => showAddToPlaylistSheet(context, song.id),
+      onLongPress: onLongPress ?? () => showAddToPlaylistSheet(context, song),
       child: Row(
         children: [
           SongArtwork(song: song),
@@ -336,7 +335,7 @@ class _TrackMenuButton extends ConsumerWidget {
   }
 
   Future<void> _openMenu(BuildContext buttonContext, WidgetRef ref) async {
-    final liked = ref.read(isLikedProvider(song.id));
+    final liked = ref.read(isLikedProvider(song.songKey));
     final selected = await showPopoverMenu<String>(buttonContext, [
       const PopupMenuItem(
         value: 'details',
@@ -363,10 +362,10 @@ class _TrackMenuButton extends ConsumerWidget {
         ref.read(navigationProvider.notifier).goTo(AppScreen.songDetail);
       case 'add':
         if (buttonContext.mounted) {
-          showAddToPlaylistSheet(buttonContext, song.id);
+          showAddToPlaylistSheet(buttonContext, song);
         }
       case 'like':
-        ref.read(likedProvider.notifier).toggle(song.id);
+        ref.read(likedProvider.notifier).toggle(song);
     }
   }
 }
@@ -1046,22 +1045,22 @@ class _NameSheetState extends State<_NameSheet> {
   }
 }
 
-/// Opens the sheet to add/remove [songId] to/from playlists. Tapping a playlist
+/// Opens the sheet to add/remove [song] to/from playlists. Tapping a playlist
 /// toggles membership (a check marks the ones it's in); "New playlist" creates
 /// one and drops the song straight in.
-Future<void> showAddToPlaylistSheet(BuildContext context, int songId) {
+Future<void> showAddToPlaylistSheet(BuildContext context, Song song) {
   return showModalBottomSheet<void>(
     context: context,
     backgroundColor: Colors.transparent,
     isScrollControlled: true,
-    builder: (_) => _AddToPlaylistSheet(songId: songId),
+    builder: (_) => _AddToPlaylistSheet(song: song),
   );
 }
 
 class _AddToPlaylistSheet extends ConsumerWidget {
-  const _AddToPlaylistSheet({required this.songId});
+  const _AddToPlaylistSheet({required this.song});
 
-  final int songId;
+  final Song song;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -1097,7 +1096,7 @@ class _AddToPlaylistSheet extends ConsumerWidget {
               );
               if (name == null) return;
               final playlist = notifier.create(name);
-              notifier.addSong(playlist.id, songId);
+              notifier.addSong(playlist.id, song);
               if (context.mounted) Navigator.of(context).pop();
             },
           ),
@@ -1125,16 +1124,16 @@ class _AddToPlaylistSheet extends ConsumerWidget {
               itemCount: playlists.length,
               itemBuilder: (context, i) {
                 final playlist = playlists[i];
-                final selected = playlist.songIds.contains(songId);
+                final selected = playlist.contains(song);
                 return _PlaylistPickRow(
                   playlist: playlist,
                   selected: selected,
                   onTap: () {
                     final notifier = ref.read(playlistsProvider.notifier);
                     if (selected) {
-                      notifier.removeSong(playlist.id, songId);
+                      notifier.removeSong(playlist.id, song);
                     } else {
-                      notifier.addSong(playlist.id, songId);
+                      notifier.addSong(playlist.id, song);
                     }
                   },
                 );
@@ -1158,7 +1157,7 @@ class _PlaylistPickRow extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final songs = ref.watch(playlistSongsProvider(playlist.id));
-    final count = playlist.songIds.length;
+    final count = playlist.songKeys.length;
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
       onTap: onTap,
