@@ -5,7 +5,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'package:my_zik/data/sample_music_repository.dart';
 import 'package:my_zik/main.dart';
+import 'package:my_zik/providers/library_provider.dart';
 import 'package:my_zik/providers/shared_preferences_provider.dart';
 
 void main() {
@@ -23,7 +25,11 @@ void main() {
 
     await tester.pumpWidget(
       ProviderScope(
-        overrides: [sharedPreferencesProvider.overrideWithValue(prefs)],
+        overrides: [
+          sharedPreferencesProvider.overrideWithValue(prefs),
+          // The phone layout's library, whatever platform runs the test.
+          musicRepositoryProvider.overrideWithValue(SampleMusicRepository()),
+        ],
         child: const MyZikApp(),
       ),
     );

@@ -3,6 +3,8 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../data/desktop_music_repository.dart';
+import '../providers/library_folders_provider.dart';
 import '../icons.dart';
 import '../models.dart';
 import '../providers/library_provider.dart';
@@ -132,6 +134,12 @@ class _LibraryGate extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final status = ref.watch(libraryProvider.select((s) => s.status));
+    final noFolder =
+        ref.watch(musicRepositoryProvider) is DesktopMusicRepository &&
+        ref.watch(libraryFoldersProvider).isEmpty;
+    if (noFolder && status != LibraryStatus.loading) {
+      return const _ChooseMusicFolder();
+    }
     final message = switch (status) {
       LibraryStatus.loading => 'Loading your library…',
       LibraryStatus.permissionDenied => 'Music access was denied.',
@@ -151,6 +159,41 @@ class _LibraryGate extends ConsumerWidget {
               child: const Text('Try again'),
             ),
           ],
+        ],
+      ),
+    );
+  }
+}
+
+/// First run on a computer: no music folder yet.
+class _ChooseMusicFolder extends ConsumerWidget {
+  const _ChooseMusicFolder();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    return Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(AppIcons.folder, size: 40, color: AppColors.whiteAlpha(0.5)),
+          const SizedBox(height: 16),
+          const Text(
+            'Add your music',
+            style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            'Pick the folder where your music lives: its audio files and those '
+            'of its subfolders become your library.',
+            textAlign: TextAlign.center,
+            style: TextStyle(color: AppColors.whiteAlpha(0.55)),
+          ),
+          const SizedBox(height: 18),
+          FilledButton.icon(
+            onPressed: () => addMusicFolder(ref),
+            icon: const Icon(AppIcons.folder, size: 16),
+            label: const Text('Choose a folder…'),
+          ),
         ],
       ),
     );

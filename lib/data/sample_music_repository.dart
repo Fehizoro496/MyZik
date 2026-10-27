@@ -3,9 +3,8 @@ import 'dart:typed_data';
 import '../models.dart';
 import 'music_repository.dart';
 
-/// A tiny built-in library used on platforms that can't (yet) read real files
-/// — desktop and web during development. Swap for a real desktop repository
-/// once folder-scanning is implemented.
+/// A tiny built-in library for the web, which can't read local files, and
+/// for tests.
 class SampleMusicRepository implements MusicRepository {
   @override
   bool get isSupported => true;

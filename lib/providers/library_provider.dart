@@ -15,7 +15,7 @@ import 'shared_preferences_provider.dart';
 /// Source of the track library for this platform. A single instance is
 /// shared by every provider that needs to read it.
 final musicRepositoryProvider = Provider<MusicRepository>((ref) {
-  return createMusicRepository();
+  return createMusicRepository(ref.read(sharedPreferencesProvider));
 });
 
 /// Cover artwork for a song id, fetched lazily and cached by Riverpod per

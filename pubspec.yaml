@@ -72,8 +72,11 @@ dependencies:
   pretty_dio_logger: ^1.4.0
   crypto: ^3.0.6
 
-  # Open/save dialogs to import and export LRC files in the lyrics editor.
+  # Native file and folder dialogs: LRC import/export, desktop music folders.
   file_selector: ^1.1.0
+
+  # Reads tags and covers of the audio files in the desktop music folders.
+  audio_metadata_reader: ^1.8.1
 
 dev_dependencies:
   flutter_test:

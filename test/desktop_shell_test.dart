@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:my_zik/data/desktop_music_repository.dart';
+import 'package:my_zik/data/music_repository.dart';
 import 'package:my_zik/data/sample_music_repository.dart';
 import 'package:my_zik/desktop/desktop_navigation.dart';
 import 'package:my_zik/desktop/desktop_shell.dart';
@@ -13,7 +15,10 @@ import 'package:my_zik/providers/playback_provider.dart';
 import 'package:my_zik/providers/shared_preferences_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-Future<void> _pumpDesktop(WidgetTester tester) async {
+Future<void> _pumpDesktop(
+  WidgetTester tester, {
+  MusicRepository Function(SharedPreferences prefs)? repository,
+}) async {
   tester.view.physicalSize = const Size(1440, 900);
   tester.view.devicePixelRatio = 1.0;
   addTearDown(tester.view.resetPhysicalSize);
@@ -24,7 +29,9 @@ Future<void> _pumpDesktop(WidgetTester tester) async {
     ProviderScope(
       overrides: [
         sharedPreferencesProvider.overrideWithValue(prefs),
-        musicRepositoryProvider.overrideWithValue(SampleMusicRepository()),
+        musicRepositoryProvider.overrideWithValue(
+          repository?.call(prefs) ?? SampleMusicRepository(),
+        ),
       ],
       child: const MyZikApp(desktop: true),
     ),
@@ -163,6 +170,28 @@ void main() {
     expect(find.byType(DesktopNowPlaying), findsOneWidget);
     expect(find.text(songs.first.title), findsWidgets);
     expect(find.byTooltip('Exit full screen (Esc)'), findsOneWidget);
+
+    await tester.pumpWidget(const SizedBox.shrink());
+  });
+
+  testWidgets('without a music folder, the desktop asks for one', (
+    tester,
+  ) async {
+    await _pumpDesktop(
+      tester,
+      repository: (prefs) => DesktopMusicRepository(preferences: prefs),
+    );
+
+    await tester.tap(find.text('Songs').first);
+    await tester.pumpAndSettle();
+    expect(find.text('Add your music'), findsOneWidget);
+    expect(find.text('Choose a folder…'), findsOneWidget);
+
+    await tester.tap(find.byTooltip('Music folders'));
+    await tester.pumpAndSettle();
+    expect(find.text('Music folders'), findsWidgets);
+    expect(find.text('No folder yet.'), findsOneWidget);
+    expect(find.text('Add folder…'), findsOneWidget);
 
     await tester.pumpWidget(const SizedBox.shrink());
   });

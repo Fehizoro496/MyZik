@@ -1,8 +1,11 @@
+import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../icons.dart';
 import '../models.dart';
+import '../providers/library_folders_provider.dart';
+import '../providers/library_provider.dart';
 import '../providers/playlists_provider.dart';
 import '../theme.dart';
 
@@ -107,6 +110,106 @@ class _AddToPlaylistDialog extends ConsumerWidget {
             if (name == null) return;
             notifier.addSong(notifier.create(name).id, song);
           },
+        ),
+        FilledButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Done'),
+        ),
+      ],
+    );
+  }
+}
+
+/// Asks for a music folder and adds it to the library, which rescans.
+Future<void> addMusicFolder(WidgetRef ref) async {
+  final folder = await getDirectoryPath(confirmButtonText: 'Add folder');
+  if (folder == null) return;
+  await ref.read(libraryFoldersProvider.notifier).add(folder);
+}
+
+/// Lists the music folders the library is built from, to add or remove
+/// some, or rescan them for new and changed files.
+Future<void> showLibraryFoldersDialog(BuildContext context) {
+  return showDialog<void>(
+    context: context,
+    builder: (_) => const _LibraryFoldersDialog(),
+  );
+}
+
+class _LibraryFoldersDialog extends ConsumerWidget {
+  const _LibraryFoldersDialog();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final folders = ref.watch(libraryFoldersProvider);
+    final library = ref.watch(libraryProvider);
+    final scanning = library.status == LibraryStatus.loading;
+    return AlertDialog(
+      backgroundColor: _dialogBackground,
+      title: const Text('Music folders'),
+      content: SizedBox(
+        width: 520,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Audio files in these folders and their subfolders make up your '
+              'library.',
+              style: TextStyle(color: AppColors.whiteAlpha(0.55)),
+            ),
+            const SizedBox(height: 12),
+            if (folders.isEmpty)
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 12),
+                child: Text(
+                  'No folder yet.',
+                  style: TextStyle(color: AppColors.whiteAlpha(0.45)),
+                ),
+              ),
+            for (final folder in folders)
+              ListTile(
+                dense: true,
+                contentPadding: EdgeInsets.zero,
+                leading: const Icon(AppIcons.folder, size: 18),
+                title: Text(
+                  folder,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                trailing: IconButton(
+                  tooltip: 'Remove from library',
+                  iconSize: 16,
+                  onPressed: scanning
+                      ? null
+                      : () => ref
+                            .read(libraryFoldersProvider.notifier)
+                            .remove(folder),
+                  icon: const Icon(AppIcons.close),
+                ),
+              ),
+            const SizedBox(height: 8),
+            Text(
+              scanning
+                  ? 'Scanning…'
+                  : '${library.songs.length} songs in your library',
+              style: TextStyle(color: AppColors.whiteAlpha(0.45), fontSize: 12),
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton.icon(
+          onPressed: scanning || folders.isEmpty
+              ? null
+              : () => ref.read(libraryProvider.notifier).load(),
+          icon: const Icon(AppIcons.retry, size: 16),
+          label: const Text('Rescan'),
+        ),
+        TextButton.icon(
+          onPressed: scanning ? null : () => addMusicFolder(ref),
+          icon: const Icon(AppIcons.add, size: 16),
+          label: const Text('Add folder…'),
         ),
         FilledButton(
           onPressed: () => Navigator.of(context).pop(),

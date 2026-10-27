@@ -11,6 +11,7 @@ import '../providers/playlists_provider.dart';
 import '../theme.dart';
 import '../widgets.dart';
 import 'desktop_navigation.dart';
+import 'dialogs.dart';
 import 'desktop_style.dart';
 import 'discover_page.dart';
 import 'now_playing.dart';
@@ -350,7 +351,16 @@ class _Sidebar extends ConsumerWidget {
                     ),
                   ),
           ),
-          const SidebarHeading('LIBRARY'),
+          SidebarHeading(
+            'LIBRARY',
+            trailing: IconButton(
+              tooltip: 'Music folders',
+              iconSize: 16,
+              visualDensity: VisualDensity.compact,
+              onPressed: () => showLibraryFoldersDialog(context),
+              icon: const Icon(AppIcons.folder),
+            ),
+          ),
           item(
             DesktopSection.songs,
             AppIcons.musicNote,
