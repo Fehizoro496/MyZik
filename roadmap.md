@@ -136,41 +136,70 @@ deux modes : *Edit & time* et *Live sync*.
 
 ## Phase 5 — Synchronisation sur le réseau local
 
+Code dans `lib/sync/` (cœur testable sans Flutter ni réseau réel), providers
+dans `lib/providers/sync_providers.dart`, écrans `lib/desktop/sync_page.dart`
+et `lib/screens/sync_screen.dart`. Le serveur (desktop) et le client (mobile)
+démarrent depuis `main()`, jamais depuis les widgets.
+
 ### 5.1 Modèle de données synchronisable
 
-- [ ] Chaque enregistrement (paroles par `SongKey`, like, playlist) porte une
-      date de modification et un marqueur de suppression (tombstone).
-- [ ] Résolution des conflits : la dernière écriture gagne, enregistrement par
-      enregistrement.
-- [ ] Journal des changements avec curseur, pour des échanges incrémentaux.
+- [x] Chaque enregistrement (`like:<SongKey>`, `playlist:<id>`,
+      `lyrics:<SongKey>`) porte une date de modification, l'appareil d'origine
+      et un marqueur de suppression (`SyncStore`). Toutes les paroles
+      voyagent, timings compris : trouvées en ligne, écrites, éditées ou
+      synchronisées à la main.
+- [x] Résolution des conflits : ce que l'utilisateur a fait l'emporte sur ce
+      que l'app a trouvé (des paroles trouvées en ligne ne remplacent jamais
+      des paroles éditées ou synchronisées à la main) ; ensuite la dernière
+      écriture gagne, enregistrement par enregistrement (égalité départagée
+      par l'appareil d'origine). Les
+      données d'avant la synchro sont enregistrées une fois comme les plus
+      anciennes, pour être fusionnées et non écrasées.
+- [x] Journal des changements avec curseur : chaque changement accepté reçoit
+      un numéro de séquence ; les échanges sont incrémentaux dans les deux
+      sens.
 
 ### 5.2 Serveur (desktop)
 
-- [ ] Serveur HTTP sur le réseau local, endpoints pull/push des changements et
-      transfert de fichiers.
-- [ ] Annonce mDNS (`nsd`) pour être découvert par le mobile.
-- [ ] Écran Synchronisation : état du serveur, appareils appairés, révocation.
+- [x] Serveur HTTP (`SyncServer`, port 47815 ou un port libre) : `hello`,
+      `pair`, `sync` (envoi + réception en un aller-retour), manifeste des
+      fichiers, téléchargement avec `Range`, envoi reprenable.
+- [x] Annonce mDNS (`nsd`, service `_myzik._tcp`, identifiant dans le TXT).
+- [x] Page « Sync with phone » : état du serveur, appairage, téléphones
+      appairés (dernière synchro, désappairage), dernier évènement.
 
 ### 5.3 Appairage
 
-- [ ] Le desktop affiche un QR code (adresse + jeton secret).
-- [ ] Le mobile le scanne une fois (`mobile_scanner`) et stocke le jeton.
-- [ ] Toutes les requêtes portent le jeton.
+- [x] Le desktop affiche un QR code (adresses, port, identifiant, code à
+      6 chiffres) ; le code est aussi affiché pour une saisie manuelle.
+      Usage unique, 10 minutes, 5 essais.
+- [x] Le mobile le scanne (`mobile_scanner`) ou le saisit, et reçoit un jeton
+      propre à l'appareil (seul son SHA-256 est gardé sur le desktop).
+- [x] Toutes les requêtes portent le jeton ; un téléphone désappairé reçoit
+      401 et l'app lui demande de s'appairer à nouveau.
 
 ### 5.4 Client (mobile)
 
-- [ ] Bouton « Synchroniser maintenant ».
-- [ ] Synchro automatique à l'ouverture de l'app quand le PC appairé est
-      découvert.
-- [ ] Indicateur d'état et de dernière synchro.
+- [x] Écran Sync (icône dans l'en-tête de l'accueil) avec « Sync now ».
+- [x] Synchro automatique au lancement et au retour au premier plan. Le PC
+      est cherché à sa dernière adresse, puis par mDNS, puis aux adresses du
+      QR code.
+- [x] État affiché : progression, dernière synchro, bilan, erreurs.
 
 ### 5.5 Fichiers audio
 
-- [ ] Échange des manifestes (`SongKey`, taille, empreinte) entre les appareils.
-- [ ] Transfert à la demande des fichiers manquants, avec reprise après
-      coupure.
-- [ ] Choix de ce qui est transféré (tout, seulement les téléchargements, ou
-      sélection manuelle).
+- [x] Échange des manifestes (`SongKey`, taille, tags) dans les deux sens.
+- [x] Transfert des fichiers manquants, reprise après coupure (fichier
+      `.part` + `Range` ou décalage d'envoi). Les fichiers reçus gardent leur
+      clé d'origine (un téléchargement YouTube reste `yt:`) et rejoignent la
+      bibliothèque avec leur pochette (pochette intégrée au fichier ou image
+      d'un téléchargement YouTube, transférée à part).
+- [x] Choix : aucun, téléchargements YouTube seulement, tout, ou sélection
+      manuelle (« Choose files to copy… »).
+
+Limites connues : horloges des appareils supposées à peu près justes (la
+dernière écriture gagne) ; Windows demande d'autoriser My Zik sur les réseaux
+privés au premier lancement ; non testé sur un vrai téléphone.
 
 ### Sécurité
 
