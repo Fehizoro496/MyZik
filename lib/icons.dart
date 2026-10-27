@@ -77,6 +77,11 @@ class AppIcons {
   static const IconData delete = CupertinoIcons.trash;
   static const IconData deleteFilled = CupertinoIcons.trash_fill;
 
+  /// Synchronization between the phone and the computer.
+  static const IconData sync = CupertinoIcons.arrow_2_circlepath;
+  static const IconData qrCode = CupertinoIcons.qrcode_viewfinder;
+  static const IconData phone = CupertinoIcons.device_phone_portrait;
+
   static const IconData video = CupertinoIcons.play_rectangle;
   static const IconData offline = CupertinoIcons.wifi_slash;
 }

@@ -5,8 +5,10 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../data/song_key.dart';
 import '../models.dart';
+import '../sync/sync_store.dart';
 import 'library_provider.dart';
 import 'shared_preferences_provider.dart';
+import 'sync_providers.dart';
 
 const _kPlaylists = SongKeyMigration.playlistsPreference;
 
@@ -40,7 +42,7 @@ class PlaylistsNotifier extends Notifier<List<Playlist>> {
       name: name.trim(),
     );
     state = [...state, playlist];
-    _persist();
+    _persist(playlist.id);
     return playlist;
   }
 
@@ -49,7 +51,7 @@ class PlaylistsNotifier extends Notifier<List<Playlist>> {
       for (final p in state)
         if (p.id == id) p.copyWith(name: name.trim()) else p,
     ];
-    _persist();
+    _persist(id);
   }
 
   void delete(String id) {
@@ -57,7 +59,7 @@ class PlaylistsNotifier extends Notifier<List<Playlist>> {
       for (final p in state)
         if (p.id != id) p,
     ];
-    _persist();
+    _persist(id, deleted: true);
   }
 
   /// Appends [song] to the playlist unless it is already there (playlists
@@ -71,7 +73,7 @@ class PlaylistsNotifier extends Notifier<List<Playlist>> {
         else
           p,
     ];
-    _persist();
+    _persist(id);
   }
 
   void removeSong(String id, Song song) {
@@ -88,7 +90,7 @@ class PlaylistsNotifier extends Notifier<List<Playlist>> {
         else
           p,
     ];
-    _persist();
+    _persist(id);
   }
 
   /// Reorders the playlist to [ordered] (the songs the UI shows, in their new
@@ -110,14 +112,47 @@ class PlaylistsNotifier extends Notifier<List<Playlist>> {
         else
           p,
     ];
-    _persist();
+    _persist(id);
   }
 
-  void _persist() {
+  /// Applies a playlist created or changed on another device.
+  void putFromSync(
+    String id, {
+    required String name,
+    required List<String> songKeys,
+  }) {
+    final exists = state.any((p) => p.id == id);
+    state = exists
+        ? [
+            for (final p in state)
+              if (p.id == id) p.copyWith(name: name, songKeys: songKeys) else p,
+          ]
+        : [...state, Playlist(id: id, name: name, songKeys: songKeys)];
+    _persist(null);
+  }
+
+  /// Applies a playlist deleted on another device.
+  void removeFromSync(String id) {
+    if (!state.any((p) => p.id == id)) return;
+    state = [
+      for (final p in state)
+        if (p.id != id) p,
+    ];
+    _persist(null);
+  }
+
+  /// Saves the playlists and records [changed] (unless null: a change from
+  /// another device) for synchronization.
+  void _persist(String? changed, {bool deleted = false}) {
     _prefs.setString(
       _kPlaylists,
       jsonEncode([for (final p in state) p.toJson()]),
     );
+    if (changed != null) {
+      ref
+          .read(syncStoreProvider)
+          .touch(SyncIds.forPlaylist(changed), deleted: deleted);
+    }
   }
 }
 

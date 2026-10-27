@@ -3,7 +3,9 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../data/song_key.dart';
 import '../models.dart';
+import '../sync/sync_store.dart';
 import 'shared_preferences_provider.dart';
+import 'sync_providers.dart';
 
 /// The liked songs, as a set of [Song.songKey]s persisted to
 /// [SharedPreferences] so likes survive an app restart. Keys rather than full
@@ -21,10 +23,23 @@ class LikedNotifier extends Notifier<Set<String>> {
   bool isLiked(Song song) => state.contains(song.songKey);
 
   void toggle(Song song) {
+    final key = song.songKey;
     final next = Set<String>.from(state);
-    if (!next.add(song.songKey)) next.remove(song.songKey);
-    state = next;
-    _prefs.setStringList(SongKeyMigration.likedKeysPreference, next.toList());
+    final liked = next.add(key);
+    if (!liked) next.remove(key);
+    _save(next);
+    ref.read(syncStoreProvider).touch(SyncIds.forLike(key), deleted: !liked);
+  }
+
+  /// Applies a like or unlike made on another device.
+  void setFromSync(String songKey, {required bool liked}) {
+    final next = Set<String>.from(state);
+    if (liked ? next.add(songKey) : next.remove(songKey)) _save(next);
+  }
+
+  void _save(Set<String> keys) {
+    state = keys;
+    _prefs.setStringList(SongKeyMigration.likedKeysPreference, keys.toList());
   }
 }
 

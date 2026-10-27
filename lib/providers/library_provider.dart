@@ -10,6 +10,7 @@ import '../models.dart';
 import 'downloads_provider.dart';
 import 'liked_provider.dart';
 import 'playlists_provider.dart';
+import 'received_tracks_provider.dart';
 import 'shared_preferences_provider.dart';
 
 /// Source of the track library for this platform. A single instance is
@@ -195,7 +196,7 @@ class LibraryNotifier extends Notifier<LibraryState> {
   LibraryState build() {
     // [load] awaits the repository; the container may be gone by then.
     ref.onDispose(() => _disposed = true);
-    ref.listen(downloadsProvider.select((d) => d.saved), (_, _) {
+    void refresh() {
       final songs = _withDownloads(_deviceSongs);
       state = state.copyWith(
         songs: songs,
@@ -205,14 +206,20 @@ class LibraryNotifier extends Notifier<LibraryState> {
           final status => status,
         },
       );
-    });
+    }
+
+    ref.listen(downloadsProvider.select((d) => d.saved), (_, _) => refresh());
+    ref.listen(receivedTracksProvider, (_, _) => refresh());
     Future.microtask(load);
     return const LibraryState(status: LibraryStatus.loading);
   }
 
+  /// [device] songs plus the YouTube downloads and the files received from
+  /// the user's other device.
   List<Song> _withDownloads(List<Song> device) => [
     ...device,
     ...ref.read(downloadsProvider).songs,
+    for (final track in ref.read(receivedTracksProvider)) track.toSong(),
   ];
 
   /// Bumped by every [load], so a slower, older key resolution can't
@@ -226,6 +233,8 @@ class LibraryNotifier extends Notifier<LibraryState> {
     // Wait for saved downloads so the first published library (which playback
     // resume relies on) already contains them.
     await ref.read(downloadsProvider.notifier).ready;
+    // Files received from another device join through the listener in
+    // [build] once read: their folder isn't awaited here.
     try {
       final granted = await repo.ensurePermission();
       if (_disposed) return;

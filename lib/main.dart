@@ -9,6 +9,7 @@ import 'desktop/desktop_shell.dart';
 import 'providers/audio_handler.dart';
 import 'providers/navigation_provider.dart';
 import 'providers/shared_preferences_provider.dart';
+import 'providers/sync_providers.dart';
 import 'screens/collection_screen.dart';
 import 'screens/home_screen.dart';
 import 'screens/my_music_screen.dart';
@@ -18,6 +19,7 @@ import 'screens/liked_screen.dart';
 import 'screens/playlist_screen.dart';
 import 'screens/search_screen.dart';
 import 'screens/song_detail_screen.dart';
+import 'screens/sync_screen.dart';
 import 'theme.dart';
 
 void main() async {
@@ -46,14 +48,23 @@ void main() async {
   } else {
     audioHandler = NoopAudioHandler();
   }
+  final container = ProviderContainer(
+    overrides: [
+      sharedPreferencesProvider.overrideWithValue(prefs),
+      audioHandlerProvider.overrideWithValue(audioHandler),
+    ],
+  );
+  // Synchronization runs with the app: the computer serves paired phones,
+  // a paired phone syncs on launch and whenever it comes back to the
+  // foreground. Started here rather than by the shells, so widget tests never
+  // open sockets.
+  if (_isDesktop) {
+    container.read(syncServerProvider.notifier).start();
+  } else if (!kIsWeb) {
+    container.read(syncClientProvider);
+  }
   runApp(
-    ProviderScope(
-      overrides: [
-        sharedPreferencesProvider.overrideWithValue(prefs),
-        audioHandlerProvider.overrideWithValue(audioHandler),
-      ],
-      child: const MyZikApp(),
-    ),
+    UncontrolledProviderScope(container: container, child: const MyZikApp()),
   );
 }
 
@@ -112,6 +123,8 @@ class PlayerShell extends ConsumerWidget {
         return const PlaylistScreen();
       case AppScreen.songDetail:
         return const SongDetailScreen();
+      case AppScreen.sync:
+        return const SyncScreen();
     }
   }
 

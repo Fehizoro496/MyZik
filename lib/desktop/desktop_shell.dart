@@ -18,6 +18,7 @@ import 'now_playing.dart';
 import 'pages.dart';
 import 'player_bar.dart';
 import 'side_panel.dart';
+import 'sync_page.dart';
 
 /// The desktop layout: sidebar, page area with a top bar, optional lyrics or
 /// queue panel on the right, and a player bar along the bottom, or Now
@@ -159,6 +160,7 @@ class _DesktopShellState extends ConsumerState<DesktopShell> {
       DesktopSection.liked => const LikedPage(),
       DesktopSection.playlists => const PlaylistsPage(),
       DesktopSection.discover => const DiscoverPage(),
+      DesktopSection.sync => const SyncPage(),
     };
   }
 }
@@ -378,6 +380,7 @@ class _Sidebar extends ConsumerWidget {
           item(DesktopSection.albums, AppIcons.category, 'Albums'),
           item(DesktopSection.artists, AppIcons.folder, 'Artists'),
           item(DesktopSection.liked, AppIcons.heart, 'Liked songs'),
+          item(DesktopSection.sync, AppIcons.sync, 'Sync with phone'),
           SidebarHeading(
             'PLAYLISTS',
             trailing: IconButton(

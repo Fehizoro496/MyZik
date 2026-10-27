@@ -78,6 +78,12 @@ dependencies:
   # Reads tags and covers of the audio files in the desktop music folders.
   audio_metadata_reader: ^1.8.1
 
+  # Phone ↔ computer sync over Wi-Fi: mDNS to find the computer, the pairing
+  # QR code it shows, and the phone camera to scan it.
+  nsd: ^5.0.1
+  qr_flutter: ^4.1.0
+  mobile_scanner: ^7.4.2
+
 dev_dependencies:
   flutter_test:
     sdk: flutter

@@ -18,11 +18,20 @@
     <!-- Progress notifications for background downloads (Android 13+, asked
          on the first download). -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- Sync with the computer: find it on the Wi-Fi (mDNS) and scan its
+         pairing QR code. -->
+    <uses-permission android:name="android.permission.CHANGE_WIFI_MULTICAST_STATE" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <uses-permission android:name="android.permission.CAMERA" />
+    <uses-feature android:name="android.hardware.camera" android:required="false" />
     <application
         android:label="my_zik"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher"
-        android:requestLegacyExternalStorage="true">
+        android:requestLegacyExternalStorage="true"
+        android:usesCleartextTraffic="true">
+        <!-- usesCleartextTraffic: the computer serves sync over plain HTTP on
+             the local network (paired devices only, with a token). -->
         <activity
             android:name=".MainActivity"
             android:exported="true"

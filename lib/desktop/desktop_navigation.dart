@@ -3,7 +3,16 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models.dart';
 
 /// Top-level destinations listed in the desktop sidebar.
-enum DesktopSection { home, songs, albums, artists, liked, playlists, discover }
+enum DesktopSection {
+  home,
+  songs,
+  albums,
+  artists,
+  liked,
+  playlists,
+  discover,
+  sync,
+}
 
 /// A page of the desktop shell: a sidebar [section], optionally narrowed to
 /// one album/artist ([collection]), one playlist ([playlistId]) or library

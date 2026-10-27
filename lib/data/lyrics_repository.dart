@@ -200,6 +200,7 @@ class LyricsRepository {
     Dio? dio,
     String apiKey = groqApiKey,
     Future<Directory> Function()? cacheDirectory,
+    this.onStored,
   }) : _dio = dio ?? _createDio(),
        _apiKey = apiKey,
        _cacheDirectory = cacheDirectory ?? getApplicationSupportDirectory;
@@ -207,6 +208,11 @@ class LyricsRepository {
   final Dio _dio;
   final String _apiKey;
   final Future<Directory> Function() _cacheDirectory;
+
+  /// Told whenever lyrics are stored for a song key: [found] when looked up
+  /// online, false when written, edited or timed by the listener. Lets them
+  /// follow the track to the listener's other devices.
+  final void Function(String songKey, {required bool found})? onStored;
 
   static Dio _createDio() {
     final dio = Dio(
@@ -306,7 +312,7 @@ class LyricsRepository {
     if (askLrclib) {
       final lyrics = await _fromLrclib(song);
       if (lyrics != null) {
-        await _writeCache(file, song, lyrics.toJson());
+        await _writeCache(file, song, lyrics.toJson(), found: true);
         return lyrics;
       }
     }
@@ -333,7 +339,7 @@ class LyricsRepository {
       await cacheMiss(web: true);
       return null;
     }
-    await _writeCache(file, song, lyrics.toJson());
+    await _writeCache(file, song, lyrics.toJson(), found: true);
     return lyrics;
   }
 
@@ -390,7 +396,7 @@ class LyricsRepository {
       edited: lyrics.edited,
     );
     final file = await _cacheFile(song);
-    await _writeCache(file, song, saved.toJson());
+    await _writeCache(file, song, saved.toJson(), found: false);
     return saved;
   }
 
@@ -704,11 +710,8 @@ class LyricsRepository {
   /// another key (the file was re-tagged or re-encoded, or comes from another
   /// device).
   Future<File> _cacheFile(Song song) async {
-    final base = await _cacheDirectory();
-    final dir = Directory('${base.path}${Platform.pathSeparator}lyrics');
-    if (!dir.existsSync()) await dir.create(recursive: true);
-    final safeName = song.songKey.replaceAll(RegExp(r'[^a-zA-Z0-9._-]'), '_');
-    final target = File('${dir.path}${Platform.pathSeparator}$safeName.json');
+    final dir = await _lyricsDirectory();
+    final target = _fileForKey(dir, song.songKey);
     if (target.existsSync()) return target;
 
     final legacy = File('${dir.path}${Platform.pathSeparator}${song.id}.json');
@@ -716,7 +719,7 @@ class LyricsRepository {
       try {
         final record = jsonDecode(await legacy.readAsString());
         if (record is Map<String, dynamic>) {
-          await _writeCache(target, song, record);
+          await _writeCache(target, song, record, found: !_isHandMade(record));
           await legacy.delete();
           return target;
         }
@@ -734,7 +737,12 @@ class LyricsRepository {
         if (other is String &&
             record['miss'] != true &&
             SongKey.sameRecording(other, signature)) {
-          await _writeCache(target, song, Map<String, dynamic>.from(record));
+          await _writeCache(
+            target,
+            song,
+            Map<String, dynamic>.from(record),
+            found: !_isHandMade(record),
+          );
           break;
         }
       } catch (_) {
@@ -744,10 +752,108 @@ class LyricsRepository {
     return target;
   }
 
-  Future<void> _writeCache(File file, Song song, Map<String, dynamic> record) =>
-      file.writeAsString(
-        jsonEncode({...record, '_songMetadata': SongKey.metadataKey(song)}),
-      );
+  /// Writes [record] for [song]. Lyrics (not a "not found") are reported to
+  /// [onStored] when [found] says how they came.
+  Future<void> _writeCache(
+    File file,
+    Song song,
+    Map<String, dynamic> record, {
+    bool? found,
+  }) async {
+    await file.writeAsString(
+      jsonEncode({
+        ...record,
+        '_songKey': song.songKey,
+        '_songMetadata': SongKey.metadataKey(song),
+      }),
+    );
+    if (found != null && _hasLyrics(record)) {
+      onStored?.call(song.songKey, found: found);
+    }
+  }
+
+  Future<Directory> _lyricsDirectory() async {
+    final base = await _cacheDirectory();
+    final dir = Directory('${base.path}${Platform.pathSeparator}lyrics');
+    if (!dir.existsSync()) await dir.create(recursive: true);
+    return dir;
+  }
+
+  static File _fileForKey(Directory dir, String songKey) {
+    final safeName = songKey.replaceAll(RegExp(r'[^a-zA-Z0-9._-]'), '_');
+    return File('${dir.path}${Platform.pathSeparator}$safeName.json');
+  }
+
+  /// Whether a cache [record] holds lyrics rather than a "not found".
+  static bool _hasLyrics(Object? record) =>
+      record is Map && record['miss'] != true;
+
+  /// Whether [record] holds lyrics the listener wrote, edited or timed.
+  static bool _isHandMade(Object? record) =>
+      record is Map &&
+      (record['edited'] == true ||
+          record['source'] == LyricsSource.manual.name);
+
+  /// Every song key with stored lyrics, mapped to whether they were found
+  /// online (rather than made by the listener).
+  Future<Map<String, bool>> storedLyrics() async {
+    final dir = await _lyricsDirectory();
+    final stored = <String, bool>{};
+    await for (final file in dir.list(followLinks: false)) {
+      if (file is! File || !file.path.endsWith('.json')) continue;
+      try {
+        final record = jsonDecode(await file.readAsString());
+        if (!_hasLyrics(record)) continue;
+        final key = record['_songKey'] is String
+            ? record['_songKey'] as String
+            : _keyFromFileName(file.path);
+        if (key != null) stored[key] = !_isHandMade(record);
+      } catch (_) {
+        // Unreadable entry: not synchronized.
+      }
+    }
+    return stored;
+  }
+
+  /// Files saved before keys were recorded inside: `fp:` and `yt:` keys
+  /// only lost their colon in the file name.
+  static String? _keyFromFileName(String path) {
+    final name = path.split(RegExp(r'[\\/]')).last;
+    final match = RegExp(r'^(fp|yt)_(.+)\.json$').firstMatch(name);
+    return match == null ? null : '${match[1]}:${match[2]}';
+  }
+
+  /// The stored lyrics for [songKey], with their timings, to send to
+  /// another device.
+  Future<Map<String, dynamic>?> readStoredLyrics(String songKey) async {
+    final file = _fileForKey(await _lyricsDirectory(), songKey);
+    try {
+      if (!file.existsSync()) return null;
+      final record = jsonDecode(await file.readAsString());
+      return _hasLyrics(record)
+          ? Map<String, dynamic>.from(record as Map)
+          : null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// Stores lyrics received from another device under [songKey]. Not
+  /// reported to [onStored]: they came from synchronization.
+  Future<void> writeSyncedLyrics(
+    String songKey,
+    Map<String, dynamic> record,
+  ) async {
+    Lyrics.fromJson(record); // Refuse what can't be read back.
+    final file = _fileForKey(await _lyricsDirectory(), songKey);
+    await file.writeAsString(jsonEncode({...record, '_songKey': songKey}));
+  }
+
+  /// Removes the lyrics stored under [songKey].
+  Future<void> deleteLyrics(String songKey) async {
+    final file = _fileForKey(await _lyricsDirectory(), songKey);
+    if (file.existsSync()) await file.delete();
+  }
 }
 
 /// Structured search hints keep noisy uploader metadata out of the first query

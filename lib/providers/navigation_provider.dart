@@ -10,6 +10,7 @@ enum AppScreen {
   collection,
   playlist,
   songDetail,
+  sync,
 }
 
 /// The screen currently shown by [PlayerShell]. Pure in-memory UI state — not

@@ -2,9 +2,17 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../data/lyrics_repository.dart';
 import '../models.dart';
+import '../sync/sync_store.dart';
+import 'sync_providers.dart';
 
 final lyricsRepositoryProvider = Provider<LyricsRepository>(
-  (ref) => LyricsRepository(),
+  (ref) => LyricsRepository(
+    // Lyrics follow the track to the listener's other devices, timings
+    // included; what the listener made outranks what was found online.
+    onStored: (songKey, {required found}) => ref
+        .read(syncStoreProvider)
+        .touch(SyncIds.forLyrics(songKey), found: found),
+  ),
 );
 
 /// Lyrics for one track: cache, then LRCLIB, then a web search through Groq.

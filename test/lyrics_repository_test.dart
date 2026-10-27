@@ -288,6 +288,53 @@ plain line without a timestamp
       expect((await repository.find(retagged))?.plain, 'Saved words');
     },
   );
+
+  test(
+    'stored lyrics are reported for sync, found apart from hand-made',
+    () async {
+      final directory = await Directory.systemTemp.createTemp('myzik_stored_');
+      addTearDown(() => directory.delete(recursive: true));
+      final reported = <(String, bool)>[];
+      final repository = LyricsRepository(
+        dio: _offlineDio(),
+        apiKey: '',
+        cacheDirectory: () async => directory,
+        onStored: (songKey, {required found}) => reported.add((songKey, found)),
+      );
+      // Found by an older version, cached under the device id.
+      File('${directory.path}/lyrics/3.json')
+        ..createSync(recursive: true)
+        ..writeAsStringSync(
+          jsonEncode(
+            const Lyrics(source: LyricsSource.lrclib, plain: 'Found').toJson(),
+          ),
+        );
+      const found = Song(id: 3, title: 'A', artist: 'B', contentKey: 'fp:a');
+      const timed = Song(id: 4, title: 'C', artist: 'D', contentKey: 'fp:c');
+      const missing = Song(id: 5, title: 'E', artist: 'F', contentKey: 'fp:e');
+
+      await repository.find(found);
+      await repository.saveLyrics(
+        timed,
+        const Lyrics(source: LyricsSource.manual, plain: 'Mine'),
+      );
+      // A "not found" is not lyrics: nothing to sync.
+      expect(await repository.find(missing), isNull);
+
+      expect(reported, [('fp:a', true), ('fp:c', false)]);
+      expect(await repository.storedLyrics(), {'fp:a': true, 'fp:c': false});
+      expect((await repository.readStoredLyrics('fp:a'))?['plain'], 'Found');
+      expect(await repository.readStoredLyrics('fp:e'), isNull);
+
+      // Lyrics from the other device are stored without being reported back.
+      await repository.writeSyncedLyrics(
+        'fp:e',
+        const Lyrics(source: LyricsSource.manual, plain: 'Synced').toJson(),
+      );
+      expect(reported, hasLength(2));
+      expect((await repository.find(missing))?.plain, 'Synced');
+    },
+  );
 }
 
 /// LRCLIB answers "not found", so only the cache can provide lyrics.
