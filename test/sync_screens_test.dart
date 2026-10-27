@@ -69,6 +69,10 @@ class _FakeClient extends SyncClientNotifier {
 
   @override
   void setMode(TransferMode mode) => state = state.copyWith(mode: mode);
+
+  @override
+  void setTransport(SyncTransport transport) =>
+      state = state.copyWith(transport: transport);
 }
 
 Future<ProviderContainer> _pump(
@@ -159,6 +163,33 @@ void main() {
 
     await tester.pumpWidget(const SizedBox.shrink());
   });
+
+  testWidgets('an Android phone can pair through the USB cable', (
+    tester,
+  ) async {
+    final client = _FakeClient(const SyncClientState());
+    final container = await _pump(
+      tester,
+      desktop: false,
+      overrides: [syncClientProvider.overrideWith(() => client)],
+    );
+    container.read(navigationProvider.notifier).goTo(AppScreen.sync);
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('USB cable'));
+    await tester.pumpAndSettle();
+    expect(container.read(syncClientProvider).transport, SyncTransport.usb);
+    expect(find.textContaining('USB debugging'), findsWidgets);
+
+    await tester.tap(find.text('Enter the code by hand'));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byType(TextField).at(2), '654321');
+    await tester.tap(find.text('Pair'));
+    await tester.pumpAndSettle();
+    expect(client.pairedWith?.hosts, ['127.0.0.1']);
+
+    await tester.pumpWidget(const SizedBox.shrink());
+  }, variant: TargetPlatformVariant.only(TargetPlatform.android));
 
   testWidgets('a paired phone syncs on demand and picks a transfer mode', (
     tester,

@@ -11,6 +11,7 @@ import '../sync/sync_engine.dart';
 import '../sync/sync_files.dart';
 import '../sync/sync_server.dart';
 import '../sync/sync_store.dart';
+import '../sync/usb_bridge.dart';
 import 'shared_preferences_provider.dart';
 
 /// The journal of synchronized changes on this device.
@@ -28,6 +29,32 @@ final syncDiscoveryProvider = Provider<SyncDiscovery>(
   (ref) => NsdSyncDiscovery(),
 );
 
+final usbBridgeProvider = Provider<UsbBridge>((ref) => UsbBridge());
+
+/// Sync by USB cable on the computer: the phones plugged in and whether
+/// they reach the server.
+class UsbSyncState {
+  const UsbSyncState({
+    this.enabled = false,
+    this.adb,
+    this.adbMissing = false,
+    this.devices = const [],
+    this.connected = const {},
+    this.error,
+  });
+
+  final bool enabled;
+
+  /// The `adb` in use, once found.
+  final String? adb;
+  final bool adbMissing;
+  final List<UsbDevice> devices;
+
+  /// Serials of the phones whose `127.0.0.1` leads to the server.
+  final Set<String> connected;
+  final String? error;
+}
+
 /// What the computer's Sync page shows.
 class SyncServerState {
   const SyncServerState({
@@ -38,6 +65,7 @@ class SyncServerState {
     this.devices = const [],
     this.pairing,
     this.lastEvent,
+    this.usb = const UsbSyncState(),
   });
 
   final bool running;
@@ -49,6 +77,7 @@ class SyncServerState {
   /// The pairing window open right now, as shown in the QR code.
   final PairingPayload? pairing;
   final String? lastEvent;
+  final UsbSyncState usb;
 
   SyncServerState copyWith({
     bool? running,
@@ -59,6 +88,7 @@ class SyncServerState {
     PairingPayload? pairing,
     bool clearPairing = false,
     String? lastEvent,
+    UsbSyncState? usb,
   }) => SyncServerState(
     running: running ?? this.running,
     port: port ?? this.port,
@@ -67,6 +97,7 @@ class SyncServerState {
     devices: devices ?? this.devices,
     pairing: clearPairing ? null : pairing ?? this.pairing,
     lastEvent: lastEvent ?? this.lastEvent,
+    usb: usb ?? this.usb,
   );
 }
 
@@ -75,6 +106,11 @@ class SyncServerState {
 class SyncServerNotifier extends Notifier<SyncServerState> {
   late final SyncServer _server;
   StreamSubscription<SyncServerEvent>? _events;
+  Timer? _usbTimer;
+  bool _usbChecking = false;
+
+  static const _usbKey = 'sync.usb.enabled';
+  static const _adbKey = 'sync.usb.adbPath';
 
   @override
   SyncServerState build() {
@@ -85,7 +121,13 @@ class SyncServerNotifier extends Notifier<SyncServerState> {
       name: Platform.localHostname,
     );
     _events = _server.events.listen(_onEvent);
+    final prefs = ref.read(sharedPreferencesProvider);
+    ref.read(usbBridgeProvider).adbPath = prefs.getString(_adbKey);
+    if (prefs.getBool(_usbKey) ?? false) {
+      Future.microtask(() => setUsb(true));
+    }
     ref.onDispose(() {
+      _usbTimer?.cancel();
       _events?.cancel();
       ref.read(syncDiscoveryProvider).stopAdvertising();
       _server.dispose();
@@ -132,6 +174,74 @@ class SyncServerNotifier extends Notifier<SyncServerState> {
     state = state.copyWith(devices: _server.devices);
   }
 
+  /// Turns sync by USB cable on or off. While on, phones plugged in are
+  /// connected to the server every few seconds, as they come.
+  Future<void> setUsb(bool enabled) async {
+    ref.read(sharedPreferencesProvider).setBool(_usbKey, enabled);
+    _usbTimer?.cancel();
+    _usbTimer = null;
+    if (!enabled) {
+      state = state.copyWith(usb: const UsbSyncState());
+      return;
+    }
+    state = state.copyWith(usb: const UsbSyncState(enabled: true));
+    await start();
+    _usbTimer = Timer.periodic(const Duration(seconds: 3), (_) => checkUsb());
+    await checkUsb();
+  }
+
+  /// Uses [path] as `adb`, when it is not found on its own.
+  Future<void> chooseAdb(String path) async {
+    ref.read(sharedPreferencesProvider).setString(_adbKey, path);
+    ref.read(usbBridgeProvider).adbPath = path;
+    state = state.copyWith(usb: UsbSyncState(enabled: state.usb.enabled));
+    if (state.usb.enabled) await checkUsb();
+  }
+
+  /// Lists the phones plugged in and connects the new ones.
+  Future<void> checkUsb() async {
+    final port = _server.boundPort;
+    if (_usbChecking || !state.usb.enabled || port == null) return;
+    _usbChecking = true;
+    final bridge = ref.read(usbBridgeProvider);
+    var usb = state.usb;
+    try {
+      final adb = usb.adb ?? await bridge.findAdb();
+      if (adb == null) {
+        usb = UsbSyncState(enabled: true, adbMissing: true);
+        return;
+      }
+      final devices = await bridge.devices(adb);
+      final connected = {
+        for (final serial in usb.connected)
+          if (devices.any((d) => d.ready && d.serial == serial)) serial,
+      };
+      String? error;
+      for (final device in devices) {
+        if (!device.ready || connected.contains(device.serial)) continue;
+        try {
+          await bridge.reverse(adb, device, port);
+          connected.add(device.serial);
+        } on UsbBridgeException catch (e) {
+          error = e.message;
+        }
+      }
+      usb = UsbSyncState(
+        enabled: true,
+        adb: adb,
+        devices: devices,
+        connected: connected,
+        error: error,
+      );
+    } catch (e) {
+      usb = UsbSyncState(enabled: true, adb: usb.adb, error: '$e');
+    } finally {
+      _usbChecking = false;
+      // Turned off meanwhile: stay off.
+      if (state.usb.enabled) state = state.copyWith(usb: usb);
+    }
+  }
+
   void _onEvent(SyncServerEvent event) {
     state = state.copyWith(
       devices: _server.devices,
@@ -160,6 +270,7 @@ class SyncClientState {
   const SyncClientState({
     this.connection,
     this.mode = TransferMode.downloads,
+    this.transport = SyncTransport.wifi,
     this.syncing = false,
     this.progress,
     this.lastSyncAt,
@@ -169,6 +280,7 @@ class SyncClientState {
 
   final SyncConnection? connection;
   final TransferMode mode;
+  final SyncTransport transport;
   final bool syncing;
   final SyncProgress? progress;
   final DateTime? lastSyncAt;
@@ -181,6 +293,7 @@ class SyncClientState {
     SyncConnection? connection,
     bool clearConnection = false,
     TransferMode? mode,
+    SyncTransport? transport,
     bool? syncing,
     SyncProgress? progress,
     DateTime? lastSyncAt,
@@ -189,6 +302,7 @@ class SyncClientState {
   }) => SyncClientState(
     connection: clearConnection ? null : connection ?? this.connection,
     mode: mode ?? this.mode,
+    transport: transport ?? this.transport,
     syncing: syncing ?? this.syncing,
     progress: progress,
     lastSyncAt: lastSyncAt ?? this.lastSyncAt,
@@ -202,6 +316,7 @@ class SyncClientState {
 class SyncClientNotifier extends Notifier<SyncClientState> {
   late final SyncClient _client;
   static const _modeKey = 'sync.transferMode';
+  static const _transportKey = 'sync.transport';
 
   @override
   SyncClientState build() {
@@ -222,9 +337,18 @@ class SyncClientNotifier extends Notifier<SyncClientState> {
               m.name == ref.read(sharedPreferencesProvider).getString(_modeKey),
         )
         .firstOrNull;
+    final transport = SyncTransport.values
+        .where(
+          (t) =>
+              t.name ==
+              ref.read(sharedPreferencesProvider).getString(_transportKey),
+        )
+        .firstOrNull;
+    _client.transport = transport ?? SyncTransport.wifi;
     final initial = SyncClientState(
       connection: _client.connection,
       mode: mode ?? TransferMode.downloads,
+      transport: _client.transport,
       lastSyncAt: _client.lastSyncAt,
     );
     if (initial.paired) Future.microtask(syncIfPaired);
@@ -265,7 +389,16 @@ class SyncClientNotifier extends Notifier<SyncClientState> {
 
   void unpair() {
     _client.unpair();
-    state = SyncClientState(mode: state.mode);
+    state = SyncClientState(mode: state.mode, transport: state.transport);
+  }
+
+  /// Reaches the computer over Wi-Fi or by USB cable from now on.
+  void setTransport(SyncTransport transport) {
+    ref
+        .read(sharedPreferencesProvider)
+        .setString(_transportKey, transport.name);
+    _client.transport = transport;
+    state = state.copyWith(transport: transport);
   }
 
   void setMode(TransferMode mode) {

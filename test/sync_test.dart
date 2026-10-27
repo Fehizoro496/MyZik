@@ -496,6 +496,43 @@ void main() {
       expect(after.toUpload, isEmpty);
     });
 
+    test(
+      'over USB the phone reaches the computer at its own address',
+      () async {
+        // The QR code's Wi-Fi address is unreachable: only the cable works,
+        // as `adb reverse` makes the phone's 127.0.0.1 lead to the computer.
+        final payload = await openPairing();
+        final overCable = PairingPayload(
+          serverId: payload.serverId,
+          serverName: payload.serverName,
+          hosts: ['192.0.2.1'],
+          port: payload.port,
+          code: payload.code,
+        );
+        client.transport = SyncTransport.usb;
+        final connection = await client.pair(overCable, deviceName: 'Phone');
+        expect(connection.hosts, ['192.0.2.1']);
+        expect(connection.lastHost, isNull);
+
+        phone.set('like:fp:1', {});
+        final report = await client.sync();
+        expect(report.sent, greaterThan(0));
+        expect(desktop.data.values.keys, contains('like:fp:1'));
+
+        await server.stop();
+        await expectLater(
+          client.sync(),
+          throwsA(
+            isA<SyncException>().having(
+              (e) => e.message,
+              'message',
+              contains('USB'),
+            ),
+          ),
+        );
+      },
+    );
+
     test('the payload round-trips through the QR code text', () async {
       final payload = await openPairing();
       final decoded = PairingPayload.tryDecode(payload.encode())!;

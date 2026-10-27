@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
@@ -8,6 +9,7 @@ import '../providers/sync_providers.dart';
 import '../sync/sync_client.dart';
 import '../sync/sync_files.dart';
 import '../sync/sync_server.dart';
+import '../sync/usb_bridge.dart' show UsbBridge;
 import '../theme.dart';
 import '../widgets.dart';
 
@@ -79,16 +81,27 @@ class _Unpaired extends ConsumerWidget {
         ),
         const SizedBox(height: 10),
         Text(
-          'Keep your likes, playlists, lyrics and music in step with My Zik on '
-          'your computer, over your Wi-Fi.\n\n'
-          'On the computer, open Sync and choose “Pair a phone”, then scan '
-          'the code it shows.',
+          sync.transport == SyncTransport.usb
+              ? 'Keep your likes, playlists, lyrics and music in step with My '
+                    'Zik on your computer, through a USB cable.\n\n'
+                    'Plug the phone in and turn on USB debugging (Settings → '
+                    'Developer options). On the computer, open Sync, turn on '
+                    '“Sync by USB cable” and choose “Pair a phone”, then scan '
+                    'the code it shows.'
+              : 'Keep your likes, playlists, lyrics and music in step with My '
+                    'Zik on your computer, over your Wi-Fi.\n\n'
+                    'On the computer, open Sync and choose “Pair a phone”, '
+                    'then scan the code it shows.',
           style: TextStyle(
             color: AppColors.whiteAlpha(0.6),
             fontSize: 14,
             height: 1.4,
           ),
         ),
+        if (usbSyncSupported) ...[
+          const SizedBox(height: 20),
+          _TransportPicker(sync),
+        ],
         const SizedBox(height: 24),
         if (sync.syncing)
           _Progress(sync.progress)
@@ -106,7 +119,10 @@ class _Unpaired extends ConsumerWidget {
           const SizedBox(height: 10),
           OutlinedButton(
             onPressed: () async {
-              final payload = await _askPairingDetails(context);
+              final payload = await _askPairingDetails(
+                context,
+                usb: sync.transport == SyncTransport.usb,
+              );
               if (payload != null) await notifier.pairWith(payload);
             },
             child: const Text('Enter the code by hand'),
@@ -158,7 +174,8 @@ class _Paired extends ConsumerWidget {
                           ? sync.progress?.stage ?? 'Syncing…'
                           : sync.lastSyncAt == null
                           ? 'Not synced yet'
-                          : 'Synced ${_ago(sync.lastSyncAt!)}',
+                          : 'Synced ${_ago(sync.lastSyncAt!)}'
+                                '${sync.transport == SyncTransport.usb ? ' · USB cable' : ''}',
                       style: TextStyle(
                         color: AppColors.whiteAlpha(0.55),
                         fontSize: 13,
@@ -185,6 +202,19 @@ class _Paired extends ConsumerWidget {
             _describe(report),
             style: TextStyle(color: AppColors.whiteAlpha(0.5), fontSize: 13),
           ),
+        ],
+        if (usbSyncSupported) ...[
+          const SizedBox(height: 28),
+          const Text(
+            'Connection',
+            style: TextStyle(
+              color: AppColors.white,
+              fontSize: 16,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 12),
+          _TransportPicker(sync),
         ],
         const SizedBox(height: 28),
         const Text(
@@ -357,6 +387,53 @@ class _FilePickerState extends State<_FilePicker> {
   }
 }
 
+/// Whether this phone can sync by USB cable: it needs `adb`, so Android.
+bool get usbSyncSupported => defaultTargetPlatform == TargetPlatform.android;
+
+/// Chooses how the phone reaches the computer: Wi-Fi or USB cable.
+class _TransportPicker extends ConsumerWidget {
+  const _TransportPicker(this.sync);
+
+  final SyncClientState sync;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        SegmentedButton<SyncTransport>(
+          segments: const [
+            ButtonSegment(
+              value: SyncTransport.wifi,
+              icon: Icon(AppIcons.wifi, size: 18),
+              label: Text('Wi-Fi'),
+            ),
+            ButtonSegment(
+              value: SyncTransport.usb,
+              icon: Icon(AppIcons.cable, size: 18),
+              label: Text('USB cable'),
+            ),
+          ],
+          selected: {sync.transport},
+          onSelectionChanged: sync.syncing
+              ? null
+              : (selected) => ref
+                    .read(syncClientProvider.notifier)
+                    .setTransport(selected.first),
+        ),
+        if (sync.transport == SyncTransport.usb) ...[
+          const SizedBox(height: 8),
+          Text(
+            'Needs USB debugging on this phone and “Sync by USB cable” on '
+            'the computer. No Wi-Fi needed.',
+            style: TextStyle(color: AppColors.whiteAlpha(0.55), fontSize: 13),
+          ),
+        ],
+      ],
+    );
+  }
+}
+
 class _Progress extends StatelessWidget {
   const _Progress(this.progress);
 
@@ -456,21 +533,28 @@ class _ScanPageState extends State<_ScanPage> {
 }
 
 /// The computer's address and code, typed by hand (no camera).
-Future<PairingPayload?> _askPairingDetails(BuildContext context) =>
-    showDialog<PairingPayload>(
-      context: context,
-      builder: (_) => const _PairByHandDialog(),
-    );
+Future<PairingPayload?> _askPairingDetails(
+  BuildContext context, {
+  bool usb = false,
+}) => showDialog<PairingPayload>(
+  context: context,
+  builder: (_) => _PairByHandDialog(usb: usb),
+);
 
 class _PairByHandDialog extends StatefulWidget {
-  const _PairByHandDialog();
+  const _PairByHandDialog({this.usb = false});
+
+  /// Over USB the computer is at the phone's own address.
+  final bool usb;
 
   @override
   State<_PairByHandDialog> createState() => _PairByHandDialogState();
 }
 
 class _PairByHandDialogState extends State<_PairByHandDialog> {
-  final _host = TextEditingController();
+  late final _host = TextEditingController(
+    text: widget.usb ? UsbBridge.phoneHost : '',
+  );
   final _port = TextEditingController(text: '${SyncServer.defaultPort}');
   final _code = TextEditingController();
 
