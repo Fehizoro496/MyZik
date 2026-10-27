@@ -1,3 +1,5 @@
+import 'dart:math';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -10,6 +12,7 @@ import '../providers/playlists_provider.dart';
 import '../theme.dart';
 import '../widgets.dart';
 import 'desktop_navigation.dart';
+import 'desktop_style.dart';
 import 'dialogs.dart';
 import 'track_table.dart';
 
@@ -69,22 +72,55 @@ class PageHeader extends StatelessWidget {
 
 /// Plays [songs] from the first one, with the list as the queue.
 class PlayAllButton extends ConsumerWidget {
-  const PlayAllButton({super.key, required this.songs});
+  const PlayAllButton({super.key, required this.songs, this.size = 56});
 
   final List<Song> songs;
+  final double size;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    return FilledButton.icon(
+    return AccentPlayButton(
+      size: size,
       onPressed: songs.isEmpty
           ? null
           : () => ref
                 .read(playbackProvider.notifier)
                 .playSong(songs.first, context: songs),
-      icon: const Icon(AppIcons.playFilled, size: 16),
-      label: const Text('Play'),
     );
   }
+}
+
+/// Turns shuffle on and plays a random song of [songs].
+class ShuffleAllButton extends ConsumerWidget {
+  const ShuffleAllButton({super.key, required this.songs});
+
+  final List<Song> songs;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    return IconButton(
+      tooltip: 'Shuffle',
+      iconSize: 20,
+      onPressed: songs.isEmpty
+          ? null
+          : () {
+              final notifier = ref.read(playbackProvider.notifier);
+              if (!ref.read(playbackProvider).shuffle) notifier.toggleShuffle();
+              notifier.playSong(
+                songs[Random().nextInt(songs.length)],
+                context: songs,
+              );
+            },
+      icon: const Icon(AppIcons.shuffle),
+    );
+  }
+}
+
+/// "12 songs · 43 min".
+String songsSummary(List<Song> songs) {
+  final total = songs.fold(Duration.zero, (sum, s) => sum + s.duration);
+  final count = '${songs.length} song${songs.length == 1 ? '' : 's'}';
+  return total.inMinutes == 0 ? count : '$count · ${total.inMinutes} min';
 }
 
 /// Shows [child] once the library is loaded, a status message otherwise.
@@ -137,6 +173,33 @@ class HomePage extends ConsumerWidget {
         ? 'Good afternoon'
         : 'Good evening';
     final navigator = ref.read(desktopNavigatorProvider.notifier);
+    final shortcuts = [
+      _ShortcutTile(
+        label: 'Liked songs',
+        icon: AppIcons.heartFilled,
+        colors: const [AppColors.liked, AppColors.accentB],
+        onTap: () => navigator.openSection(DesktopSection.liked),
+      ),
+      for (final playlist in playlists.take(4))
+        _ShortcutTile(
+          label: playlist.name,
+          cover: PlaylistCover(
+            songs: ref.watch(playlistSongsProvider(playlist.id)),
+            size: 64,
+            radius: 0,
+            probeLimit: 4,
+          ),
+          onTap: () => navigator.open(
+            DesktopRoute(DesktopSection.playlists, playlistId: playlist.id),
+          ),
+        ),
+      _ShortcutTile(
+        label: 'Discover',
+        icon: AppIcons.search,
+        colors: const [AppColors.accentA, AppColors.accentB],
+        onTap: () => navigator.openSection(DesktopSection.discover),
+      ),
+    ];
     return _LibraryGate(
       child: ListView(
         padding: const EdgeInsets.only(bottom: 32),
@@ -147,62 +210,56 @@ class HomePage extends ConsumerWidget {
                 '${songs.length} songs · ${albums.length} albums · '
                 '${liked.length} liked',
           ),
+          const _ContinueListening(),
           Padding(
-            padding: const EdgeInsets.fromLTRB(28, 12, 28, 0),
-            child: Wrap(
-              spacing: 12,
-              runSpacing: 12,
-              children: [
-                _ShortcutTile(
-                  label: 'Liked songs',
-                  icon: AppIcons.heartFilled,
-                  colors: const [AppColors.liked, AppColors.accentB],
-                  onTap: () => navigator.openSection(DesktopSection.liked),
-                ),
-                for (final playlist in playlists.take(5))
-                  _ShortcutTile(
-                    label: playlist.name,
-                    icon: AppIcons.queue,
-                    colors:
-                        AppArt.gradients[playlist.name.hashCode.abs() %
-                            AppArt.gradients.length],
-                    onTap: () => navigator.open(
-                      DesktopRoute(
-                        DesktopSection.playlists,
-                        playlistId: playlist.id,
-                      ),
-                    ),
-                  ),
-                _ShortcutTile(
-                  label: 'Discover',
-                  icon: AppIcons.search,
-                  colors: const [AppColors.accentA, AppColors.accentB],
-                  onTap: () => navigator.openSection(DesktopSection.discover),
-                ),
-              ],
+            padding: const EdgeInsets.fromLTRB(28, 24, 28, 0),
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                const gap = 12.0;
+                final columns = max(
+                  1,
+                  ((constraints.maxWidth + gap) / (220 + gap)).floor(),
+                );
+                final width =
+                    (constraints.maxWidth - gap * (columns - 1)) / columns;
+                return Wrap(
+                  spacing: gap,
+                  runSpacing: gap,
+                  children: [
+                    for (final tile in shortcuts)
+                      SizedBox(width: width, child: tile),
+                  ],
+                );
+              },
             ),
           ),
           if (albums.isNotEmpty) ...[
-            const _SectionTitle('Albums'),
+            _SectionTitle(
+              'Albums',
+              onShowAll: () => navigator.openSection(DesktopSection.albums),
+            ),
             SizedBox(
-              height: 236,
+              height: 244,
               child: ListView.separated(
-                padding: const EdgeInsets.symmetric(horizontal: 28),
+                padding: const EdgeInsets.symmetric(horizontal: 22),
                 scrollDirection: Axis.horizontal,
                 itemCount: albums.length,
-                separatorBuilder: (_, _) => const SizedBox(width: 18),
+                separatorBuilder: (_, _) => const SizedBox(width: 8),
                 itemBuilder: (context, i) =>
-                    SizedBox(width: 176, child: CollectionCard(albums[i])),
+                    SizedBox(width: 184, child: CollectionCard(albums[i])),
               ),
             ),
           ],
           if (songs.isNotEmpty) ...[
-            const _SectionTitle('Songs'),
+            _SectionTitle(
+              'Songs',
+              onShowAll: () => navigator.openSection(DesktopSection.songs),
+            ),
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 28),
+              padding: const EdgeInsets.symmetric(horizontal: 22),
               child: Wrap(
                 spacing: 12,
-                runSpacing: 8,
+                runSpacing: 4,
                 children: [
                   for (final song in songs.take(12))
                     SizedBox(
@@ -219,18 +276,160 @@ class HomePage extends ConsumerWidget {
   }
 }
 
+/// The playing (or last played) track in a large card: resume it, see how
+/// far along it is, or open it full screen.
+class _ContinueListening extends ConsumerWidget {
+  const _ContinueListening();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final playback = ref.watch(playbackProvider);
+    final track = playback.current;
+    if (track == null) return const SizedBox.shrink();
+    final notifier = ref.read(playbackProvider.notifier);
+    final details = [track.artist, ?track.album].join(' · ');
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(28, 16, 28, 0),
+      child: Container(
+        padding: const EdgeInsets.all(24),
+        decoration: BoxDecoration(
+          color: DesktopColors.surface,
+          borderRadius: BorderRadius.circular(22),
+          border: Border.all(color: AppColors.whiteAlpha(0.06)),
+        ),
+        child: Row(
+          children: [
+            DecoratedBox(
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(16),
+                boxShadow: [
+                  BoxShadow(
+                    color: AppColors.accentA.withValues(alpha: 0.35),
+                    blurRadius: 48,
+                    offset: const Offset(0, 24),
+                    spreadRadius: -16,
+                  ),
+                ],
+              ),
+              child: SongArtwork(song: track, size: 168, radius: 16),
+            ),
+            const SizedBox(width: 28),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    playback.playing ? 'NOW PLAYING' : 'CONTINUE LISTENING',
+                    style: DesktopText.overline.copyWith(
+                      color: DesktopColors.accentText,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    track.title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontSize: 32,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: -0.6,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    details,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: AppColors.whiteAlpha(0.7),
+                      fontSize: 15,
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+                  Row(
+                    children: [
+                      DesktopPill(
+                        primary: true,
+                        icon: playback.playing
+                            ? AppIcons.pause
+                            : AppIcons.playFilled,
+                        label: playback.playing ? 'Pause' : 'Resume',
+                        onPressed: notifier.togglePlay,
+                      ),
+                      const SizedBox(width: 8),
+                      DesktopPill(
+                        label: 'Full screen',
+                        onPressed: () =>
+                            ref.read(desktopFullscreenProvider.notifier).state =
+                                true,
+                      ),
+                      const SizedBox(width: 20),
+                      Flexible(
+                        child: ConstrainedBox(
+                          constraints: const BoxConstraints(maxWidth: 260),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              ClipRRect(
+                                borderRadius: BorderRadius.circular(2),
+                                child: LinearProgressIndicator(
+                                  value: playback.progress,
+                                  minHeight: 4,
+                                  color: AppColors.accentA,
+                                  backgroundColor: AppColors.whiteAlpha(0.12),
+                                ),
+                              ),
+                              const SizedBox(height: 6),
+                              Text(
+                                '${playback.remaining} left',
+                                style: TextStyle(
+                                  color: AppColors.whiteAlpha(0.6),
+                                  fontSize: 12,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class _SectionTitle extends StatelessWidget {
-  const _SectionTitle(this.title);
+  const _SectionTitle(this.title, {this.onShowAll});
 
   final String title;
+  final VoidCallback? onShowAll;
 
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(28, 32, 28, 14),
-      child: Text(
-        title,
-        style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800),
+      padding: const EdgeInsets.fromLTRB(28, 32, 20, 12),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              title,
+              style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800),
+            ),
+          ),
+          if (onShowAll != null)
+            TextButton(
+              onPressed: onShowAll,
+              style: TextButton.styleFrom(
+                foregroundColor: DesktopColors.accentText,
+              ),
+              child: const Text('Show all'),
+            ),
+        ],
       ),
     );
   }
@@ -239,39 +438,47 @@ class _SectionTitle extends StatelessWidget {
 class _ShortcutTile extends StatelessWidget {
   const _ShortcutTile({
     required this.label,
-    required this.icon,
-    required this.colors,
     required this.onTap,
+    this.icon,
+    this.colors,
+    this.cover,
   });
 
   final String label;
-  final IconData icon;
-  final List<Color> colors;
   final VoidCallback onTap;
+
+  /// Either a gradient square with [icon], or a [cover].
+  final IconData? icon;
+  final List<Color>? colors;
+  final Widget? cover;
 
   @override
   Widget build(BuildContext context) {
     return Material(
-      color: AppColors.whiteAlpha(0.06),
-      borderRadius: BorderRadius.circular(8),
+      color: AppColors.whiteAlpha(0.04),
+      borderRadius: BorderRadius.circular(12),
       clipBehavior: Clip.antiAlias,
       child: InkWell(
         onTap: onTap,
+        hoverColor: AppColors.whiteAlpha(0.04),
         child: SizedBox(
-          width: 260,
           height: 64,
           child: Row(
             children: [
-              Container(
-                width: 64,
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                    colors: colors,
-                  ),
-                ),
-                child: Icon(icon, color: AppColors.white, size: 22),
+              SizedBox.square(
+                dimension: 64,
+                child:
+                    cover ??
+                    DecoratedBox(
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                          colors: colors!,
+                        ),
+                      ),
+                      child: Icon(icon, color: AppColors.white, size: 22),
+                    ),
               ),
               const SizedBox(width: 14),
               Expanded(
@@ -279,9 +486,13 @@ class _ShortcutTile extends StatelessWidget {
                   label,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(fontWeight: FontWeight.w700),
+                  style: const TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w700,
+                  ),
                 ),
               ),
+              const SizedBox(width: 14),
             ],
           ),
         ),
@@ -469,8 +680,8 @@ class SongsPage extends ConsumerWidget {
             : 'Nothing in your library matches “$query”.',
         header: PageHeader(
           title: q == null ? 'Songs' : 'Results for “$query”',
-          subtitle: '${songs.length} songs',
-          actions: [PlayAllButton(songs: songs)],
+          subtitle: songsSummary(songs),
+          actions: [PlayAllButton(songs: songs, size: 48)],
         ),
       ),
     );
@@ -529,16 +740,16 @@ class CollectionPage extends StatelessWidget {
       header: _Hero(
         cover: SongArtwork(
           song: collection.cover,
-          size: 180,
-          radius: 10,
+          size: 208,
+          radius: 18,
           circle: collection.isArtist,
         ),
         kind: collection.isArtist ? 'ARTIST' : 'ALBUM',
         title: collection.title,
         subtitle: collection.isArtist
-            ? collection.subtitle
-            : '${collection.subtitle} · ${collection.songs.length} songs',
-        actions: [PlayAllButton(songs: collection.songs)],
+            ? songsSummary(collection.songs)
+            : '${collection.subtitle} · ${songsSummary(collection.songs)}',
+        songs: collection.songs,
       ),
     );
   }
@@ -550,6 +761,7 @@ class _Hero extends StatelessWidget {
     required this.kind,
     required this.title,
     required this.subtitle,
+    required this.songs,
     this.actions = const [],
   });
 
@@ -557,51 +769,79 @@ class _Hero extends StatelessWidget {
   final String kind;
   final String title;
   final String subtitle;
+
+  /// What the play and shuffle buttons play.
+  final List<Song> songs;
+
+  /// Extra buttons after play and shuffle (rename, delete…).
   final List<Widget> actions;
 
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(28, 24, 28, 12),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.end,
+      padding: const EdgeInsets.fromLTRB(28, 16, 28, 12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          cover,
-          const SizedBox(width: 24),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  kind,
-                  style: TextStyle(
-                    color: AppColors.whiteAlpha(0.6),
-                    fontSize: 11,
-                    fontWeight: FontWeight.w700,
-                    letterSpacing: 1.4,
-                  ),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              DecoratedBox(
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(18),
+                  boxShadow: [
+                    BoxShadow(
+                      color: AppColors.accentA.withValues(alpha: 0.4),
+                      blurRadius: 60,
+                      offset: const Offset(0, 30),
+                      spreadRadius: -20,
+                    ),
+                  ],
                 ),
-                const SizedBox(height: 6),
-                Text(
-                  title,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    fontSize: 40,
-                    fontWeight: FontWeight.w800,
-                    letterSpacing: -1,
-                    height: 1.1,
-                  ),
+                child: cover,
+              ),
+              const SizedBox(width: 28),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(kind, style: DesktopText.overline),
+                    const SizedBox(height: 10),
+                    Text(
+                      title,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontSize: 56,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: -1.6,
+                        height: 1,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    Text(
+                      subtitle,
+                      style: TextStyle(
+                        color: AppColors.whiteAlpha(0.7),
+                        fontSize: 14,
+                      ),
+                    ),
+                  ],
                 ),
-                const SizedBox(height: 8),
-                Text(
-                  subtitle,
-                  style: TextStyle(color: AppColors.whiteAlpha(0.6)),
-                ),
-                const SizedBox(height: 16),
-                Wrap(spacing: 10, children: actions),
+              ),
+            ],
+          ),
+          const SizedBox(height: 28),
+          Row(
+            children: [
+              PlayAllButton(songs: songs),
+              const SizedBox(width: 12),
+              ShuffleAllButton(songs: songs),
+              for (final action in actions) ...[
+                const SizedBox(width: 8),
+                action,
               ],
-            ),
+            ],
           ),
         ],
       ),
@@ -627,26 +867,26 @@ class LikedPage extends ConsumerWidget {
         removeLabel: 'Remove from liked',
         header: _Hero(
           cover: Container(
-            width: 180,
-            height: 180,
+            width: 208,
+            height: 208,
             decoration: BoxDecoration(
               gradient: const LinearGradient(
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
                 colors: [AppColors.liked, AppColors.accentB],
               ),
-              borderRadius: BorderRadius.circular(10),
+              borderRadius: BorderRadius.circular(18),
             ),
             child: const Icon(
               AppIcons.heartFilled,
-              size: 64,
+              size: 72,
               color: AppColors.white,
             ),
           ),
           kind: 'PLAYLIST',
           title: 'Liked songs',
-          subtitle: '${songs.length} songs',
-          actions: [PlayAllButton(songs: songs)],
+          subtitle: songsSummary(songs),
+          songs: songs,
         ),
       ),
     );
@@ -795,13 +1035,13 @@ class PlaylistPage extends ConsumerWidget {
       onRemove: (song) => notifier.removeSong(playlistId, song.id),
       removeLabel: 'Remove from playlist',
       header: _Hero(
-        cover: PlaylistCover(songs: songs, size: 180, radius: 10),
+        cover: PlaylistCover(songs: songs, size: 208, radius: 18),
         kind: 'PLAYLIST',
         title: playlist.name,
-        subtitle: '${songs.length} songs',
+        subtitle: songsSummary(songs),
+        songs: songs,
         actions: [
-          PlayAllButton(songs: songs),
-          OutlinedButton.icon(
+          DesktopPill(
             onPressed: () async {
               final name = await showNameDialog(
                 context,
@@ -811,10 +1051,10 @@ class PlaylistPage extends ConsumerWidget {
               );
               if (name != null) notifier.rename(playlistId, name);
             },
-            icon: const Icon(AppIcons.edit, size: 16),
-            label: const Text('Rename'),
+            icon: AppIcons.edit,
+            label: 'Rename',
           ),
-          OutlinedButton.icon(
+          DesktopPill(
             onPressed: () async {
               final confirmed = await showDialog<bool>(
                 context: context,
@@ -838,8 +1078,8 @@ class PlaylistPage extends ConsumerWidget {
               notifier.delete(playlistId);
               ref.read(desktopNavigatorProvider.notifier).back();
             },
-            icon: const Icon(AppIcons.delete, size: 16),
-            label: const Text('Delete'),
+            icon: AppIcons.delete,
+            label: 'Delete',
           ),
         ],
       ),

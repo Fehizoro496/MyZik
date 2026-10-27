@@ -7,6 +7,7 @@ import '../providers/playback_provider.dart';
 import '../theme.dart';
 import '../widgets.dart';
 import 'desktop_navigation.dart';
+import 'desktop_style.dart';
 
 /// Full-width transport bar along the bottom of the desktop window: the
 /// current track on the left, controls and seek bar in the middle, panel
@@ -22,7 +23,7 @@ class DesktopPlayerBar extends ConsumerWidget {
       height: height,
       padding: const EdgeInsets.symmetric(horizontal: 16),
       decoration: BoxDecoration(
-        color: const Color(0xFF0E0E14),
+        color: DesktopColors.bar,
         border: Border(top: BorderSide(color: AppColors.whiteAlpha(0.06))),
       ),
       child: const Row(
@@ -51,7 +52,17 @@ class _NowPlayingInfo extends ConsumerWidget {
     final liked = ref.watch(isLikedProvider(track.id));
     return Row(
       children: [
-        SongArtwork(song: track, size: 56, radius: 8),
+        Tooltip(
+          message: 'Full screen',
+          child: MouseRegion(
+            cursor: SystemMouseCursors.click,
+            child: GestureDetector(
+              onTap: () =>
+                  ref.read(desktopFullscreenProvider.notifier).state = true,
+              child: SongArtwork(song: track, size: 56, radius: 10),
+            ),
+          ),
+        ),
         const SizedBox(width: 14),
         Flexible(
           child: Column(
@@ -73,7 +84,7 @@ class _NowPlayingInfo extends ConsumerWidget {
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: TextStyle(
-                  color: AppColors.whiteAlpha(0.55),
+                  color: AppColors.whiteAlpha(0.6),
                   fontSize: 12,
                 ),
               ),
@@ -107,7 +118,7 @@ class _Transport extends ConsumerWidget {
     );
     final notifier = ref.read(playbackProvider.notifier);
     Color toggled(bool on) =>
-        on ? AppColors.accentA : AppColors.whiteAlpha(0.6);
+        on ? DesktopColors.accentText : AppColors.whiteAlpha(0.66);
     return Column(
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
@@ -136,8 +147,8 @@ class _Transport extends ConsumerWidget {
                   customBorder: const CircleBorder(),
                   onTap: hasTrack ? notifier.togglePlay : null,
                   child: SizedBox(
-                    width: 38,
-                    height: 38,
+                    width: 42,
+                    height: 42,
                     child: Icon(
                       playing ? AppIcons.pause : AppIcons.playFilled,
                       size: 18,
@@ -213,8 +224,8 @@ class _SeekBarState extends ConsumerState<_SeekBar> {
               trackHeight: 3,
               thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 5),
               overlayShape: const RoundSliderOverlayShape(overlayRadius: 12),
-              activeTrackColor: AppColors.white,
-              inactiveTrackColor: AppColors.whiteAlpha(0.15),
+              activeTrackColor: AppColors.accentA,
+              inactiveTrackColor: AppColors.whiteAlpha(0.12),
               thumbColor: AppColors.white,
             ),
             child: Slider(
@@ -262,12 +273,20 @@ class _BarActionsState extends ConsumerState<_BarActions> {
       return IconButton(
         tooltip: tooltip,
         iconSize: 18,
+        style: IconButton.styleFrom(
+          backgroundColor: active
+              ? AppColors.accentA.withValues(alpha: 0.14)
+              : null,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(10),
+          ),
+        ),
         onPressed: () => ref.read(desktopPanelProvider.notifier).state = active
             ? null
             : target,
         icon: Icon(
           icon,
-          color: active ? AppColors.accentA : AppColors.whiteAlpha(0.6),
+          color: active ? DesktopColors.accentText : AppColors.whiteAlpha(0.66),
         ),
       );
     }
@@ -276,6 +295,7 @@ class _BarActionsState extends ConsumerState<_BarActions> {
       mainAxisAlignment: MainAxisAlignment.end,
       children: [
         panelToggle(DesktopPanel.lyrics, AppIcons.lyrics, 'Lyrics (Ctrl+L)'),
+        const SizedBox(width: 4),
         panelToggle(DesktopPanel.queue, AppIcons.queue, 'Queue (Ctrl+Q)'),
         const SizedBox(width: 8),
         Icon(
@@ -306,6 +326,13 @@ class _BarActionsState extends ConsumerState<_BarActions> {
               },
             ),
           ),
+        ),
+        IconButton(
+          tooltip: 'Full screen',
+          iconSize: 17,
+          onPressed: () =>
+              ref.read(desktopFullscreenProvider.notifier).state = true,
+          icon: const Icon(Icons.open_in_full_rounded),
         ),
       ],
     );
