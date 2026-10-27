@@ -290,6 +290,38 @@ class LyricText extends StatelessWidget {
   }
 }
 
+/// Before a track's audio leaves the device for AI synchronization: says so
+/// once, and remembers the answer.
+Future<bool> confirmAutoSync(BuildContext context, WidgetRef ref) async {
+  const consentKey = 'lyrics.autoSyncConsent';
+  final prefs = ref.read(sharedPreferencesProvider);
+  if (prefs.getBool(consentKey) ?? false) return true;
+  final accepted = await showDialog<bool>(
+    context: context,
+    builder: (context) => AlertDialog(
+      title: const Text('Synchronize with AI?'),
+      content: const Text(
+        'The audio file of this track is sent to Groq, whose speech '
+        'recognition finds when each line is sung. Only files on this '
+        'device are sent.',
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context, false),
+          child: const Text('Cancel'),
+        ),
+        TextButton(
+          onPressed: () => Navigator.pop(context, true),
+          child: const Text('Continue'),
+        ),
+      ],
+    ),
+  );
+  if (accepted != true) return false;
+  await prefs.setBool(consentKey, true);
+  return true;
+}
+
 /// Empty LRC lines mark instrumental breaks; show a note instead of a gap.
 String _display(LyricLine line) => line.text.isEmpty ? '♪' : line.text;
 
@@ -340,8 +372,6 @@ class _LyricsSheetState extends ConsumerState<LyricsSheet> {
   /// Auto-synced timings matching at least this share of the lyric words are
   /// saved directly; below, they open in the synchronizer to be checked.
   static const _autoSaveConfidence = 0.8;
-
-  static const _kAutoSyncConsent = 'lyrics.autoSyncConsent';
 
   /// Taps land a little after the line actually starts; this is taken off
   /// every mark so lines light up on time.
@@ -828,7 +858,7 @@ class _LyricsSheetState extends ConsumerState<LyricsSheet> {
   /// Times the lyrics with Whisper. A confident result is saved right away;
   /// otherwise it opens in the synchronizer, prefilled, to be checked.
   Future<void> _autoSynchronize(Lyrics lyrics) async {
-    if (!await _confirmAutoSync() || !mounted) return;
+    if (!await confirmAutoSync(context, ref) || !mounted) return;
     setState(() {
       _autoSyncing = true;
       _notice = null;
@@ -875,36 +905,6 @@ class _LyricsSheetState extends ConsumerState<LyricsSheet> {
     } finally {
       if (mounted) setState(() => _autoSyncing = false);
     }
-  }
-
-  /// The audio leaves the device: say so once, and remember the answer.
-  Future<bool> _confirmAutoSync() async {
-    final prefs = ref.read(sharedPreferencesProvider);
-    if (prefs.getBool(_kAutoSyncConsent) ?? false) return true;
-    final accepted = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Synchronize with AI?'),
-        content: const Text(
-          'The audio file of this track is sent to Groq, whose speech '
-          'recognition finds when each line is sung. Only files on this '
-          'device are sent.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('Continue'),
-          ),
-        ],
-      ),
-    );
-    if (accepted != true) return false;
-    await prefs.setBool(_kAutoSyncConsent, true);
-    return true;
   }
 
   Future<bool> _confirmDiscard() async {

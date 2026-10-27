@@ -4,18 +4,24 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../icons.dart';
+import '../providers/downloads_provider.dart';
+import '../providers/library_provider.dart';
 import '../providers/playback_provider.dart';
 import '../providers/playlists_provider.dart';
 import '../theme.dart';
+import '../widgets.dart';
 import 'desktop_navigation.dart';
+import 'desktop_style.dart';
 import 'discover_page.dart';
+import 'now_playing.dart';
 import 'pages.dart';
 import 'player_bar.dart';
 import 'side_panel.dart';
 
 /// The desktop layout: sidebar, page area with a top bar, optional lyrics or
-/// queue panel on the right, and a player bar along the bottom. Shares every
-/// provider with the mobile [PlayerShell]; only the presentation differs.
+/// queue panel on the right, and a player bar along the bottom, or Now
+/// Playing filling the window. Shares every provider with the mobile
+/// [PlayerShell]; only the presentation differs.
 class DesktopShell extends ConsumerStatefulWidget {
   const DesktopShell({super.key});
 
@@ -50,6 +56,7 @@ class _DesktopShellState extends ConsumerState<DesktopShell> {
   Widget build(BuildContext context) {
     final route = ref.watch(desktopNavigatorProvider);
     final panel = ref.watch(desktopPanelProvider);
+    final fullscreen = ref.watch(desktopFullscreenProvider);
     final navigator = ref.read(desktopNavigatorProvider.notifier);
     final playback = ref.read(playbackProvider.notifier);
     // Leaving search results (back, sidebar) clears the search box.
@@ -66,8 +73,10 @@ class _DesktopShellState extends ConsumerState<DesktopShell> {
             playback.next,
         const SingleActivator(LogicalKeyboardKey.arrowLeft, control: true):
             playback.previous,
-        const SingleActivator(LogicalKeyboardKey.keyF, control: true):
-            _searchFocus.requestFocus,
+        const SingleActivator(LogicalKeyboardKey.keyF, control: true): () {
+          ref.read(desktopFullscreenProvider.notifier).state = false;
+          _searchFocus.requestFocus();
+        },
         const SingleActivator(LogicalKeyboardKey.keyL, control: true): () =>
             _togglePanel(DesktopPanel.lyrics),
         const SingleActivator(LogicalKeyboardKey.keyQ, control: true): () =>
@@ -76,6 +85,11 @@ class _DesktopShellState extends ConsumerState<DesktopShell> {
             navigator.back,
         const SingleActivator(LogicalKeyboardKey.arrowRight, alt: true):
             navigator.forward,
+        const SingleActivator(LogicalKeyboardKey.escape): () {
+          if (!_typing) {
+            ref.read(desktopFullscreenProvider.notifier).state = false;
+          }
+        },
       },
       child: Focus(
         autofocus: true,
@@ -87,31 +101,33 @@ class _DesktopShellState extends ConsumerState<DesktopShell> {
           },
           child: Scaffold(
             backgroundColor: AppColors.homeBackground,
-            body: Column(
-              children: [
-                Expanded(
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
+            body: fullscreen
+                ? const DesktopNowPlaying()
+                : Column(
                     children: [
-                      const _Sidebar(),
                       Expanded(
-                        child: Column(
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
                           children: [
-                            _TopBar(
-                              searchController: _searchController,
-                              searchFocus: _searchFocus,
+                            const _Sidebar(),
+                            Expanded(
+                              child: Column(
+                                children: [
+                                  _TopBar(
+                                    searchController: _searchController,
+                                    searchFocus: _searchFocus,
+                                  ),
+                                  Expanded(child: _page(route)),
+                                ],
+                              ),
                             ),
-                            Expanded(child: _page(route)),
+                            if (panel != null) DesktopSidePanel(panel: panel),
                           ],
                         ),
                       ),
-                      if (panel != null) DesktopSidePanel(panel: panel),
+                      const DesktopPlayerBar(),
                     ],
                   ),
-                ),
-                const DesktopPlayerBar(),
-              ],
-            ),
           ),
         ),
       ),
@@ -158,7 +174,7 @@ class _TopBar extends ConsumerWidget {
     ref.watch(desktopNavigatorProvider);
     final navigator = ref.read(desktopNavigatorProvider.notifier);
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+      padding: const EdgeInsets.fromLTRB(20, 14, 28, 6),
       child: Row(
         children: [
           IconButton(
@@ -174,37 +190,51 @@ class _TopBar extends ConsumerWidget {
             icon: const Icon(AppIcons.chevronRight),
           ),
           const SizedBox(width: 12),
-          SizedBox(
-            width: 360,
-            height: 40,
-            child: CallbackShortcuts(
-              bindings: {
-                const SingleActivator(LogicalKeyboardKey.escape): () {
-                  searchController.clear();
-                  navigator.search('');
-                  searchFocus.unfocus();
-                },
-              },
-              child: TextField(
-                controller: searchController,
-                focusNode: searchFocus,
-                onChanged: navigator.search,
-                textAlignVertical: TextAlignVertical.center,
-                style: const TextStyle(fontSize: 14),
-                decoration: InputDecoration(
-                  hintText: 'Search your library (Ctrl+F)',
-                  prefixIcon: const Icon(AppIcons.search, size: 16),
-                  isDense: true,
-                  filled: true,
-                  fillColor: AppColors.whiteAlpha(0.07),
-                  contentPadding: EdgeInsets.zero,
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(20),
-                    borderSide: BorderSide.none,
+          Flexible(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 420),
+              child: SizedBox(
+                height: 40,
+                child: CallbackShortcuts(
+                  bindings: {
+                    const SingleActivator(LogicalKeyboardKey.escape): () {
+                      searchController.clear();
+                      navigator.search('');
+                      searchFocus.unfocus();
+                    },
+                  },
+                  child: TextField(
+                    controller: searchController,
+                    focusNode: searchFocus,
+                    onChanged: navigator.search,
+                    textAlignVertical: TextAlignVertical.center,
+                    style: const TextStyle(fontSize: 14),
+                    decoration: InputDecoration(
+                      hintText: 'Search songs, albums, artists',
+                      hintStyle: TextStyle(color: AppColors.whiteAlpha(0.5)),
+                      prefixIcon: const Icon(AppIcons.search, size: 16),
+                      suffixIcon: const Padding(
+                        padding: EdgeInsets.only(right: 10),
+                        child: Center(widthFactor: 1, child: KeyHint('Ctrl F')),
+                      ),
+                      isDense: true,
+                      filled: true,
+                      fillColor: AppColors.whiteAlpha(0.07),
+                      contentPadding: EdgeInsets.zero,
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide.none,
+                      ),
+                    ),
                   ),
                 ),
               ),
             ),
+          ),
+          const Spacer(),
+          const CircleAvatar(
+            radius: 17,
+            backgroundImage: AssetImage('assets/images/avatar.png'),
           ),
         ],
       ),
@@ -215,36 +245,56 @@ class _TopBar extends ConsumerWidget {
 class _Sidebar extends ConsumerWidget {
   const _Sidebar();
 
-  static const width = 232.0;
+  static const width = 240.0;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final route = ref.watch(desktopNavigatorProvider);
     final playlists = ref.watch(playlistsProvider);
+    final songCount = ref.watch(libraryProvider.select((s) => s.songs.length));
+    final downloading = ref.watch(
+      downloadsProvider.select(
+        (d) => d.active.values.where((a) => !a.isFailed).length,
+      ),
+    );
     final navigator = ref.read(desktopNavigatorProvider.notifier);
 
-    Widget item(DesktopSection section, IconData icon, String label) {
+    Widget item(
+      DesktopSection section,
+      IconData icon,
+      String label, {
+      Widget? trailing,
+    }) {
       final selected =
           route.section == section &&
           route.playlistId == null &&
+          route.collection == null &&
           !route.isSearch;
       return _SidebarItem(
-        icon: icon,
+        leading: Icon(
+          icon,
+          size: 18,
+          color: selected ? AppColors.white : AppColors.whiteAlpha(0.66),
+        ),
         label: label,
         selected: selected,
+        trailing: trailing,
         onTap: () => navigator.openSection(section),
       );
     }
 
     return Container(
       width: width,
-      color: const Color(0xFF050508),
+      decoration: BoxDecoration(
+        color: DesktopColors.panel,
+        border: Border(right: BorderSide(color: AppColors.whiteAlpha(0.06))),
+      ),
       padding: const EdgeInsets.fromLTRB(12, 20, 12, 12),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Padding(
-            padding: const EdgeInsets.fromLTRB(10, 0, 10, 20),
+            padding: const EdgeInsets.fromLTRB(12, 4, 12, 20),
             child: Row(
               children: [
                 Container(
@@ -252,7 +302,7 @@ class _Sidebar extends ConsumerWidget {
                   height: 30,
                   decoration: BoxDecoration(
                     gradient: AppColors.accentGradient,
-                    borderRadius: BorderRadius.circular(8),
+                    borderRadius: BorderRadius.circular(9),
                   ),
                   child: const Icon(
                     AppIcons.musicNote,
@@ -263,23 +313,66 @@ class _Sidebar extends ConsumerWidget {
                 const SizedBox(width: 10),
                 const Text(
                   'My Zik',
-                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
+                  style: TextStyle(
+                    fontSize: 19,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: -0.4,
+                  ),
                 ),
               ],
             ),
           ),
           item(DesktopSection.home, AppIcons.home, 'Home'),
-          item(DesktopSection.discover, AppIcons.search, 'Discover'),
-          const _SidebarHeading('LIBRARY'),
-          item(DesktopSection.songs, AppIcons.musicNote, 'Songs'),
+          item(
+            DesktopSection.discover,
+            AppIcons.search,
+            'Discover',
+            trailing: downloading == 0
+                ? null
+                : Tooltip(
+                    message: '$downloading downloading',
+                    child: Container(
+                      constraints: const BoxConstraints(minWidth: 20),
+                      height: 20,
+                      padding: const EdgeInsets.symmetric(horizontal: 6),
+                      alignment: Alignment.center,
+                      decoration: BoxDecoration(
+                        gradient: AppColors.accentGradient,
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Text(
+                        '$downloading',
+                        style: const TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ),
+                  ),
+          ),
+          const SidebarHeading('LIBRARY'),
+          item(
+            DesktopSection.songs,
+            AppIcons.musicNote,
+            'Songs',
+            trailing: songCount == 0
+                ? null
+                : Text(
+                    '$songCount',
+                    style: TextStyle(
+                      color: AppColors.whiteAlpha(0.6),
+                      fontSize: 12,
+                    ),
+                  ),
+          ),
           item(DesktopSection.albums, AppIcons.category, 'Albums'),
           item(DesktopSection.artists, AppIcons.folder, 'Artists'),
           item(DesktopSection.liked, AppIcons.heart, 'Liked songs'),
-          _SidebarHeading(
+          SidebarHeading(
             'PLAYLISTS',
             trailing: IconButton(
               tooltip: 'New playlist',
-              iconSize: 14,
+              iconSize: 16,
               visualDensity: VisualDensity.compact,
               onPressed: () => createPlaylist(context, ref),
               icon: const Icon(AppIcons.add),
@@ -291,8 +384,14 @@ class _Sidebar extends ConsumerWidget {
               children: [
                 for (final playlist in playlists)
                   _SidebarItem(
-                    icon: AppIcons.queue,
+                    leading: PlaylistCover(
+                      songs: ref.watch(playlistSongsProvider(playlist.id)),
+                      size: 32,
+                      radius: 7,
+                      probeLimit: 4,
+                    ),
                     label: playlist.name,
+                    subtitle: '${playlist.songIds.length} songs',
                     selected: route.playlistId == playlist.id,
                     onTap: () => navigator.open(
                       DesktopRoute(
@@ -310,8 +409,9 @@ class _Sidebar extends ConsumerWidget {
   }
 }
 
-class _SidebarHeading extends StatelessWidget {
-  const _SidebarHeading(this.label, {this.trailing, this.onTap});
+/// Small uppercase title above a group of sidebar or panel entries.
+class SidebarHeading extends StatelessWidget {
+  const SidebarHeading(this.label, {super.key, this.trailing, this.onTap});
 
   final String label;
   final Widget? trailing;
@@ -320,21 +420,13 @@ class _SidebarHeading extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(10, 22, 0, 6),
+      padding: const EdgeInsets.fromLTRB(12, 20, 0, 6),
       child: Row(
         children: [
           Expanded(
             child: GestureDetector(
               onTap: onTap,
-              child: Text(
-                label,
-                style: TextStyle(
-                  color: AppColors.whiteAlpha(0.4),
-                  fontSize: 11,
-                  fontWeight: FontWeight.w700,
-                  letterSpacing: 1.4,
-                ),
-              ),
+              child: Text(label, style: DesktopText.overline),
             ),
           ),
           ?trailing,
@@ -346,14 +438,18 @@ class _SidebarHeading extends StatelessWidget {
 
 class _SidebarItem extends StatelessWidget {
   const _SidebarItem({
-    required this.icon,
+    required this.leading,
     required this.label,
     required this.selected,
     required this.onTap,
+    this.subtitle,
+    this.trailing,
   });
 
-  final IconData icon;
+  final Widget leading;
   final String label;
+  final String? subtitle;
+  final Widget? trailing;
   final bool selected;
   final VoidCallback onTap;
 
@@ -363,36 +459,49 @@ class _SidebarItem extends StatelessWidget {
       padding: const EdgeInsets.only(bottom: 2),
       child: Material(
         color: selected ? AppColors.whiteAlpha(0.08) : Colors.transparent,
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(10),
         child: InkWell(
-          borderRadius: BorderRadius.circular(8),
+          borderRadius: BorderRadius.circular(10),
+          hoverColor: AppColors.whiteAlpha(0.05),
           onTap: onTap,
           child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
+            padding: EdgeInsets.symmetric(
+              horizontal: subtitle == null ? 12 : 8,
+              vertical: subtitle == null ? 10 : 6,
+            ),
             child: Row(
               children: [
-                Icon(
-                  icon,
-                  size: 17,
-                  color: selected
-                      ? AppColors.accentA
-                      : AppColors.whiteAlpha(0.6),
-                ),
+                leading,
                 const SizedBox(width: 12),
                 Expanded(
-                  child: Text(
-                    label,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      color: selected
-                          ? AppColors.white
-                          : AppColors.whiteAlpha(0.7),
-                      fontSize: 14,
-                      fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
-                    ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        label,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: selected || subtitle != null
+                              ? AppColors.white
+                              : AppColors.whiteAlpha(0.7),
+                          fontSize: subtitle == null ? 14 : 13,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      if (subtitle != null)
+                        Text(
+                          subtitle!,
+                          style: TextStyle(
+                            color: AppColors.whiteAlpha(0.6),
+                            fontSize: 11,
+                          ),
+                        ),
+                    ],
                   ),
                 ),
+                ?trailing,
               ],
             ),
           ),

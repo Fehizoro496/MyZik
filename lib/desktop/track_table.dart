@@ -9,6 +9,7 @@ import '../providers/playback_provider.dart';
 import '../theme.dart';
 import '../widgets.dart';
 import 'desktop_navigation.dart';
+import 'desktop_style.dart';
 import 'dialogs.dart';
 
 enum _SortColumn { order, title, artist, album, duration }
@@ -220,10 +221,10 @@ class _TrackTableState extends ConsumerState<TrackTable> {
             active ? '$label ${_ascending ? '↑' : '↓'}' : label,
             textAlign: align,
             style: TextStyle(
-              color: AppColors.whiteAlpha(active ? 0.9 : 0.45),
-              fontSize: 12,
+              color: AppColors.whiteAlpha(active ? 0.9 : 0.6),
+              fontSize: 11,
               fontWeight: FontWeight.w700,
-              letterSpacing: 0.6,
+              letterSpacing: 1.2,
             ),
           ),
         ),
@@ -283,9 +284,9 @@ class _TrackTableRowState extends ConsumerState<_TrackTableRow> {
   Widget build(BuildContext context) {
     final song = widget.song;
     final liked = ref.watch(isLikedProvider(song.id));
-    final accent = widget.playing ? AppColors.accentA : AppColors.white;
+    final accent = widget.playing ? DesktopColors.accentText : AppColors.white;
     final secondary = TextStyle(
-      color: AppColors.whiteAlpha(0.55),
+      color: AppColors.whiteAlpha(0.66),
       fontSize: 13,
     );
     return MouseRegion(
@@ -304,8 +305,10 @@ class _TrackTableRowState extends ConsumerState<_TrackTableRow> {
                 ? AppColors.whiteAlpha(0.10)
                 : _hovered
                 ? AppColors.whiteAlpha(0.05)
+                : widget.playing
+                ? AppColors.accentA.withValues(alpha: 0.08)
                 : Colors.transparent,
-            borderRadius: BorderRadius.circular(8),
+            borderRadius: BorderRadius.circular(10),
           ),
           child: Row(
             children: [
@@ -324,7 +327,7 @@ class _TrackTableRowState extends ConsumerState<_TrackTableRow> {
                     ? const Icon(
                         AppIcons.musicNote,
                         size: 16,
-                        color: AppColors.accentA,
+                        color: DesktopColors.accentText,
                       )
                     : Text('${widget.index}', style: secondary),
               ),
@@ -332,7 +335,7 @@ class _TrackTableRowState extends ConsumerState<_TrackTableRow> {
                 flex: 5,
                 child: Row(
                   children: [
-                    SongArtwork(song: song, size: 40, radius: 6),
+                    SongArtwork(song: song, size: 40, radius: 8),
                     const SizedBox(width: 12),
                     Expanded(
                       child: Text(
@@ -342,7 +345,7 @@ class _TrackTableRowState extends ConsumerState<_TrackTableRow> {
                         style: TextStyle(
                           color: accent,
                           fontSize: 14,
-                          fontWeight: FontWeight.w600,
+                          fontWeight: FontWeight.w700,
                         ),
                       ),
                     ),

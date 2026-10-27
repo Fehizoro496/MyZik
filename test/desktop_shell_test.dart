@@ -3,9 +3,13 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:my_zik/data/sample_music_repository.dart';
+import 'package:my_zik/desktop/desktop_navigation.dart';
 import 'package:my_zik/desktop/desktop_shell.dart';
+import 'package:my_zik/desktop/desktop_style.dart';
+import 'package:my_zik/desktop/now_playing.dart';
 import 'package:my_zik/main.dart';
 import 'package:my_zik/providers/library_provider.dart';
+import 'package:my_zik/providers/playback_provider.dart';
 import 'package:my_zik/providers/shared_preferences_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -85,6 +89,80 @@ void main() {
     await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
     await tester.pumpAndSettle();
     expect(find.text(lyricsHint), findsNothing);
+
+    await tester.pumpWidget(const SizedBox.shrink());
+  });
+
+  testWidgets('every sidebar page lays out at a desktop size', (tester) async {
+    await _pumpDesktop(tester);
+
+    for (final page in [
+      'Discover',
+      'Songs',
+      'Albums',
+      'Artists',
+      'Liked songs',
+      'Home',
+    ]) {
+      await tester.tap(find.text(page).first);
+      await tester.pumpAndSettle();
+    }
+    // Home also titles a section "Albums": the sidebar entry comes first.
+    await tester.tap(find.text('Albums').first);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Echoes'));
+    await tester.pumpAndSettle();
+    // The album hero: play and shuffle above the track table.
+    expect(find.byType(AccentPlayButton), findsOneWidget);
+    expect(find.text('Lost in the Echo'), findsOneWidget);
+
+    await tester.pumpWidget(const SizedBox.shrink());
+  });
+
+  testWidgets('full-screen Now Playing replaces the layout until Esc', (
+    tester,
+  ) async {
+    await _pumpDesktop(tester);
+    final container = ProviderScope.containerOf(
+      tester.element(find.byType(DesktopShell)),
+    );
+
+    container.read(desktopFullscreenProvider.notifier).state = true;
+    await tester.pumpAndSettle();
+    expect(find.byType(DesktopNowPlaying), findsOneWidget);
+    expect(find.text('NOW PLAYING'), findsOneWidget);
+    expect(find.text('LIBRARY'), findsNothing);
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await tester.pumpAndSettle();
+    expect(find.byType(DesktopNowPlaying), findsNothing);
+    expect(find.text('LIBRARY'), findsOneWidget);
+
+    await tester.pumpWidget(const SizedBox.shrink());
+  });
+
+  testWidgets('a current track fills Home and full screen', (tester) async {
+    await _pumpDesktop(tester);
+    final container = ProviderScope.containerOf(
+      tester.element(find.byType(DesktopShell)),
+    );
+    final songs = container.read(libraryProvider).songs;
+    // Sets the track without loading audio, which tests can't play.
+    // ignore: invalid_use_of_protected_member, invalid_use_of_visible_for_testing_member
+    container.read(playbackProvider.notifier).state = PlaybackState(
+      current: songs.first,
+      queue: songs,
+      duration: songs.first.duration,
+    );
+    // The lyrics keep loading (and spinning): pump frames, don't settle.
+    await tester.pump(const Duration(milliseconds: 500));
+    expect(find.text('CONTINUE LISTENING'), findsOneWidget);
+
+    await tester.tap(find.text('Full screen').first);
+    await tester.pump(const Duration(milliseconds: 500));
+    expect(find.byType(DesktopNowPlaying), findsOneWidget);
+    expect(find.text(songs.first.title), findsWidgets);
+    expect(find.byTooltip('Exit full screen (Esc)'), findsOneWidget);
 
     await tester.pumpWidget(const SizedBox.shrink());
   });

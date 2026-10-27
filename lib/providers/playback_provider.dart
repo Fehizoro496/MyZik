@@ -452,6 +452,11 @@ class PlaybackNotifier extends Notifier<PlaybackState> {
   Future<void> setVolume(double volume) =>
       _player.setVolume(volume.clamp(0.0, 1.0));
 
+  /// Playback rate, 1 being normal speed (slowed down to time lyrics).
+  double get speed => _player.speed;
+
+  Future<void> setSpeed(double speed) => _player.setSpeed(speed);
+
   void _persistSongId(int id) {
     ref.read(sharedPreferencesProvider).setInt(_kLastSongId, id);
     ref.read(sharedPreferencesProvider).setInt(_kLastPositionMs, 0);

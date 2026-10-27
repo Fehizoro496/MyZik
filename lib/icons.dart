@@ -15,6 +15,9 @@ class AppIcons {
   /// Trailing disclosure chevron on tappable list rows.
   static const IconData chevronRight = CupertinoIcons.chevron_forward;
 
+  /// Leaves the full-screen player on desktop.
+  static const IconData chevronDown = CupertinoIcons.chevron_down;
+
   static const IconData search = CupertinoIcons.search;
   static const IconData close = CupertinoIcons.xmark;
 

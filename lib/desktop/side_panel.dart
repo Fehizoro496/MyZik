@@ -7,11 +7,12 @@ import '../icons.dart';
 import '../models.dart';
 import '../providers/lyrics_provider.dart';
 import '../providers/playback_provider.dart';
-import '../screens/lyrics_editor_screen.dart';
 import '../screens/lyrics_view.dart';
 import '../theme.dart';
 import '../widgets.dart';
 import 'desktop_navigation.dart';
+import 'desktop_style.dart';
+import 'lyrics_editor.dart';
 
 /// Right-hand panel of the desktop shell: the playing track's lyrics or the
 /// play queue, picked from the player bar.
@@ -20,14 +21,14 @@ class DesktopSidePanel extends ConsumerWidget {
 
   final DesktopPanel panel;
 
-  static const width = 380.0;
+  static const width = 340.0;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     return Container(
       width: width,
       decoration: BoxDecoration(
-        color: const Color(0xFF0E0E14),
+        color: DesktopColors.panel,
         border: Border(left: BorderSide(color: AppColors.whiteAlpha(0.06))),
       ),
       child: Column(
@@ -137,19 +138,48 @@ class _LyricsPanel extends ConsumerWidget {
                   ),
                 ),
               ),
+              if (lyrics != null && lyrics.synced) ...[
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 3,
+                  ),
+                  decoration: BoxDecoration(
+                    color: AppColors.accentA.withValues(alpha: 0.16),
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: const Text(
+                    'SYNCED',
+                    style: TextStyle(
+                      color: DesktopColors.accentText,
+                      fontSize: 10,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: 0.6,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 4),
+              ],
               if (!state.isLoading) ...[
                 IconButton(
                   tooltip: lyrics == null ? 'Write lyrics' : 'Edit lyrics',
                   iconSize: 16,
                   onPressed: () =>
-                      LyricsEditorScreen.open(context, song, lyrics),
+                      DesktopLyricsEditor.open(context, song, lyrics),
                   icon: const Icon(AppIcons.edit),
                 ),
-                if (lyrics != null && !lyrics.instrumental)
+                if (lyrics != null &&
+                    !lyrics.instrumental &&
+                    (lyrics.plain?.trim().isNotEmpty ?? false))
                   IconButton(
                     tooltip: 'Synchronize',
                     iconSize: 16,
-                    onPressed: () => LyricsSheet.show(context, song),
+                    onPressed: () => DesktopLyricsEditor.open(
+                      context,
+                      song,
+                      lyrics,
+                      liveSync: true,
+                    ),
                     icon: const Icon(AppIcons.timer),
                   ),
                 IconButton(
@@ -185,7 +215,7 @@ class _LyricsPanel extends ConsumerWidget {
                 return const _PanelMessage('Instrumental');
               }
               return lyrics.synced
-                  ? _SyncedLyrics(key: ValueKey(lyrics), lyrics: lyrics)
+                  ? DesktopSyncedLyrics(key: ValueKey(lyrics), lyrics: lyrics)
                   : _PlainLyrics(lyrics.plain ?? '');
             },
           ),
@@ -196,17 +226,26 @@ class _LyricsPanel extends ConsumerWidget {
 }
 
 /// Timed lyrics following the playhead; clicking a line seeks to it. Hand
-/// scrolling pauses the follow for a few seconds.
-class _SyncedLyrics extends ConsumerStatefulWidget {
-  const _SyncedLyrics({super.key, required this.lyrics});
+/// scrolling pauses the follow for a few seconds. The side panel's size by
+/// default, larger in full screen.
+class DesktopSyncedLyrics extends ConsumerStatefulWidget {
+  const DesktopSyncedLyrics({
+    super.key,
+    required this.lyrics,
+    this.fontSize = 20,
+    this.padding = const EdgeInsets.fromLTRB(20, 8, 20, 160),
+  });
 
   final Lyrics lyrics;
+  final double fontSize;
+  final EdgeInsets padding;
 
   @override
-  ConsumerState<_SyncedLyrics> createState() => _SyncedLyricsState();
+  ConsumerState<DesktopSyncedLyrics> createState() =>
+      _DesktopSyncedLyricsState();
 }
 
-class _SyncedLyricsState extends ConsumerState<_SyncedLyrics> {
+class _DesktopSyncedLyricsState extends ConsumerState<DesktopSyncedLyrics> {
   final _keys = <int, GlobalKey>{};
   late final Map<int, String?> _stanzas = stanzaStarts(
     widget.lyrics.lines,
@@ -249,24 +288,24 @@ class _SyncedLyricsState extends ConsumerState<_SyncedLyrics> {
         return false;
       },
       child: ListView.builder(
-        padding: const EdgeInsets.fromLTRB(20, 8, 20, 160),
+        padding: widget.padding,
         itemCount: lines.length,
         itemBuilder: (context, i) {
           final line = lines[i];
           if (isSectionLabel(line.text)) return const SizedBox.shrink();
           final label = _stanzas[i];
           final style = TextStyle(
-            fontSize: 20,
-            height: 1.35,
+            fontSize: i == current ? widget.fontSize * 1.1 : widget.fontSize,
+            height: 1.3,
             fontWeight: FontWeight.w800,
             color: i == current
                 ? AppColors.white
-                : AppColors.whiteAlpha(i < current ? 0.35 : 0.5),
+                : AppColors.whiteAlpha(i < current ? 0.4 : 0.62),
           );
           return Padding(
             key: _keys.putIfAbsent(i, GlobalKey.new),
             padding: EdgeInsets.only(
-              top: _stanzas.containsKey(i) && i > 0 ? 22 : 0,
+              top: _stanzas.containsKey(i) && i > 0 ? widget.fontSize * 1.1 : 0,
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -389,7 +428,7 @@ class _QueueRow extends StatelessWidget {
       dense: true,
       contentPadding: const EdgeInsets.only(left: 8, right: 36),
       selected: current,
-      selectedTileColor: AppColors.whiteAlpha(0.06),
+      selectedTileColor: AppColors.accentA.withValues(alpha: 0.1),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
       leading: SongArtwork(song: song, size: 40, radius: 6),
       title: Text(
@@ -397,15 +436,15 @@ class _QueueRow extends StatelessWidget {
         maxLines: 1,
         overflow: TextOverflow.ellipsis,
         style: TextStyle(
-          color: current ? AppColors.accentA : AppColors.white,
-          fontWeight: FontWeight.w600,
+          color: current ? DesktopColors.accentText : AppColors.white,
+          fontWeight: FontWeight.w700,
         ),
       ),
       subtitle: Text(
         song.artist,
         maxLines: 1,
         overflow: TextOverflow.ellipsis,
-        style: TextStyle(color: AppColors.whiteAlpha(0.5)),
+        style: TextStyle(color: AppColors.whiteAlpha(0.6)),
       ),
       onTap: onPlay,
     );

@@ -96,3 +96,6 @@ enum DesktopPanel { lyrics, queue }
 final desktopPanelProvider = StateProvider<DesktopPanel?>(
   (ref) => DesktopPanel.lyrics,
 );
+
+/// Whether Now Playing fills the window instead of the library layout.
+final desktopFullscreenProvider = StateProvider<bool>((ref) => false);
