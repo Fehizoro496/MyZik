@@ -66,13 +66,20 @@ Prérequis de toute la synchro : les likes, playlists et paroles sont indexés p
 Le mobile reste inchangé ; le desktop a son propre shell qui réutilise les
 providers existants.
 
-- [ ] `DesktopShell` : barre latérale (Accueil, Bibliothèque, Likes, Playlists,
-      Découvrir, Studio, Synchronisation), panneau central, barre de lecture en
-      bas, panneau paroles à droite.
-- [ ] Listes denses adaptées à la souris (tri, colonnes, menu contextuel,
+- [x] `DesktopShell` (`lib/desktop/`) : barre latérale (Accueil, Découvrir,
+      Morceaux, Albums, Artistes, Likes, Playlists), barre du haut (historique
+      précédent/suivant, recherche dans la bibliothèque), barre de lecture en
+      bas, panneau Paroles / File d'attente à droite. Les entrées Studio et
+      Synchronisation viendront avec les phases 4 et 5.
+- [x] Listes denses adaptées à la souris (tri, colonnes, menu contextuel,
       double-clic pour lire).
-- [ ] Raccourcis globaux : lecture/pause, suivant/précédent, recherche.
-- [ ] Choix du shell selon la plateforme dans `main.dart`.
+- [x] Raccourcis globaux : Espace (lecture/pause), Ctrl+←/→ (précédent/suivant),
+      Ctrl+F (recherche), Ctrl+L / Ctrl+Q (panneaux), Alt+←/→ et boutons
+      latéraux de la souris (historique).
+- [x] Choix du shell selon la plateforme dans `main.dart`.
+
+Tant que la phase 2 n'est pas faite, le desktop affiche la bibliothèque
+d'exemple.
 
 ## Phase 4 — Studio de paroles
 

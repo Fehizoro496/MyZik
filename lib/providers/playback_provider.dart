@@ -446,6 +446,12 @@ class PlaybackNotifier extends Notifier<PlaybackState> {
   /// every ~200 ms, too coarse for timing lyrics by hand.
   Duration get livePosition => _player.position;
 
+  /// Output volume, 0 to 1 (the desktop player bar's slider).
+  double get volume => _player.volume;
+
+  Future<void> setVolume(double volume) =>
+      _player.setVolume(volume.clamp(0.0, 1.0));
+
   void _persistSongId(int id) {
     ref.read(sharedPreferencesProvider).setInt(_kLastSongId, id);
     ref.read(sharedPreferencesProvider).setInt(_kLastPositionMs, 0);

@@ -258,8 +258,8 @@ class LyricsSectionLabel extends StatelessWidget {
 
 /// A lyric line where parts in parentheses (backing vocals, ad-libs) are
 /// set in a lighter italic, so the lead line reads first.
-class _LyricText extends StatelessWidget {
-  const _LyricText(this.text, {this.style});
+class LyricText extends StatelessWidget {
+  const LyricText(this.text, {super.key, this.style});
 
   final String text;
   final TextStyle? style;
@@ -653,7 +653,7 @@ class _LyricsSheetState extends ConsumerState<LyricsSheet> {
                                     ? FontWeight.w800
                                     : FontWeight.w700,
                               ),
-                              child: _LyricText(_display(lyrics.lines[i])),
+                              child: LyricText(_display(lyrics.lines[i])),
                             ),
                           ],
                         ),
@@ -790,7 +790,7 @@ class _LyricsSheetState extends ConsumerState<LyricsSheet> {
                   if (i > 0) const SizedBox(height: 22),
                   if (stanza.label != null) LyricsSectionLabel(stanza.label!),
                   for (final line in stanza.lines)
-                    _LyricText(
+                    LyricText(
                       line,
                       style: TextStyle(
                         color: AppColors.whiteAlpha(0.8),

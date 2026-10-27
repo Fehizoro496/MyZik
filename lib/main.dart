@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:just_audio_media_kit/just_audio_media_kit.dart';
 
+import 'desktop/desktop_shell.dart';
 import 'providers/audio_handler.dart';
 import 'providers/navigation_provider.dart';
 import 'providers/shared_preferences_provider.dart';
@@ -56,8 +57,23 @@ void main() async {
   );
 }
 
+/// Windows, macOS and Linux get the desktop layout; phones and the web keep
+/// the mobile one.
+bool get _isDesktop =>
+    !kIsWeb &&
+    switch (defaultTargetPlatform) {
+      TargetPlatform.windows ||
+      TargetPlatform.macOS ||
+      TargetPlatform.linux => true,
+      _ => false,
+    };
+
 class MyZikApp extends StatelessWidget {
-  const MyZikApp({super.key});
+  const MyZikApp({super.key, this.desktop});
+
+  /// Forces the desktop ([DesktopShell]) or mobile ([PlayerShell]) layout;
+  /// null picks it from the platform.
+  final bool? desktop;
 
   @override
   Widget build(BuildContext context) {
@@ -65,14 +81,14 @@ class MyZikApp extends StatelessWidget {
       title: 'My Zik',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.dark(),
-      home: const PlayerShell(),
+      home: desktop ?? _isDesktop ? const DesktopShell() : const PlayerShell(),
     );
   }
 }
 
 /// Swaps between the app's screens based on [navigationProvider]. On wide
-/// viewports (desktop / web) the app is framed inside a 390×844 phone mockup;
-/// on a phone it fills the screen edge to edge.
+/// viewports (the web) the app is framed inside a 390×844 phone mockup; on a
+/// phone it fills the screen edge to edge.
 class PlayerShell extends ConsumerWidget {
   const PlayerShell({super.key});
 
