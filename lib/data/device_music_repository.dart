@@ -65,5 +65,6 @@ class DeviceMusicRepository implements MusicRepository {
     album: m.album,
     duration: Duration(milliseconds: m.duration ?? 0),
     uri: m.uri,
+    filePath: m.data.isEmpty ? null : m.data,
   );
 }

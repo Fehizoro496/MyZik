@@ -1,5 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'dart:io';
 import 'package:my_zik/data/lyrics_repository.dart';
+import 'package:my_zik/models.dart';
 
 void main() {
   group('parseLrc', () {
@@ -40,9 +42,109 @@ void main() {
       ),
       (title: 'Blinding Lights', artist: 'The Weeknd'),
     );
-    expect(
-      cleanTrackQuery('Blinding Lights [Lyrics]', 'The Weeknd - Topic'),
-      (title: 'Blinding Lights', artist: 'The Weeknd'),
+    expect(cleanTrackQuery('Blinding Lights [Lyrics]', 'The Weeknd - Topic'), (
+      title: 'Blinding Lights',
+      artist: 'The Weeknd',
+    ));
+  });
+
+  test('manual synchronization keeps the original text and source', () async {
+    final directory = await Directory.systemTemp.createTemp('myzik_sync_test_');
+    addTearDown(() => directory.delete(recursive: true));
+    final repository = LyricsRepository(cacheDirectory: () async => directory);
+    const song = Song(id: 6, title: 'Song', artist: 'Artist');
+    const original = Lyrics(
+      source: LyricsSource.web,
+      plain: 'First line\nSecond line',
+      sourceUrl: 'https://example.org/lyrics',
+    );
+
+    final saved = await repository.saveSynchronization(song, original, [
+      const LyricLine(Duration(seconds: 2), 'First line'),
+      const LyricLine(Duration(seconds: 5), 'Second line'),
+    ]);
+
+    expect(saved.synced, isTrue);
+    expect(saved.plain, original.plain);
+    expect(saved.sourceUrl, original.sourceUrl);
+    final fromCache = await repository.find(song);
+    expect(fromCache?.lines.map((line) => line.time.inSeconds), [2, 5]);
+  });
+
+  test('synchronized lyrics can be redone, with instrumental breaks', () async {
+    final directory = await Directory.systemTemp.createTemp('myzik_sync_test_');
+    addTearDown(() => directory.delete(recursive: true));
+    final repository = LyricsRepository(cacheDirectory: () async => directory);
+    const song = Song(id: 8, title: 'Song', artist: 'Artist');
+    final synced = Lyrics(
+      source: LyricsSource.lrclib,
+      lines: parseLrc('[00:01.00]A\n[00:02.00]B'),
+      plain: 'A\nB',
+    );
+
+    final redone = await repository.saveSynchronization(song, synced, const [
+      LyricLine(Duration(seconds: 3), 'A'),
+      LyricLine(Duration(seconds: 6), ''),
+      LyricLine(Duration(seconds: 9), 'B'),
+    ]);
+
+    expect(redone.source, LyricsSource.lrclib);
+    expect(redone.plain, 'A\nB');
+    final fromCache = await repository.find(song);
+    expect(fromCache?.lines.map((line) => line.text), ['A', '', 'B']);
+    expect(fromCache?.indexAt(const Duration(seconds: 7)), 1);
+  });
+
+  test('manual synchronization rejects breaks without lyrics', () async {
+    final directory = await Directory.systemTemp.createTemp('myzik_sync_test_');
+    addTearDown(() => directory.delete(recursive: true));
+    final repository = LyricsRepository(cacheDirectory: () async => directory);
+    const song = Song(id: 9, title: 'Song', artist: 'Artist');
+    const original = Lyrics(source: LyricsSource.web, plain: 'A');
+    await expectLater(
+      repository.saveSynchronization(song, original, const [
+        LyricLine(Duration(seconds: 5), ''),
+      ]),
+      throwsArgumentError,
+    );
+  });
+
+  test('edited and hand-written lyrics are kept, empty ones refused', () async {
+    final directory = await Directory.systemTemp.createTemp('myzik_edit_test_');
+    addTearDown(() => directory.delete(recursive: true));
+    final repository = LyricsRepository(cacheDirectory: () async => directory);
+    const song = Song(id: 10, title: 'Song', artist: 'Artist');
+
+    await repository.saveLyrics(
+      song,
+      const Lyrics(source: LyricsSource.manual, plain: 'Mine', edited: true),
+    );
+    final fromCache = await repository.find(song);
+    expect(fromCache?.source, LyricsSource.manual);
+    expect(fromCache?.edited, isTrue);
+    expect(fromCache?.plain, 'Mine');
+
+    await expectLater(
+      repository.saveLyrics(
+        song,
+        const Lyrics(source: LyricsSource.manual, plain: '  '),
+      ),
+      throwsArgumentError,
+    );
+  });
+
+  test('manual synchronization rejects unordered timestamps', () async {
+    final directory = await Directory.systemTemp.createTemp('myzik_sync_test_');
+    addTearDown(() => directory.delete(recursive: true));
+    final repository = LyricsRepository(cacheDirectory: () async => directory);
+    const song = Song(id: 7, title: 'Song', artist: 'Artist');
+    const original = Lyrics(source: LyricsSource.web, plain: 'A\nB');
+    await expectLater(
+      repository.saveSynchronization(song, original, const [
+        LyricLine(Duration(seconds: 5), 'A'),
+        LyricLine(Duration(seconds: 5), 'B'),
+      ]),
+      throwsArgumentError,
     );
   });
 }

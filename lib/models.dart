@@ -11,6 +11,7 @@ class Song {
     this.album,
     this.duration = Duration.zero,
     this.uri,
+    this.filePath,
     this.artworkUrl,
   });
 
@@ -25,6 +26,10 @@ class Song {
   /// Playable location (content:// uri or file path). Used by the audio engine
   /// in the playback pass; may be null for sample data.
   final String? uri;
+
+  /// The audio file on this device, readable with `dart:io` (unlike a
+  /// content:// [uri]). Null for streamed tracks, which have no file.
+  final String? filePath;
 
   /// Remote artwork for streamed tracks. Local tracks keep this null and use
   /// their embedded MediaStore artwork instead.

@@ -22,6 +22,27 @@ class LyricsNotifier extends AutoDisposeFamilyAsyncNotifier<Lyrics?, Song> {
       () => ref.read(lyricsRepositoryProvider).find(arg, refresh: true),
     );
   }
+
+  /// Stores timestamps manually matched to the current playback position.
+  /// Throws on failure and keeps the current lyrics, so a failed save never
+  /// hides them behind an error.
+  Future<void> saveSynchronization(List<LyricLine> lines) async {
+    final lyrics = state.asData?.value;
+    if (lyrics == null) return;
+    state = AsyncData(
+      await ref
+          .read(lyricsRepositoryProvider)
+          .saveSynchronization(arg, lyrics, lines),
+    );
+  }
+
+  /// Replaces the lyrics with a version edited (or written) by hand: text,
+  /// timings or both. Throws on failure and keeps the current lyrics.
+  Future<void> saveEdited(Lyrics lyrics) async {
+    state = AsyncData(
+      await ref.read(lyricsRepositoryProvider).saveLyrics(arg, lyrics),
+    );
+  }
 }
 
 final lyricsProvider = AsyncNotifierProvider.autoDispose

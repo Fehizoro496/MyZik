@@ -17,11 +17,21 @@ void main() {
   late Map<String, dynamic> response;
   late List<RequestOptions> requests;
 
-  Map<String, dynamic> completion(Object answer, {String finish = 'stop'}) => {
+  Map<String, dynamic> completion(
+    Object answer, {
+    String finish = 'stop',
+    bool searched = true,
+  }) => {
     'choices': [
       {
         'finish_reason': finish,
-        'message': {'content': answer is String ? answer : jsonEncode(answer)},
+        'message': {
+          'content': answer is String ? answer : jsonEncode(answer),
+          if (searched)
+            'executed_tools': [
+              {'type': 'browser_search'},
+            ],
+        },
       },
     ],
   };
@@ -71,7 +81,7 @@ void main() {
       expect(context['normalized'], {'title': 'Example', 'artist': 'Artist'});
       expect(context['original']['title'], song.title);
       expect(context['suggested_queries'].first, '"Example" "Artist" lyrics');
-      expect(body['tool_choice'], 'required');
+      expect(body['tool_choice'], 'auto');
       await repository.find(song);
       expect(requests.where((r) => r.method == 'POST'), hasLength(1));
     },
@@ -125,6 +135,18 @@ void main() {
       expect(requests.where((r) => r.method == 'POST'), hasLength(2));
     });
   }
+
+  test('answers given without searching are not trusted', () async {
+    response = completion({
+      'found': false,
+      'status': 'not_found',
+      'lyrics': '',
+      'source': '',
+    }, searched: false);
+    await expectLater(repository.find(song), throwsA(isA<LyricsException>()));
+    await expectLater(repository.find(song), throwsA(isA<LyricsException>()));
+    expect(requests.where((r) => r.method == 'POST'), hasLength(2));
+  });
 
   test('truncated completion is not cached as a miss', () async {
     response = completion({

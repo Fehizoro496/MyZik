@@ -25,6 +25,11 @@ class AppIcons {
   static const IconData downloadFilled = CupertinoIcons.arrow_down_circle_fill;
   static const IconData downloaded = CupertinoIcons.checkmark_alt_circle_fill;
   static const IconData retry = CupertinoIcons.arrow_clockwise;
+  static const IconData undo = CupertinoIcons.arrow_uturn_left;
+  static const IconData rewind = CupertinoIcons.gobackward;
+  static const IconData sparkles = CupertinoIcons.sparkles;
+  static const IconData merge = CupertinoIcons.arrow_merge;
+  static const IconData timer = CupertinoIcons.timer;
 
   /// Overflow menu affordance: three dots inside a circle.
   static const IconData more = CupertinoIcons.ellipsis_circle;

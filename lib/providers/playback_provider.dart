@@ -442,6 +442,10 @@ class PlaybackNotifier extends Notifier<PlaybackState> {
   /// Move the playhead to an absolute [position] (tapping a lyrics line).
   void seek(Duration position) => _player.seek(position);
 
+  /// The player's position right now. [PlaybackState.position] only updates
+  /// every ~200 ms, too coarse for timing lyrics by hand.
+  Duration get livePosition => _player.position;
+
   void _persistSongId(int id) {
     ref.read(sharedPreferencesProvider).setInt(_kLastSongId, id);
     ref.read(sharedPreferencesProvider).setInt(_kLastPositionMs, 0);

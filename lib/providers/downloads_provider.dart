@@ -89,6 +89,7 @@ class DownloadedTrack {
     artist: artist,
     duration: duration,
     uri: Uri.file(audioPath).toString(),
+    filePath: audioPath,
     artworkUrl: artworkFile == null
         ? null
         : Uri.file(_path(artworkFile!)).toString(),

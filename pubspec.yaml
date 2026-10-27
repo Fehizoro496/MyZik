@@ -63,7 +63,7 @@ dependencies:
   # 9.6+ requires Flutter 3.47.
   background_downloader: ^9.5.9
 
-  # Lyrics lookups: LRCLIB (synced LRC) and the Groq Whisper fallback.
+  # Lyrics: LRCLIB (synced LRC), Groq web search and Whisper auto-sync.
   # Requests are logged in debug builds only.
   dio: ^5.11.1
   pretty_dio_logger: ^1.4.0

@@ -7,6 +7,8 @@ import 'package:path_provider/path_provider.dart';
 import 'package:pretty_dio_logger/pretty_dio_logger.dart';
 
 import '../models.dart';
+import 'lyrics_aligner.dart';
+import 'lyrics_structure.dart';
 
 /// Groq API key, compiled in from `.env` via
 /// `fvm flutter run --dart-define-from-file=.env`. Empty when not provided,
@@ -21,6 +23,9 @@ enum LyricsSource {
   /// Found on a lyrics page by an LLM with web search (Groq). Unsynced, and
   /// may be incomplete or inaccurate, so the UI flags it.
   web,
+
+  /// Written by the listener when none could be found.
+  manual,
 }
 
 /// One timed line of lyrics.
@@ -44,6 +49,7 @@ class Lyrics {
     this.plain,
     this.instrumental = false,
     this.sourceUrl,
+    this.edited = false,
   });
 
   final LyricsSource source;
@@ -55,6 +61,9 @@ class Lyrics {
   final List<LyricLine> lines;
   final String? plain;
   final bool instrumental;
+
+  /// The listener corrected the text or timings by hand.
+  final bool edited;
 
   bool get synced => lines.isNotEmpty;
 
@@ -82,6 +91,7 @@ class Lyrics {
     'plain': plain,
     'instrumental': instrumental,
     'sourceUrl': sourceUrl,
+    'edited': edited,
   };
 
   factory Lyrics.fromJson(Map<String, dynamic> json) => Lyrics(
@@ -93,6 +103,7 @@ class Lyrics {
     plain: json['plain'] as String?,
     instrumental: json['instrumental'] as bool? ?? false,
     sourceUrl: json['sourceUrl'] as String?,
+    edited: json['edited'] as bool? ?? false,
   );
 }
 
@@ -196,7 +207,10 @@ class LyricsRepository {
       '{"found": boolean, "lyrics": string, "source": string, '
       '"status": "found" | "not_found" | "unavailable"}. '
       '"lyrics" is the lyrics text as published on the page you found, one '
-      'line per lyric line, no commentary or navigation text. "source" must '
+      'line per lyric line, no commentary or navigation text. Keep the '
+      "page's structure: an empty line between stanzas, and its section "
+      'labels on their own line in brackets, e.g. [Chorus]. Drop '
+      'annotations, ads and contributor credits. "source" must '
       'be the absolute HTTP(S) URL of the page actually read. Use status found '
       'only with found=true and nonempty lyrics and source. If searches '
       'complete without a matching page, return found=false, status=not_found '
@@ -274,6 +288,159 @@ class LyricsRepository {
     return lyrics;
   }
 
+  /// Replaces the timing of [lyrics] with timestamps entered by the listener
+  /// (a first synchronization, or a redo of an existing one). Lines with
+  /// empty text mark instrumental breaks. The original text and source stay
+  /// in the cache so attribution is retained and the lyrics can be redone.
+  Future<Lyrics> saveSynchronization(
+    Song song,
+    Lyrics lyrics,
+    List<LyricLine> lines,
+  ) async {
+    if (lines.isEmpty) {
+      throw ArgumentError.value(lines, 'lines', 'must contain timed lyrics');
+    }
+    return saveLyrics(
+      song,
+      Lyrics(
+        source: lyrics.source,
+        lines: lines,
+        plain: lyrics.plain,
+        sourceUrl: lyrics.sourceUrl,
+        edited: lyrics.edited,
+      ),
+    );
+  }
+
+  /// Stores [lyrics] edited by the listener (text, timings or both) in place
+  /// of the cached ones, after checking they still make sense: timed lines
+  /// must be in strictly increasing order and hold some text, untimed
+  /// lyrics need text.
+  Future<Lyrics> saveLyrics(Song song, Lyrics lyrics) async {
+    final lines = lyrics.lines;
+    if (lines.isNotEmpty) {
+      if (lines.every((line) => line.text.isEmpty)) {
+        throw ArgumentError.value(lines, 'lines', 'must contain timed lyrics');
+      }
+      if (lines.first.time < Duration.zero) {
+        throw ArgumentError.value(lines, 'lines', 'timestamps must be >= 0');
+      }
+      for (var i = 1; i < lines.length; i++) {
+        if (lines[i - 1].time >= lines[i].time) {
+          throw ArgumentError.value(lines, 'lines', 'timestamps must increase');
+        }
+      }
+    } else if (lyrics.plain?.trim().isEmpty ?? true) {
+      throw ArgumentError.value(lyrics, 'lyrics', 'must contain lyrics');
+    }
+    final saved = Lyrics(
+      source: lyrics.source,
+      lines: List.unmodifiable(lines),
+      plain: lyrics.plain,
+      sourceUrl: lyrics.sourceUrl,
+      edited: lyrics.edited,
+    );
+    final file = await _cacheFile(song);
+    await file.writeAsString(jsonEncode(saved.toJson()));
+    return saved;
+  }
+
+  /// Speech-to-text model used to time lyrics; large-v3 copes better with
+  /// vocals over music than the turbo variant.
+  static const _transcriptionModel = 'whisper-large-v3';
+
+  /// Groq's upload limit on the free tier.
+  static const _maxUploadBytes = 25 * 1024 * 1024;
+
+  /// Whether [song]'s [lyrics] can be timed automatically: needs the Groq
+  /// key, the audio as a file on the device (never a stream) and the text.
+  bool canAutoSynchronize(Song song, Lyrics lyrics) =>
+      canSearchWeb &&
+      song.filePath != null &&
+      !lyrics.instrumental &&
+      (lyrics.plain?.trim().isNotEmpty ?? false);
+
+  /// Times [lyrics] by sending [song]'s audio file to Whisper (Groq) for word
+  /// timestamps and aligning the known text on them; see [alignLyrics]. Does
+  /// not save: the caller decides from [LyricsAlignment.confidence] whether
+  /// the result is good enough or needs checking by hand.
+  Future<LyricsAlignment> autoSynchronize(Song song, Lyrics lyrics) async {
+    final path = song.filePath;
+    if (!canAutoSynchronize(song, lyrics) || path == null) {
+      throw const LyricsException('This track cannot be synchronized.');
+    }
+    final file = File(path);
+    if (!file.existsSync()) {
+      throw const LyricsException('The audio file could not be found.');
+    }
+    if (await file.length() > _maxUploadBytes) {
+      throw const LyricsException(
+        'The audio file is too large to synchronize automatically (25 MB max).',
+      );
+    }
+
+    // Section labels ("[Chorus]") are never sung: leave them out.
+    final textLines = lyricLinesOf(lyrics.plain!);
+    final Map<String, dynamic> json;
+    try {
+      final response = await _dio.post<Map<String, dynamic>>(
+        'https://api.groq.com/openai/v1/audio/transcriptions',
+        data: FormData.fromMap({
+          'file': await MultipartFile.fromFile(path),
+          'model': _transcriptionModel,
+          'response_format': 'verbose_json',
+          'timestamp_granularities[]': 'word',
+          'temperature': '0',
+          // The start of the lyrics steers spelling and language; Whisper
+          // only reads the first ~224 tokens of a prompt.
+          'prompt': _truncate(textLines.join(' '), 600),
+        }),
+        options: Options(
+          headers: {'Authorization': 'Bearer $_apiKey'},
+          sendTimeout: const Duration(seconds: 60),
+          receiveTimeout: const Duration(seconds: 120),
+        ),
+      );
+      json = response.data ?? const {};
+    } on DioException catch (e) {
+      final status = e.response?.statusCode;
+      throw LyricsException(switch (status) {
+        null => 'Synchronization failed: network error.',
+        413 => 'The audio file is too large to synchronize automatically.',
+        429 => 'Synchronization limit reached. Please try again later.',
+        _ => 'Synchronization failed (HTTP $status).',
+      });
+    }
+
+    final words = <TimedWord>[];
+    for (final w in (json['words'] as List? ?? const [])) {
+      if (w is! Map) continue;
+      final text = w['word'];
+      final start = w['start'];
+      final end = w['end'];
+      if (text is! String || start is! num || end is! num) continue;
+      words.add(
+        TimedWord(
+          text,
+          Duration(milliseconds: (start * 1000).round()),
+          Duration(milliseconds: (end * 1000).round()),
+        ),
+      );
+    }
+    final alignment = alignLyrics(textLines, words);
+    _log(
+      '"${song.title}": auto-sync heard ${words.length} words, '
+      '${(alignment.confidence * 100).round()}% of the lyrics matched',
+    );
+    if (alignment.lines.isEmpty) {
+      throw const LyricsException('No lyrics could be heard in this track.');
+    }
+    return alignment;
+  }
+
+  static String _truncate(String text, int maxLength) =>
+      text.length <= maxLength ? text : text.substring(0, maxLength);
+
   static const _noKey =
       'web search skipped: GROQ_API_KEY is empty (launch with '
       '--dart-define-from-file=.env, then a full restart)';
@@ -296,7 +463,11 @@ class LyricsRepository {
           'tools': [
             {'type': 'browser_search'},
           ],
-          'tool_choice': 'required',
+          // Not 'required': that forces a tool call on every turn, so the
+          // final answer comes back as a call to a made-up `json` tool and
+          // Groq rejects it (400 tool_use_failed). Searching is checked on
+          // the response instead (executed_tools).
+          'tool_choice': 'auto',
           'messages': [
             {'role': 'system', 'content': _webSearchPrompt},
             {
@@ -314,11 +485,16 @@ class LyricsRepository {
       json = response.data ?? const {};
     } on DioException catch (e) {
       final status = e.response?.statusCode;
-      throw LyricsException(
-        status == null
-            ? 'Web search failed: network error.'
-            : 'Web search failed (HTTP $status).',
-      );
+      final body = e.response?.data;
+      final code = body is Map && body['error'] is Map
+          ? (body['error'] as Map)['code']
+          : null;
+      throw LyricsException(switch ((status, code)) {
+        (null, _) => 'Web search failed: network error.',
+        (_, 'tool_use_failed') =>
+          'Web search returned an invalid answer. Please try again.',
+        _ => 'Web search failed (HTTP $status).',
+      });
     }
 
     const invalid = LyricsException(
@@ -330,6 +506,13 @@ class LyricsRepository {
     if (choice is! Map || choice['finish_reason'] != 'stop') throw invalid;
     final message = choice['message'];
     if (message is! Map || message['content'] is! String) throw invalid;
+    // An answer given without searching is from the model's memory: neither
+    // its lyrics nor its "not found" can be trusted (or cached).
+    final searched = message['executed_tools'];
+    if (searched is! List || searched.isEmpty) {
+      _log('web answer ignored: no search was executed');
+      throw invalid;
+    }
     final answer = _parseJsonObject(message['content'] as String);
     if (answer == null ||
         answer['found'] is! bool ||
@@ -360,7 +543,11 @@ class LyricsRepository {
         uri.userInfo.isNotEmpty) {
       throw invalid;
     }
-    return Lyrics(source: LyricsSource.web, plain: text, sourceUrl: source);
+    return Lyrics(
+      source: LyricsSource.web,
+      plain: normalizeLyricsText(text),
+      sourceUrl: source,
+    );
   }
 
   /// The JSON object in [content], tolerating code fences or stray text
@@ -440,7 +627,11 @@ class LyricsRepository {
     final plain = r['plainLyrics'] as String?;
     final lines = synced == null ? const <LyricLine>[] : parseLrc(synced);
     if (lines.isEmpty && (plain == null || plain.trim().isEmpty)) return null;
-    return Lyrics(source: LyricsSource.lrclib, lines: lines, plain: plain);
+    return Lyrics(
+      source: LyricsSource.lrclib,
+      lines: lines,
+      plain: plain == null ? null : normalizeLyricsText(plain),
+    );
   }
 
   /// GET on LRCLIB; null when it answers with an error status (404 = no
