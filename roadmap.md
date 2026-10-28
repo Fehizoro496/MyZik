@@ -207,6 +207,66 @@ La première version passe en HTTP sur le réseau local, protégée par le jeton
 mais sans TLS : acceptable pour un réseau domestique, pas pour un Wi-Fi public.
 Piste d'évolution : TLS avec certificat auto-signé épinglé lors de l'appairage.
 
+## Phase 6 — Stockage en base SQLite
+
+Aujourd'hui, les données structurées vivent dans `shared_preferences` (JSON
+réécrit en entier à chaque changement) et dans des fichiers JSON (paroles,
+index). Objectif : une base SQLite pour les données, des dossiers locaux pour
+les seuls fichiers binaires. Le comportement visible ne change pas, la
+synchronisation entre appareils comprise.
+
+Choix : `sqflite` sur Android/iOS/macOS, `sqflite_common_ffi` sur
+Windows/Linux (même API ; la bibliothèque SQLite native est fournie par sa
+dépendance `sqlite3`), sans génération de code.
+`drift` écarté pour ne pas introduire `build_runner`.
+
+Répartition visée :
+
+| Base SQLite | Dossiers locaux | `shared_preferences` |
+| --- | --- | --- |
+| likes, playlists, paroles et timings, journal de synchro, appareils appairés, cache des empreintes, index de la bibliothèque desktop, téléchargements et fichiers reçus (métadonnées) | fichiers audio et pochettes (téléchargés et reçus) | quelques réglages simples : mode de transfert, dernier morceau joué, consentement à l'auto-sync IA |
+
+### 6.1 Socle
+
+- [x] Dépendances et initialisation : `sqflite` sur mobile ;
+      `sqflite_common_ffi` sur desktop, initialisés dans `main()`
+      (`sqlite3_flutter_libs`, paquet vide en fin de vie, retiré).
+- [x] Un fichier de base unique dans le dossier support de l'app, schéma
+      versionné avec migrations (`onCreate` / `onUpgrade`).
+- [x] Provider de la base, surchargeable par une base en mémoire dans les
+      tests.
+
+### 6.2 Données
+
+- [x] Likes (table par `SongKey`) et playlists (table des playlists + table
+      ordonnée des morceaux).
+- [x] Paroles : une ligne par `SongKey` (texte, timings, source, édité,
+      métadonnées normalisées indexées). Remplace le dossier `lyrics/` et
+      permet de chercher le même enregistrement par requête.
+- [x] Journal de synchronisation (`SyncStore`) et appareils appairés.
+- [x] Cache des empreintes et index de la bibliothèque desktop.
+- [x] Métadonnées des téléchargements YouTube et des fichiers reçus ; les
+      fichiers audio et pochettes restent dans `downloads/` et `received/`.
+- [x] Écritures atomiques : appliquer un changement reçu et l'inscrire au
+      journal dans une même transaction (`AppDatabase.atomically`, utilisé
+      par `SyncEngine.incoming` ; en cas d'échec, rien n'est écrit et l'état
+      en mémoire est relu depuis le disque).
+
+### 6.3 Migration
+
+- [x] Au premier lancement, reprise automatique des données existantes
+      (`shared_preferences`, `lyrics/*.json`, `library_index.json`,
+      `received/index.json`) dans la base, une seule fois et sans perte.
+- [x] Suppression des anciennes clés et fichiers une fois la reprise
+      réussie ; en cas d'échec, les anciennes données restent en place.
+      Les anciens ids encore sans morceau sont gardés pour la migration
+      tardive ; les fichiers audio et pochettes reçus restent. Une
+      installation déjà migrée par une version précédente est nettoyée une
+      fois (`legacy.cleanup.v1`).
+- [x] Tests : schéma et migrations, reprise des anciennes données, suite
+      existante adaptée à une base en mémoire (`test/support/
+      test_database.dart`, une base indépendante par test).
+
 ---
 
 ## Plus tard
