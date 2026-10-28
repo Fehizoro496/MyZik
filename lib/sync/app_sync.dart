@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../data/desktop_music_repository.dart' show readArtwork;
 import '../data/song_key.dart';
+import '../providers/app_database_provider.dart';
 import '../providers/library_provider.dart';
 import '../providers/liked_provider.dart';
 import '../providers/lyrics_provider.dart';
@@ -96,6 +97,10 @@ class AppSyncData implements SyncData {
           SyncIds.forLyrics(song.songKey),
     }.toList();
   }
+
+  @override
+  Future<void> transaction(Future<void> Function() body) =>
+      _ref.read(appDatabaseProvider).atomically(body);
 
   static String? _after(String id, String prefix) =>
       id.startsWith(prefix) ? id.substring(prefix.length) : null;

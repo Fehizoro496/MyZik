@@ -12,11 +12,15 @@ import '../sync/sync_files.dart';
 import '../sync/sync_server.dart';
 import '../sync/sync_store.dart';
 import '../sync/usb_bridge.dart';
+import 'app_database_provider.dart';
 import 'shared_preferences_provider.dart';
 
 /// The journal of synchronized changes on this device.
 final syncStoreProvider = Provider<SyncStore>(
-  (ref) => SyncStore(ref.read(sharedPreferencesProvider)),
+  (ref) => SyncStore(
+    ref.read(sharedPreferencesProvider),
+    database: ref.read(appDatabaseProvider),
+  ),
 );
 
 final syncEngineProvider = Provider<SyncEngine>(
@@ -118,6 +122,7 @@ class SyncServerNotifier extends Notifier<SyncServerState> {
       engine: ref.read(syncEngineProvider),
       files: ref.read(syncFilesProvider),
       preferences: ref.read(sharedPreferencesProvider),
+      database: ref.read(appDatabaseProvider),
       name: Platform.localHostname,
     );
     _events = _server.events.listen(_onEvent);
@@ -324,6 +329,7 @@ class SyncClientNotifier extends Notifier<SyncClientState> {
       engine: ref.read(syncEngineProvider),
       files: ref.read(syncFilesProvider),
       preferences: ref.read(sharedPreferencesProvider),
+      database: ref.read(appDatabaseProvider),
       discovery: ref.read(syncDiscoveryProvider),
     );
     final lifecycle = AppLifecycleListener(onResume: syncIfPaired);

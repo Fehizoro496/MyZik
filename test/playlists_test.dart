@@ -2,7 +2,6 @@
 // from the Playlists tab, adding tracks via the detail sheet and via a track's
 // long-press "add to playlist" sheet, and that playlists persist to prefs.
 
-import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
@@ -19,6 +18,9 @@ import 'package:my_zik/providers/navigation_provider.dart';
 import 'package:my_zik/providers/playlists_provider.dart';
 import 'package:my_zik/providers/shared_preferences_provider.dart';
 import 'package:my_zik/screens/playlist_screen.dart';
+import 'package:my_zik/providers/app_database_provider.dart';
+
+import 'support/test_database.dart';
 
 class _FakeRepo implements MusicRepository {
   @override
@@ -59,6 +61,7 @@ void main() {
       ProviderScope(
         overrides: [
           sharedPreferencesProvider.overrideWithValue(prefs),
+          appDatabaseProvider.overrideWithValue(await testDatabase(tester)),
           musicRepositoryProvider.overrideWithValue(_FakeRepo()),
         ],
         child: const MaterialApp(home: PlayerShell()),
@@ -103,8 +106,9 @@ void main() {
     await tester.pumpAndSettle();
     expect(container.read(playlistsProvider).first.songKeys, [keyOf(2)]);
 
-    // Persisted to prefs.
-    expect(prefs.getString('playlists.v1'), isNotNull);
+    // Saved in the database.
+    final database = container.read(appDatabaseProvider);
+    expect(database.playlists.single['songKeys'], [keyOf(2)]);
 
     // Close the "Add songs" sheet (tap its barrier), then return to My Music.
     await tester.tapAt(const Offset(195, 10));
@@ -139,8 +143,7 @@ void main() {
       keyOf(3),
       keyOf(2),
     ]);
-    final saved = jsonDecode(prefs.getString('playlists.v1')!) as List;
-    expect((saved.single as Map)['songKeys'], [keyOf(3), keyOf(2)]);
+    expect(database.playlists.single['songKeys'], [keyOf(3), keyOf(2)]);
 
     // Open the playlist and remove the first track via its ⋮ context menu.
     await tester.tap(find.text('Playlists'));

@@ -8,10 +8,8 @@ import '../data/download_engine.dart';
 import '../data/youtube_repository.dart';
 import '../models.dart';
 import 'library_provider.dart';
-import 'shared_preferences_provider.dart';
+import 'app_database_provider.dart';
 import 'youtube_provider.dart';
-
-const _kDownloads = 'downloads.tracks';
 
 /// [Song.id] for a YouTube video, shared by the streamed and downloaded
 /// versions so likes and playlists follow the track. Negative so it can never
@@ -190,15 +188,13 @@ class DownloadsNotifier extends Notifier<DownloadsState> {
   }
 
   Future<void> _restore() async {
-    final raw = ref.read(sharedPreferencesProvider).getStringList(_kDownloads);
-    if (raw == null || raw.isEmpty) return;
+    final raw = ref.read(appDatabaseProvider).downloadRecords;
+    if (raw.isEmpty) return;
     final dir = (await ref.read(downloadsDirectoryProvider.future)).path;
     final saved = <String, DownloadedTrack>{};
     for (final entry in raw) {
       try {
-        final track = DownloadedTrack.fromJson(
-          jsonDecode(entry) as Map<String, dynamic>,
-        ).inDirectory(dir);
+        final track = DownloadedTrack.fromJson(entry).inDirectory(dir);
         // Skip entries whose file was removed behind the app's back.
         if (File(track.audioPath).existsSync()) saved[track.videoId] = track;
       } catch (_) {
@@ -391,9 +387,10 @@ class DownloadsNotifier extends Notifier<DownloadsState> {
   }
 
   void _persist() {
-    ref.read(sharedPreferencesProvider).setStringList(_kDownloads, [
-      for (final track in state.saved.values) jsonEncode(track.toJson()),
-    ]);
+    ref.read(appDatabaseProvider).replaceDownloads({
+      for (final track in state.saved.values)
+        track.videoId: jsonEncode(track.toJson()),
+    });
   }
 
   static String _artworkName(String videoId) => '$videoId.cover';

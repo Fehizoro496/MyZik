@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../data/desktop_music_repository.dart';
+import 'app_database_provider.dart';
 import 'library_provider.dart';
 import 'shared_preferences_provider.dart';
 
@@ -12,9 +13,15 @@ class LibraryFoldersNotifier extends Notifier<List<String>> {
   SharedPreferences get _prefs => ref.read(sharedPreferencesProvider);
 
   @override
-  List<String> build() =>
-      _prefs.getStringList(DesktopMusicRepository.foldersPreference) ??
-      const [];
+  List<String> build() {
+    final database = ref.read(appDatabaseProvider);
+    return database.hasSetting(DesktopMusicRepository.foldersPreference)
+        ? database.getStringListSetting(
+            DesktopMusicRepository.foldersPreference,
+          )
+        : _prefs.getStringList(DesktopMusicRepository.foldersPreference) ??
+              const [];
+  }
 
   /// Adds [folder] unless it (or a folder holding it) is already there.
   Future<void> add(String folder) async {
@@ -36,10 +43,12 @@ class LibraryFoldersNotifier extends Notifier<List<String>> {
 
   Future<void> _save(List<String> folders) async {
     state = folders;
-    await _prefs.setStringList(
-      DesktopMusicRepository.foldersPreference,
-      folders,
-    );
+    await ref
+        .read(appDatabaseProvider)
+        .setStringListSetting(
+          DesktopMusicRepository.foldersPreference,
+          folders,
+        );
     await ref.read(libraryProvider.notifier).load();
   }
 }

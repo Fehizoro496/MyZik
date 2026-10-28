@@ -56,6 +56,11 @@ dependencies:
   # Local key-value storage backing the persisted providers (settings, resume
   # playback).
   shared_preferences: ^2.3.3
+  # SQLite is native on mobile/macOS and uses the FFI factory on Windows/Linux
+  # (its sqlite3 dependency bundles the native library).
+  sqflite: ^2.4.5
+  sqflite_common_ffi: ^2.4.5
+  path: ^1.9.1
 
   # Searches YouTube and resolves playable audio streams entirely on-device.
   youtube_explode_dart: ^3.1.0

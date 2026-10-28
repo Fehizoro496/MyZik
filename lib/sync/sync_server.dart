@@ -6,6 +6,7 @@ import 'dart:math';
 
 import 'package:crypto/crypto.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../data/app_database.dart';
 
 import 'sync_engine.dart';
 import 'sync_files.dart';
@@ -168,6 +169,7 @@ class SyncServer {
     required this.engine,
     required this.files,
     required SharedPreferences preferences,
+    this.database,
     required this.name,
     this.port = defaultPort,
   }) : _prefs = preferences {
@@ -177,6 +179,7 @@ class SyncServer {
   final SyncEngine engine;
   final SyncFiles files;
   final SharedPreferences _prefs;
+  final AppDatabase? database;
   final String name;
 
   /// The port tried first; another free one is used when it is taken.
@@ -488,6 +491,11 @@ class SyncServer {
 
   List<PairedDevice> _loadDevices() {
     try {
+      if (database case final db?) {
+        return [
+          for (final row in db.pairedDevices) ?PairedDevice.tryFromJson(row),
+        ];
+      }
       return [
         for (final json
             in jsonDecode(_prefs.getString(_devicesKey) ?? '[]') as List)
@@ -498,10 +506,16 @@ class SyncServer {
     }
   }
 
-  void _saveDevices() => _prefs.setString(
-    _devicesKey,
-    jsonEncode([for (final d in _devices) d.toJson()]),
-  );
+  void _saveDevices() {
+    if (database case final db?) {
+      db.replacePairedDevices([for (final device in _devices) device.toJson()]);
+    } else {
+      _prefs.setString(
+        _devicesKey,
+        jsonEncode([for (final d in _devices) d.toJson()]),
+      );
+    }
+  }
 
   static Future<Map<String, dynamic>> _readJson(HttpRequest request) async {
     final text = await utf8.decoder.bind(request).join();

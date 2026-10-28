@@ -15,6 +15,9 @@ import 'package:my_zik/providers/library_provider.dart';
 import 'package:my_zik/providers/playback_provider.dart';
 import 'package:my_zik/providers/shared_preferences_provider.dart';
 import 'package:my_zik/screens/now_playing_screen.dart';
+import 'package:my_zik/providers/app_database_provider.dart';
+
+import 'support/test_database.dart';
 
 class _FakeRepo implements MusicRepository {
   @override
@@ -50,6 +53,7 @@ void main() {
       ProviderScope(
         overrides: [
           sharedPreferencesProvider.overrideWithValue(prefs),
+          appDatabaseProvider.overrideWithValue(await testDatabase(tester)),
           musicRepositoryProvider.overrideWithValue(_FakeRepo()),
         ],
         child: const MaterialApp(home: NowPlayingScreen()),
@@ -91,6 +95,9 @@ void main() {
     // Unmount so the notifier's periodic persist timer is cancelled before the
     // binding's end-of-test check.
     await tester.pumpWidget(const SizedBox.shrink());
+    // The lyrics lookup's SQLite query can't finish under the fake clock;
+    // let sqflite's 10 s lock warning timer run out.
+    await tester.pump(const Duration(seconds: 11));
   });
 
   testWidgets('dragging a handle reorders the queue', (tester) async {
@@ -106,6 +113,7 @@ void main() {
       ProviderScope(
         overrides: [
           sharedPreferencesProvider.overrideWithValue(prefs),
+          appDatabaseProvider.overrideWithValue(await testDatabase(tester)),
           musicRepositoryProvider.overrideWithValue(_FakeRepo()),
         ],
         child: const MaterialApp(home: NowPlayingScreen()),

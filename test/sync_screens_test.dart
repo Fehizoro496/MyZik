@@ -11,6 +11,9 @@ import 'package:my_zik/sync/sync_client.dart';
 import 'package:my_zik/sync/sync_server.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:my_zik/providers/app_database_provider.dart';
+
+import 'support/test_database.dart';
 
 /// The computer's server, without sockets.
 class _FakeServer extends SyncServerNotifier {
@@ -92,6 +95,7 @@ Future<ProviderContainer> _pump(
     ProviderScope(
       overrides: [
         sharedPreferencesProvider.overrideWithValue(prefs),
+        appDatabaseProvider.overrideWithValue(await testDatabase(tester)),
         musicRepositoryProvider.overrideWithValue(SampleMusicRepository()),
         ...overrides,
       ],
@@ -164,32 +168,34 @@ void main() {
     await tester.pumpWidget(const SizedBox.shrink());
   });
 
-  testWidgets('an Android phone can pair through the USB cable', (
-    tester,
-  ) async {
-    final client = _FakeClient(const SyncClientState());
-    final container = await _pump(
-      tester,
-      desktop: false,
-      overrides: [syncClientProvider.overrideWith(() => client)],
-    );
-    container.read(navigationProvider.notifier).goTo(AppScreen.sync);
-    await tester.pumpAndSettle();
+  testWidgets(
+    'an Android phone can pair through the USB cable',
+    (tester) async {
+      final client = _FakeClient(const SyncClientState());
+      final container = await _pump(
+        tester,
+        desktop: false,
+        overrides: [syncClientProvider.overrideWith(() => client)],
+      );
+      container.read(navigationProvider.notifier).goTo(AppScreen.sync);
+      await tester.pumpAndSettle();
 
-    await tester.tap(find.text('USB cable'));
-    await tester.pumpAndSettle();
-    expect(container.read(syncClientProvider).transport, SyncTransport.usb);
-    expect(find.textContaining('USB debugging'), findsWidgets);
+      await tester.tap(find.text('USB cable'));
+      await tester.pumpAndSettle();
+      expect(container.read(syncClientProvider).transport, SyncTransport.usb);
+      expect(find.textContaining('USB debugging'), findsWidgets);
 
-    await tester.tap(find.text('Enter the code by hand'));
-    await tester.pumpAndSettle();
-    await tester.enterText(find.byType(TextField).at(2), '654321');
-    await tester.tap(find.text('Pair'));
-    await tester.pumpAndSettle();
-    expect(client.pairedWith?.hosts, ['127.0.0.1']);
+      await tester.tap(find.text('Enter the code by hand'));
+      await tester.pumpAndSettle();
+      await tester.enterText(find.byType(TextField).at(2), '654321');
+      await tester.tap(find.text('Pair'));
+      await tester.pumpAndSettle();
+      expect(client.pairedWith?.hosts, ['127.0.0.1']);
 
-    await tester.pumpWidget(const SizedBox.shrink());
-  }, variant: TargetPlatformVariant.only(TargetPlatform.android));
+      await tester.pumpWidget(const SizedBox.shrink());
+    },
+    variant: TargetPlatformVariant.only(TargetPlatform.android),
+  );
 
   testWidgets('a paired phone syncs on demand and picks a transfer mode', (
     tester,

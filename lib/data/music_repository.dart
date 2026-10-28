@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../models.dart';
+import 'app_database.dart';
 import 'desktop_music_repository.dart';
 import 'device_music_repository.dart';
 import 'sample_music_repository.dart';
@@ -29,8 +30,11 @@ abstract class MusicRepository {
 /// Picks the right repository for the current platform: the device's media
 /// library on phones, the user's music folders on computers (listed in
 /// [preferences]), sample data on the web.
-MusicRepository createMusicRepository(SharedPreferences preferences) {
+MusicRepository createMusicRepository(
+  SharedPreferences preferences, {
+  AppDatabase? database,
+}) {
   if (kIsWeb) return SampleMusicRepository();
   if (Platform.isAndroid || Platform.isIOS) return DeviceMusicRepository();
-  return DesktopMusicRepository(preferences: preferences);
+  return DesktopMusicRepository(preferences: preferences, database: database);
 }

@@ -1,12 +1,14 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../data/lyrics_repository.dart';
+import 'app_database_provider.dart';
 import '../models.dart';
 import '../sync/sync_store.dart';
 import 'sync_providers.dart';
 
 final lyricsRepositoryProvider = Provider<LyricsRepository>(
   (ref) => LyricsRepository(
+    database: ref.read(appDatabaseProvider),
     // Lyrics follow the track to the listener's other devices, timings
     // included; what the listener made outranks what was found online.
     onStored: (songKey, {required found}) => ref

@@ -4,6 +4,7 @@ import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:shared_preferences/shared_preferences.dart';
+import '../data/app_database.dart';
 
 import 'sync_discovery.dart';
 import 'sync_engine.dart';
@@ -176,6 +177,7 @@ class SyncClient {
     required this.engine,
     required this.files,
     required SharedPreferences preferences,
+    this.database,
     this.discovery,
     HttpClient? http,
   }) : _prefs = preferences,
@@ -185,6 +187,7 @@ class SyncClient {
   final SyncEngine engine;
   final SyncFiles files;
   final SharedPreferences _prefs;
+  final AppDatabase? database;
   final SyncDiscovery? discovery;
   final HttpClient _http;
 
@@ -209,7 +212,11 @@ class SyncClient {
 
   Map<String, dynamic> get _state {
     try {
-      return jsonDecode(_prefs.getString(_stateKey) ?? '{}')
+      return jsonDecode(
+            database?.getSyncState(_stateKey) ??
+                _prefs.getString(_stateKey) ??
+                '{}',
+          )
           as Map<String, dynamic>;
     } catch (_) {
       return {};
@@ -217,7 +224,16 @@ class SyncClient {
   }
 
   void _update(Map<String, dynamic> changes) =>
-      _prefs.setString(_stateKey, jsonEncode({..._state, ...changes}));
+      _saveState({..._state, ...changes});
+
+  void _saveState(Map<String, dynamic> value) {
+    final encoded = jsonEncode(value);
+    if (database case final db?) {
+      db.setSyncState(_stateKey, encoded);
+    } else {
+      _prefs.setString(_stateKey, encoded);
+    }
+  }
 
   /// Pairs with the computer described by [payload] (from its QR code).
   Future<SyncConnection> pair(
@@ -249,10 +265,7 @@ class SyncClient {
           lastHost: transport == SyncTransport.usb ? null : host,
         );
         // A new computer: start its exchange from scratch.
-        _prefs.setString(
-          _stateKey,
-          jsonEncode({'connection': connection.toJson()}),
-        );
+        _saveState({'connection': connection.toJson()});
         return connection;
       } on SyncException catch (e) {
         failure = e;
@@ -268,7 +281,13 @@ class SyncClient {
   }
 
   /// Forgets the paired computer on this phone.
-  void unpair() => _prefs.remove(_stateKey);
+  void unpair() {
+    if (database case final db?) {
+      db.setSyncState(_stateKey, '{}');
+    } else {
+      _prefs.remove(_stateKey);
+    }
+  }
 
   /// Exchanges records with the computer, then transfers the files [mode]
   /// asks for.

@@ -8,6 +8,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../models.dart';
+import 'app_database.dart';
 import 'music_repository.dart';
 
 /// The library on a computer: the audio files under the folders the user
@@ -17,11 +18,13 @@ import 'music_repository.dart';
 class DesktopMusicRepository implements MusicRepository {
   DesktopMusicRepository({
     required SharedPreferences preferences,
+    this.database,
     Future<Directory> Function()? indexDirectory,
   }) : _preferences = preferences,
        _indexDirectory = indexDirectory ?? getApplicationSupportDirectory;
 
   final SharedPreferences _preferences;
+  final AppDatabase? database;
   final Future<Directory> Function() _indexDirectory;
 
   static const foldersPreference = 'library.folders.v1';
@@ -32,7 +35,9 @@ class DesktopMusicRepository implements MusicRepository {
 
   /// The music folders, as picked by the user.
   List<String> get folders =>
-      _preferences.getStringList(foldersPreference) ?? const [];
+      database != null && database!.hasSetting(foldersPreference)
+      ? database!.getStringListSetting(foldersPreference)
+      : _preferences.getStringList(foldersPreference) ?? const [];
 
   @override
   bool get isSupported => true;
@@ -48,13 +53,22 @@ class DesktopMusicRepository implements MusicRepository {
       _pathById = const {};
       return const [];
     }
-    final indexFile = await _indexFile();
-    final cached = await _readIndex(indexFile);
+    final indexFile = database == null ? await _indexFile() : null;
+    final cached = database == null
+        ? await _readIndex(indexFile!)
+        : _decodeIndex(database!.libraryIndex());
     final scan = await Isolate.run(() => scanLibrary(folders, cached));
     if (scan.changed) {
-      await indexFile.writeAsString(
-        jsonEncode([for (final track in scan.tracks) track.toJson()]),
-      );
+      if (database case final db?) {
+        db.replaceLibraryIndex({
+          for (final track in scan.tracks)
+            track.path: jsonEncode(track.toJson()),
+        });
+      } else {
+        await indexFile!.writeAsString(
+          jsonEncode([for (final track in scan.tracks) track.toJson()]),
+        );
+      }
     }
     final songs = [for (final track in scan.tracks) track.toSong()];
     _pathById = {for (final song in songs) song.id: song.filePath!};
@@ -87,6 +101,15 @@ class DesktopMusicRepository implements MusicRepository {
       // Corrupt or outdated index: rebuild it from the files.
       return const {};
     }
+  }
+
+  static Map<String, IndexedTrack> _decodeIndex(Map<String, String> records) {
+    final index = <String, IndexedTrack>{};
+    for (final entry in records.entries) {
+      final track = IndexedTrack.tryFromJson(jsonDecode(entry.value));
+      if (track != null) index[entry.key] = track;
+    }
+    return index;
   }
 }
 

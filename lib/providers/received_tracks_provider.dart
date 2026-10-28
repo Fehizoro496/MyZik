@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path_provider/path_provider.dart';
 
 import '../sync/sync_files.dart';
+import 'app_database_provider.dart';
 
 /// Audio files received from the user's other device, in a private folder.
 /// [libraryProvider] lists them alongside the device's own music.
@@ -24,6 +25,7 @@ class ReceivedTracksNotifier extends Notifier<List<TrackFile>> {
     final base = await getApplicationSupportDirectory();
     return ReceivedTracksStore(
       Directory('${base.path}${Platform.pathSeparator}received'),
+      database: ref.read(appDatabaseProvider),
     );
   }();
 

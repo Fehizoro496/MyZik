@@ -1,10 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:shared_preferences/shared_preferences.dart';
-
-import '../data/song_key.dart';
 import '../models.dart';
 import '../sync/sync_store.dart';
-import 'shared_preferences_provider.dart';
+import 'app_database_provider.dart';
 import 'sync_providers.dart';
 
 /// The liked songs, as a set of [Song.songKey]s persisted to
@@ -13,12 +10,8 @@ import 'sync_providers.dart';
 /// means the same recording on every device. Likes saved by older versions
 /// under [Song.id]s are moved here by [SongKeyMigration].
 class LikedNotifier extends Notifier<Set<String>> {
-  SharedPreferences get _prefs => ref.read(sharedPreferencesProvider);
-
   @override
-  Set<String> build() => {
-    ...?_prefs.getStringList(SongKeyMigration.likedKeysPreference),
-  };
+  Set<String> build() => ref.read(appDatabaseProvider).likedKeys;
 
   bool isLiked(Song song) => state.contains(song.songKey);
 
@@ -39,7 +32,7 @@ class LikedNotifier extends Notifier<Set<String>> {
 
   void _save(Set<String> keys) {
     state = keys;
-    _prefs.setStringList(SongKeyMigration.likedKeysPreference, keys.toList());
+    ref.read(appDatabaseProvider).replaceLikes(keys);
   }
 }
 

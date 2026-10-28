@@ -4,9 +4,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:just_audio_media_kit/just_audio_media_kit.dart';
+import 'package:path_provider/path_provider.dart';
 
 import 'desktop/desktop_shell.dart';
 import 'providers/audio_handler.dart';
+import 'data/app_database.dart';
+import 'data/app_database_migration.dart';
+import 'providers/app_database_provider.dart';
 import 'providers/navigation_provider.dart';
 import 'providers/shared_preferences_provider.dart';
 import 'providers/sync_providers.dart';
@@ -25,6 +29,11 @@ import 'theme.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   final prefs = await SharedPreferences.getInstance();
+  final database = await AppDatabase.open();
+  await database.migrateLegacy(
+    preferences: prefs,
+    supportDirectory: await getApplicationSupportDirectory(),
+  );
   if (!kIsWeb && defaultTargetPlatform == TargetPlatform.windows) {
     JustAudioMediaKit.ensureInitialized(windows: true, linux: false);
     JustAudioMediaKit.title = 'My Zik';
@@ -51,6 +60,7 @@ void main() async {
   final container = ProviderContainer(
     overrides: [
       sharedPreferencesProvider.overrideWithValue(prefs),
+      appDatabaseProvider.overrideWithValue(database),
       audioHandlerProvider.overrideWithValue(audioHandler),
     ],
   );

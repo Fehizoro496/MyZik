@@ -14,6 +14,9 @@ import 'package:my_zik/providers/library_provider.dart';
 import 'package:my_zik/providers/playback_provider.dart';
 import 'package:my_zik/providers/shared_preferences_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:my_zik/providers/app_database_provider.dart';
+
+import 'support/test_database.dart';
 
 Future<void> _pumpDesktop(
   WidgetTester tester, {
@@ -29,6 +32,7 @@ Future<void> _pumpDesktop(
     ProviderScope(
       overrides: [
         sharedPreferencesProvider.overrideWithValue(prefs),
+        appDatabaseProvider.overrideWithValue(await testDatabase(tester)),
         musicRepositoryProvider.overrideWithValue(
           repository?.call(prefs) ?? SampleMusicRepository(),
         ),

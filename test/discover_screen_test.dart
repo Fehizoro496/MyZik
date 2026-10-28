@@ -8,6 +8,9 @@ import 'package:my_zik/providers/playback_provider.dart';
 import 'package:my_zik/providers/shared_preferences_provider.dart';
 import 'package:my_zik/providers/youtube_provider.dart';
 import 'package:my_zik/screens/discover_screen.dart';
+import 'package:my_zik/providers/app_database_provider.dart';
+
+import 'support/test_database.dart';
 
 class _FakeYouTubeRepository implements YouTubeRepository {
   _FakeYouTubeRepository({this.failResolution = false});
@@ -62,6 +65,7 @@ void main() {
       ProviderScope(
         overrides: [
           sharedPreferencesProvider.overrideWithValue(preferences),
+          appDatabaseProvider.overrideWithValue(await testDatabase(tester)),
           youtubeRepositoryProvider.overrideWithValue(repository),
         ],
         child: const MaterialApp(home: Scaffold(body: DiscoverScreen())),
@@ -111,6 +115,7 @@ void main() {
       ProviderScope(
         overrides: [
           sharedPreferencesProvider.overrideWithValue(preferences),
+          appDatabaseProvider.overrideWithValue(await testDatabase(tester)),
           youtubeRepositoryProvider.overrideWithValue(repository),
         ],
         child: const MaterialApp(home: Scaffold(body: DiscoverScreen())),

@@ -18,6 +18,9 @@ class _MemoryData implements SyncData {
   final songs = <String, String>{};
 
   @override
+  Future<void> transaction(Future<void> Function() body) => body();
+
+  @override
   Future<List<String>> aliases(String id, Object? value) async {
     final metadata = value is Map ? value['_songMetadata'] : null;
     if (!id.startsWith(SyncIds.lyrics) || metadata is! String) return const [];

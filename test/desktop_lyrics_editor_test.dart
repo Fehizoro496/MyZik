@@ -13,6 +13,9 @@ import 'package:my_zik/models.dart';
 import 'package:my_zik/providers/lyrics_provider.dart';
 import 'package:my_zik/providers/shared_preferences_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:my_zik/providers/app_database_provider.dart';
+
+import 'support/test_database.dart';
 
 const _song = Song(
   id: 7,
@@ -65,6 +68,7 @@ Future<List<Lyrics>> _pumpEditor(
     ProviderScope(
       overrides: [
         sharedPreferencesProvider.overrideWithValue(prefs),
+        appDatabaseProvider.overrideWithValue(await testDatabase(tester)),
         lyricsProvider.overrideWith(() => _FakeLyrics(saved)),
         ...overrides,
       ],

@@ -1,6 +1,8 @@
 import 'dart:convert';
 import 'dart:io';
 
+import '../data/app_database.dart';
+
 import '../data/desktop_music_repository.dart' show songIdForPath;
 import '../models.dart';
 
@@ -150,9 +152,10 @@ abstract class SyncFiles {
 /// device (a YouTube download stays `yt:`), so likes, playlists and lyrics
 /// follow them.
 class ReceivedTracksStore {
-  ReceivedTracksStore(this.directory);
+  ReceivedTracksStore(this.directory, {this.database});
 
   final Directory directory;
+  final AppDatabase? database;
 
   File get _index =>
       File('${directory.path}${Platform.pathSeparator}index.json');
@@ -160,8 +163,15 @@ class ReceivedTracksStore {
   /// The received files still on disk.
   Future<List<TrackFile>> load() async {
     try {
-      if (!_index.existsSync()) return const [];
-      final entries = jsonDecode(await _index.readAsString()) as List;
+      final entries = database != null
+          ? database!
+                .receivedFiles()
+                .values
+                .map((record) => jsonDecode(record))
+                .toList()
+          : _index.existsSync()
+          ? jsonDecode(await _index.readAsString()) as List
+          : const [];
       return [
         for (final entry in entries)
           if (TrackFile.tryFromJson(entry) case final track?
@@ -206,9 +216,15 @@ class ReceivedTracksStore {
         if (t.songKey != track.songKey) t,
       stored,
     ];
-    await _index.writeAsString(
-      jsonEncode([for (final t in tracks) t.toJson(withPath: true)]),
-    );
+    if (database case final db?) {
+      db.replaceReceivedFiles({
+        for (final t in tracks) t.songKey: jsonEncode(t.toJson(withPath: true)),
+      });
+    } else {
+      await _index.writeAsString(
+        jsonEncode([for (final t in tracks) t.toJson(withPath: true)]),
+      );
+    }
     return stored;
   }
 

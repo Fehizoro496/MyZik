@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../data/music_repository.dart';
+import 'app_database_provider.dart';
 import '../data/song_key.dart';
 import '../models.dart';
 import 'downloads_provider.dart';
@@ -16,7 +17,10 @@ import 'shared_preferences_provider.dart';
 /// Source of the track library for this platform. A single instance is
 /// shared by every provider that needs to read it.
 final musicRepositoryProvider = Provider<MusicRepository>((ref) {
-  return createMusicRepository(ref.read(sharedPreferencesProvider));
+  return createMusicRepository(
+    ref.read(sharedPreferencesProvider),
+    database: ref.read(appDatabaseProvider),
+  );
 });
 
 /// Cover artwork for a song id, fetched lazily and cached by Riverpod per
@@ -288,6 +292,7 @@ class LibraryNotifier extends Notifier<LibraryState> {
       final result = await SongKeyMigration.run(
         _withDownloads(_deviceSongs),
         prefs,
+        database: ref.read(appDatabaseProvider),
       );
       if (_disposed || generation != _generation) return;
       final keyById = {for (final song in result.songs) song.id: song};

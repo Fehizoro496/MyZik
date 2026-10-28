@@ -5,9 +5,11 @@ import 'dart:typed_data';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:my_zik/data/desktop_music_repository.dart';
+import 'package:my_zik/data/app_database.dart';
 import 'package:my_zik/data/sample_music_repository.dart';
 import 'package:my_zik/providers/library_folders_provider.dart';
 import 'package:my_zik/providers/library_provider.dart';
+import 'package:my_zik/providers/app_database_provider.dart';
 import 'package:my_zik/providers/shared_preferences_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -198,9 +200,12 @@ void main() {
   test('music folders persist, skip nested ones and rescan', () async {
     SharedPreferences.setMockInitialValues({});
     final prefs = await SharedPreferences.getInstance();
+    final database = await AppDatabase.inMemory();
+    addTearDown(database.close);
     final container = ProviderContainer(
       overrides: [
         sharedPreferencesProvider.overrideWithValue(prefs),
+        appDatabaseProvider.overrideWithValue(database),
         musicRepositoryProvider.overrideWithValue(SampleMusicRepository()),
       ],
     );
@@ -210,9 +215,10 @@ void main() {
     await folders.add(root.path);
     await folders.add(sub('inside'));
     expect(container.read(libraryFoldersProvider), [root.path]);
-    expect(prefs.getStringList(DesktopMusicRepository.foldersPreference), [
-      root.path,
-    ]);
+    expect(
+      database.getStringListSetting(DesktopMusicRepository.foldersPreference),
+      [root.path],
+    );
     expect(container.read(libraryProvider).status, LibraryStatus.ready);
 
     await folders.remove(root.path);

@@ -5,6 +5,7 @@ import 'package:crypto/crypto.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../models.dart';
+import 'app_database.dart';
 
 /// Cross-device identity for a recording: the value of [Song.songKey] once
 /// the file fingerprint is known.
@@ -26,8 +27,13 @@ class SongKey {
   static Future<SongKey> forSong(
     Song song, {
     SharedPreferences? preferences,
+    AppDatabase? database,
   }) async {
-    final keys = await resolveAll([song], preferences: preferences);
+    final keys = await resolveAll(
+      [song],
+      preferences: preferences,
+      database: database,
+    );
     return SongKey._(keys.single);
   }
 
@@ -39,8 +45,14 @@ class SongKey {
   static Future<List<String>> resolveAll(
     List<Song> songs, {
     SharedPreferences? preferences,
+    AppDatabase? database,
   }) async {
-    final cache = preferences == null
+    final cache = database != null
+        ? database.fingerprintCache().map(
+            (key, value) =>
+                MapEntry(key, value.replaceFirst(RegExp(r'^fp:'), '')),
+          )
+        : preferences == null
         ? <String, dynamic>{}
         : _readFingerprintCache(preferences);
     final used = <String, String>{};
@@ -78,7 +90,17 @@ class SongKey {
       keys.addAll(await Future.wait(batch.map(resolve)));
     }
 
-    if (preferences != null && hashed) {
+    if (database != null && hashed) {
+      for (final entry in used.entries) {
+        final parts = entry.key.split('|');
+        database.setFingerprint(
+          entry.key,
+          'fp:${entry.value}',
+          size: parts.length > 1 ? int.tryParse(parts[1]) ?? 0 : 0,
+          modifiedMs: parts.length > 2 ? int.tryParse(parts[2]) ?? 0 : 0,
+        );
+      }
+    } else if (preferences != null && hashed) {
       final next = <String, dynamic>{...used};
       for (final entry in cache.entries) {
         if (next.length >= _maxCachedFingerprints) break;
@@ -174,9 +196,14 @@ class SongKeyMigration {
   /// [Song.contentKey] set, and whether likes or playlists changed.
   static Future<({List<Song> songs, bool migrated})> run(
     List<Song> songs,
-    SharedPreferences preferences,
-  ) async {
-    final keys = await SongKey.resolveAll(songs, preferences: preferences);
+    SharedPreferences preferences, {
+    AppDatabase? database,
+  }) async {
+    final keys = await SongKey.resolveAll(
+      songs,
+      preferences: preferences,
+      database: database,
+    );
     final keyed = [
       for (var i = 0; i < songs.length; i++)
         keys[i].startsWith('fp:') && songs[i].contentKey != keys[i]
@@ -191,18 +218,55 @@ class SongKeyMigration {
       await preferences.setString(mediaIdMapPreference, encodedMap);
     }
 
-    final likesMoved = await _migrateLikes(preferences, byId);
-    final playlistsMoved = await _migratePlaylists(preferences, byId);
-    return (songs: keyed, migrated: likesMoved || playlistsMoved);
+    // With a database, keys live there: preferences only keep the ids
+    // still waiting for their track.
+    final keepKeys = database == null;
+    final likedNow = await _migrateLikes(preferences, byId, keepKeys: keepKeys);
+    final playlistKeys = await _migratePlaylists(
+      preferences,
+      byId,
+      keepKeys: keepKeys,
+    );
+    if (database != null) {
+      // Only what just migrated goes in: the database holds every change
+      // made since, which the preferences no longer follow.
+      if (likedNow.isNotEmpty) {
+        database.replaceLikes({...database.likedKeys, ...likedNow});
+      }
+      if (playlistKeys.isNotEmpty) {
+        database.replacePlaylists([
+          for (final playlist in database.playlists)
+            switch (playlistKeys[playlist['id']]) {
+              final added? => {
+                ...playlist,
+                'songKeys': {
+                  ...(playlist['songKeys'] as List? ?? const [])
+                      .whereType<String>(),
+                  ...added,
+                }.toList(),
+              },
+              _ => playlist,
+            },
+        ]);
+      }
+    }
+    return (
+      songs: keyed,
+      migrated: likedNow.isNotEmpty || playlistKeys.isNotEmpty,
+    );
   }
 
-  static Future<bool> _migrateLikes(
+  /// Moves legacy liked ids that [byId] now knows to keys; returns the keys
+  /// that moved.
+  static Future<Set<String>> _migrateLikes(
     SharedPreferences preferences,
-    Map<String, String> byId,
-  ) async {
+    Map<String, String> byId, {
+    bool keepKeys = true,
+  }) async {
     final legacy = preferences.getStringList(legacyLikedIdsPreference);
-    if (legacy == null || legacy.isEmpty) return false;
+    if (legacy == null || legacy.isEmpty) return const {};
     final liked = {...?preferences.getStringList(likedKeysPreference)};
+    final moved = <String>{};
     final pending = <String>[];
     for (final id in legacy) {
       final key = byId[id];
@@ -210,24 +274,30 @@ class SongKeyMigration {
         pending.add(id);
       } else {
         liked.add(key);
+        moved.add(key);
       }
     }
-    if (pending.length == legacy.length) return false;
-    await preferences.setStringList(likedKeysPreference, liked.toList());
+    if (moved.isEmpty) return const {};
+    if (keepKeys) {
+      await preferences.setStringList(likedKeysPreference, liked.toList());
+    }
     if (pending.isEmpty) {
       await preferences.remove(legacyLikedIdsPreference);
     } else {
       await preferences.setStringList(legacyLikedIdsPreference, pending);
     }
-    return true;
+    return moved;
   }
 
-  static Future<bool> _migratePlaylists(
+  /// Moves legacy playlist ids that [byId] now knows to keys; returns, by
+  /// playlist id, the keys that moved.
+  static Future<Map<String, List<String>>> _migratePlaylists(
     SharedPreferences preferences,
-    Map<String, String> byId,
-  ) async {
+    Map<String, String> byId, {
+    bool keepKeys = true,
+  }) async {
     final raw = preferences.getString(playlistsPreference);
-    if (raw == null || raw.isEmpty) return false;
+    if (raw == null || raw.isEmpty) return const {};
     final List<Playlist> playlists;
     try {
       playlists = [
@@ -236,21 +306,34 @@ class SongKeyMigration {
       ];
     } catch (_) {
       // Leave malformed user data for the playlists reader.
-      return false;
+      return const {};
     }
-    var changed = false;
+    final moved = <String, List<String>>{};
     final migrated = <Playlist>[];
     for (final playlist in playlists) {
       final next = _migratePlaylist(playlist, byId);
-      if (next != null) changed = true;
+      if (next != null) {
+        moved[playlist.id] = [
+          for (final key in next.songKeys)
+            if (!playlist.songKeys.contains(key)) key,
+        ];
+      }
       migrated.add(next ?? playlist);
     }
-    if (!changed) return false;
-    await preferences.setString(
-      playlistsPreference,
-      jsonEncode([for (final p in migrated) p.toJson()]),
-    );
-    return true;
+    if (moved.isEmpty) return const {};
+    final kept = [
+      for (final p in migrated)
+        if (keepKeys) p else if (p.songIds.isNotEmpty) p.copyWith(songKeys: []),
+    ];
+    if (kept.isEmpty) {
+      await preferences.remove(playlistsPreference);
+    } else {
+      await preferences.setString(
+        playlistsPreference,
+        jsonEncode([for (final p in kept) p.toJson()]),
+      );
+    }
+    return moved;
   }
 
   /// [playlist] with its legacy ids that [byId] knows moved to keys, or null

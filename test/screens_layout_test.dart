@@ -7,6 +7,9 @@ import 'package:my_zik/providers/shared_preferences_provider.dart';
 import 'package:my_zik/screens/home_screen.dart';
 import 'package:my_zik/screens/my_music_screen.dart';
 import 'package:my_zik/screens/now_playing_screen.dart';
+import 'package:my_zik/providers/app_database_provider.dart';
+
+import 'support/test_database.dart';
 
 Future<void> _pumpAt(WidgetTester tester, Widget child) async {
   SharedPreferences.setMockInitialValues({});
@@ -17,7 +20,10 @@ Future<void> _pumpAt(WidgetTester tester, Widget child) async {
   addTearDown(tester.view.resetDevicePixelRatio);
   await tester.pumpWidget(
     ProviderScope(
-      overrides: [sharedPreferencesProvider.overrideWithValue(prefs)],
+      overrides: [
+        sharedPreferencesProvider.overrideWithValue(prefs),
+        appDatabaseProvider.overrideWithValue(await testDatabase(tester)),
+      ],
       child: MaterialApp(home: child),
     ),
   );

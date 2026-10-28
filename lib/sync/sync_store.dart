@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:math';
 
 import 'package:shared_preferences/shared_preferences.dart';
+import '../data/app_database.dart';
 
 /// One synchronized record as exchanged between devices: its id (see
 /// [SyncIds]), when and where it last changed, whether it was found
@@ -106,12 +107,17 @@ class SyncIds {
 /// Persisted in [SharedPreferences] so local changes are recorded
 /// synchronously, the moment they happen.
 class SyncStore {
-  SyncStore(this._prefs, {int Function()? clock, this.keyPrefix = ''})
-    : _clock = clock ?? (() => DateTime.now().millisecondsSinceEpoch) {
+  SyncStore(
+    this._prefs, {
+    int Function()? clock,
+    this.keyPrefix = '',
+    this.database,
+  }) : _clock = clock ?? (() => DateTime.now().millisecondsSinceEpoch) {
     _load();
   }
 
   final SharedPreferences _prefs;
+  final AppDatabase? database;
   final int Function() _clock;
 
   /// Prepended to the preference keys, so two devices can share one
@@ -121,7 +127,8 @@ class SyncStore {
   String get _stateKey => '${keyPrefix}sync.state.v1';
   String get _deviceKey => '${keyPrefix}sync.deviceId';
 
-  late final String deviceId = _prefs.getString(_deviceKey) ?? _newDeviceId();
+  late final String deviceId =
+      database?.deviceId ?? _prefs.getString(_deviceKey) ?? _newDeviceId();
   int _sequence = 0;
   final _entries = <String, _Entry>{};
 
@@ -139,7 +146,7 @@ class SyncStore {
     // Never go back in time, even if the clock does.
     final now = max(_clock(), (previous?.updatedAt ?? 0) + 1);
     _entries[id] = _Entry(++_sequence, now, deviceId, deleted, found);
-    _save();
+    _save([id]);
   }
 
   /// Registers the [existing] records (id → whether it was found rather
@@ -149,12 +156,14 @@ class SyncStore {
   /// instead of one erasing the other. Known records are left alone.
   void register(Map<String, bool> existing) {
     var added = false;
+    final addedIds = <String>[];
     for (final MapEntry(key: id, value: found) in existing.entries) {
       if (_entries.containsKey(id)) continue;
       _entries[id] = _Entry(++_sequence, 1, deviceId, false, found);
       added = true;
+      addedIds.add(id);
     }
-    if (added) _save();
+    if (added) _save(addedIds);
   }
 
   /// The records changed after [since], oldest change first, without values.
@@ -183,7 +192,7 @@ class SyncStore {
       remote.deleted,
       remote.found,
     );
-    _save();
+    _save([remote.id]);
   }
 
   String _newDeviceId() {
@@ -197,6 +206,20 @@ class SyncStore {
   }
 
   void _load() {
+    if (database case final db?) {
+      _sequence = db.syncSequence;
+      for (final entry in db.journal.entries) {
+        final row = entry.value;
+        _entries[entry.key] = _Entry(
+          row['sequence'] as int? ?? 0,
+          row['updatedAt'] as int? ?? 0,
+          row['origin'] as String? ?? '',
+          row['deleted'] == true,
+          row['found'] == true,
+        );
+      }
+      return;
+    }
     final raw = _prefs.getString(_stateKey);
     if (raw == null) return;
     try {
@@ -212,7 +235,24 @@ class SyncStore {
     }
   }
 
-  void _save() {
+  void _save([Iterable<String>? changedIds]) {
+    if (database case final db?) {
+      final ids = changedIds ?? _entries.keys;
+      for (final id in ids) {
+        final entry = _entries[id];
+        if (entry == null) continue;
+        db.putSyncRecord(id, {
+          'sequence': entry.sequence,
+          'updatedAt': entry.updatedAt,
+          'origin': entry.origin,
+          'deleted': entry.deleted,
+          'found': entry.found,
+        }, sequence: entry.sequence);
+      }
+      db.setSyncState('deviceId', deviceId);
+      db.setSyncState('sequence', '$_sequence');
+      return;
+    }
     _prefs.setString(
       _stateKey,
       jsonEncode({

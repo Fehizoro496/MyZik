@@ -4,7 +4,9 @@ import 'dart:io';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:my_zik/data/song_key.dart';
+import 'package:my_zik/data/app_database.dart';
 import 'package:my_zik/models.dart';
+import 'package:my_zik/providers/app_database_provider.dart';
 import 'package:my_zik/providers/downloads_provider.dart' show youtubeSongId;
 import 'package:my_zik/providers/liked_provider.dart';
 import 'package:my_zik/providers/playlists_provider.dart';
@@ -29,7 +31,12 @@ class _CountingStore extends InMemorySharedPreferencesStore {
 }
 
 void main() {
-  setUp(() => SharedPreferences.setMockInitialValues({}));
+  late AppDatabase database;
+  setUp(() async {
+    SharedPreferences.setMockInitialValues({});
+    database = await AppDatabase.inMemory();
+  });
+  tearDown(() => database.close());
 
   test(
     'uses YouTube video identity for streamed and downloaded tracks',
@@ -133,7 +140,10 @@ void main() {
 
     ProviderContainer makeContainer(SharedPreferences prefs) {
       final container = ProviderContainer(
-        overrides: [sharedPreferencesProvider.overrideWithValue(prefs)],
+        overrides: [
+          sharedPreferencesProvider.overrideWithValue(prefs),
+          appDatabaseProvider.overrideWithValue(database),
+        ],
       );
       addTearDown(container.dispose);
       return container;
@@ -146,16 +156,10 @@ void main() {
       final liked = makeContainer(prefs).read(likedProvider.notifier);
 
       liked.toggle(streamed);
-      expect(
-        prefs.getStringList(SongKeyMigration.likedKeysPreference),
-        contains('yt:$videoId'),
-      );
+      expect(database.likedKeys, contains('yt:$videoId'));
 
       liked.toggle(streamed);
-      expect(
-        prefs.getStringList(SongKeyMigration.likedKeysPreference) ?? const [],
-        isNot(contains('yt:$videoId')),
-      );
+      expect(database.likedKeys, isNot(contains('yt:$videoId')));
     });
 
     test('adding one to a playlist records its portable key', () async {

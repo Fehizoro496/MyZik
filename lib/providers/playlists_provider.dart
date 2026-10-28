@@ -1,38 +1,21 @@
-import 'dart:convert';
-
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
-import '../data/song_key.dart';
 import '../models.dart';
 import '../sync/sync_store.dart';
 import 'library_provider.dart';
-import 'shared_preferences_provider.dart';
+import 'app_database_provider.dart';
 import 'sync_providers.dart';
-
-const _kPlaylists = SongKeyMigration.playlistsPreference;
 
 /// The user's playlists, persisted to [SharedPreferences] as a JSON array so
 /// they survive an app restart. Like liked songs, tracks are stored as
 /// [Song.songKey]s rather than full [Song]s, so a playlist outlives a library
 /// rescan and means the same tracks on every device.
 class PlaylistsNotifier extends Notifier<List<Playlist>> {
-  SharedPreferences get _prefs => ref.read(sharedPreferencesProvider);
-
   @override
-  List<Playlist> build() {
-    final raw = _prefs.getString(_kPlaylists);
-    if (raw == null || raw.isEmpty) return const [];
-    try {
-      final decoded = jsonDecode(raw) as List;
-      return [
-        for (final e in decoded) Playlist.fromJson(e as Map<String, dynamic>),
-      ];
-    } catch (_) {
-      // Corrupt or outdated payload — start clean rather than crash.
-      return const [];
-    }
-  }
+  List<Playlist> build() => [
+    for (final value in ref.read(appDatabaseProvider).playlists)
+      Playlist.fromJson(value),
+  ];
 
   /// Creates an empty playlist named [name] and returns it (so the caller can
   /// navigate straight into it).
@@ -144,10 +127,9 @@ class PlaylistsNotifier extends Notifier<List<Playlist>> {
   /// Saves the playlists and records [changed] (unless null: a change from
   /// another device) for synchronization.
   void _persist(String? changed, {bool deleted = false}) {
-    _prefs.setString(
-      _kPlaylists,
-      jsonEncode([for (final p in state) p.toJson()]),
-    );
+    ref.read(appDatabaseProvider).replacePlaylists([
+      for (final p in state) p.toJson(),
+    ]);
     if (changed != null) {
       ref
           .read(syncStoreProvider)

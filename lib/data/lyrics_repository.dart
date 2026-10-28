@@ -7,6 +7,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:pretty_dio_logger/pretty_dio_logger.dart';
 
 import '../models.dart';
+import 'app_database.dart';
 import 'lyrics_aligner.dart';
 import 'lyrics_structure.dart';
 import 'song_key.dart';
@@ -200,6 +201,7 @@ class LyricsRepository {
     Dio? dio,
     String apiKey = groqApiKey,
     Future<Directory> Function()? cacheDirectory,
+    this.database,
     this.onStored,
   }) : _dio = dio ?? _createDio(),
        _apiKey = apiKey,
@@ -208,6 +210,7 @@ class LyricsRepository {
   final Dio _dio;
   final String _apiKey;
   final Future<Directory> Function() _cacheDirectory;
+  final AppDatabase? database;
 
   /// Told whenever lyrics are stored for a song key: [found] when looked up
   /// online, false when written, edited or timed by the listener. Lets them
@@ -283,12 +286,28 @@ class LyricsRepository {
   /// Throws [LyricsException] when a service can't be reached, so an outage
   /// isn't cached as "no lyrics".
   Future<Lyrics?> find(Song song, {bool refresh = false}) async {
-    final file = await _cacheFile(song);
+    // Once SQLite is active, read and write only its record. In particular,
+    // don't call the legacy file-adoption path, which used to delete an old
+    // ID-named cache file after adopting it.
+    final file = database == null ? await _cacheFile(song) : null;
     var askLrclib = true;
-    if (!refresh && file.existsSync()) {
+    final metadata = song.metadataKey.split('|');
+    final dbRecord =
+        database?.lyric(song.songKey) ??
+        (database != null && metadata.length >= 3
+            ? await database!.lyricByMetadata(
+                metadata[0],
+                metadata[1],
+                int.tryParse(metadata[2]) ?? song.duration.inSeconds,
+              )
+            : null);
+    final fileRecord = file != null && file.existsSync()
+        ? await _readRecord(file)
+        : null;
+    final cachedRecord = dbRecord ?? fileRecord;
+    if (!refresh && cachedRecord != null) {
       try {
-        final json =
-            jsonDecode(await file.readAsString()) as Map<String, dynamic>;
+        final json = cachedRecord;
         if (json['miss'] != true) return Lyrics.fromJson(json);
         final at = DateTime.fromMillisecondsSinceEpoch(json['at'] as int);
         if (DateTime.now().difference(at) < _missTtl) {
@@ -395,7 +414,7 @@ class LyricsRepository {
       sourceUrl: lyrics.sourceUrl,
       edited: lyrics.edited,
     );
-    final file = await _cacheFile(song);
+    final file = database == null ? await _cacheFile(song) : null;
     await _writeCache(file, song, saved.toJson(), found: false);
     return saved;
   }
@@ -755,18 +774,30 @@ class LyricsRepository {
   /// Writes [record] for [song]. Lyrics (not a "not found") are reported to
   /// [onStored] when [found] says how they came.
   Future<void> _writeCache(
-    File file,
+    File? file,
     Song song,
     Map<String, dynamic> record, {
     bool? found,
   }) async {
-    await file.writeAsString(
-      jsonEncode({
-        ...record,
-        '_songKey': song.songKey,
-        '_songMetadata': SongKey.metadataKey(song),
-      }),
-    );
+    final stored = {
+      ...record,
+      '_songKey': song.songKey,
+      '_songMetadata': SongKey.metadataKey(song),
+    };
+    if (database case final db?) {
+      final metadata = song.metadataKey.split('|');
+      await db.putLyrics(
+        song.songKey,
+        stored,
+        metadataKey: song.metadataKey,
+        artist: metadata.isEmpty ? '' : metadata.first,
+        title: metadata.length < 2 ? '' : metadata[1],
+        durationSeconds: song.duration.inSeconds,
+        found: found ?? !_isHandMade(record),
+      );
+    } else {
+      await file!.writeAsString(jsonEncode(stored));
+    }
     if (found != null && _hasLyrics(record)) {
       onStored?.call(song.songKey, found: found);
     }
@@ -797,6 +828,13 @@ class LyricsRepository {
   /// Every song key with stored lyrics, mapped to whether they were found
   /// online (rather than made by the listener).
   Future<Map<String, bool>> storedLyrics() async {
+    if (database case final db?) {
+      return {
+        for (final record in db.lyricRecords)
+          if (_hasLyrics(record))
+            record['_songKey'] as String: !_isHandMade(record),
+      };
+    }
     final dir = await _lyricsDirectory();
     final stored = <String, bool>{};
     await for (final file in dir.list(followLinks: false)) {
@@ -826,6 +864,10 @@ class LyricsRepository {
   /// The stored lyrics for [songKey], with their timings, to send to
   /// another device.
   Future<Map<String, dynamic>?> readStoredLyrics(String songKey) async {
+    if (database case final db?) {
+      final record = db.lyric(songKey);
+      return _hasLyrics(record) ? record : null;
+    }
     final file = _fileForKey(await _lyricsDirectory(), songKey);
     try {
       if (!file.existsSync()) return null;
@@ -845,14 +887,42 @@ class LyricsRepository {
     Map<String, dynamic> record,
   ) async {
     Lyrics.fromJson(record); // Refuse what can't be read back.
+    if (database case final db?) {
+      // Indexed like local lyrics, so the same recording under another key
+      // finds them, and with how they came (found online or hand-made).
+      final metadataKey = record['_songMetadata'] as String?;
+      final parts = metadataKey?.split('|') ?? const <String>[];
+      await db.putLyrics(
+        songKey,
+        {...record, '_songKey': songKey},
+        metadataKey: metadataKey,
+        artist: parts.isNotEmpty ? parts[0] : null,
+        title: parts.length > 1 ? parts[1] : null,
+        durationSeconds: parts.length > 2 ? int.tryParse(parts[2]) ?? 0 : 0,
+        found: !_isHandMade(record),
+      );
+      return;
+    }
     final file = _fileForKey(await _lyricsDirectory(), songKey);
     await file.writeAsString(jsonEncode({...record, '_songKey': songKey}));
   }
 
   /// Removes the lyrics stored under [songKey].
   Future<void> deleteLyrics(String songKey) async {
+    if (database case final db?) {
+      await db.deleteLyrics(songKey);
+      return;
+    }
     final file = _fileForKey(await _lyricsDirectory(), songKey);
     if (file.existsSync()) await file.delete();
+  }
+
+  Future<Map<String, dynamic>?> _readRecord(File file) async {
+    try {
+      return jsonDecode(await file.readAsString()) as Map<String, dynamic>;
+    } catch (_) {
+      return null;
+    }
   }
 }
 

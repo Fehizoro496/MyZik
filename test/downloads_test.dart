@@ -20,6 +20,10 @@ import 'package:my_zik/providers/downloads_provider.dart';
 import 'package:my_zik/providers/library_provider.dart';
 import 'package:my_zik/providers/shared_preferences_provider.dart';
 import 'package:my_zik/providers/youtube_provider.dart';
+import 'package:my_zik/data/app_database.dart';
+import 'package:my_zik/providers/app_database_provider.dart';
+
+import 'support/test_database.dart';
 
 class _DeviceRepo implements MusicRepository {
   @override
@@ -120,9 +124,12 @@ void main() {
   setUpAll(TestWidgetsFlutterBinding.ensureInitialized);
 
   late Directory dir;
+  // Shared by every app session of a test, like the database on disk.
+  late AppDatabase database;
   setUp(() async {
     dir = await Directory.systemTemp.createTemp('myzik_downloads_test');
     SharedPreferences.setMockInitialValues({});
+    database = await testDatabase();
   });
   tearDown(() => dir.delete(recursive: true));
 
@@ -134,6 +141,7 @@ void main() {
     final container = ProviderContainer(
       overrides: [
         sharedPreferencesProvider.overrideWithValue(prefs),
+        appDatabaseProvider.overrideWithValue(database),
         musicRepositoryProvider.overrideWithValue(_DeviceRepo()),
         youtubeRepositoryProvider.overrideWithValue(youtube ?? _FakeYouTube()),
         downloadsDirectoryProvider.overrideWith((ref) async => dir),
@@ -197,7 +205,7 @@ void main() {
     expect(song.id, youtubeSongId('abc123'));
     expect(Uri.parse(song.uri!).toFilePath(), saved.audioPath);
 
-    // A fresh app session reads the download back from preferences.
+    // A fresh app session reads the download back from the database.
     final restarted = await makeContainer(_FakeEngine(dir));
     expect(restarted.read(downloadsProvider).saved.keys, ['abc123']);
     expect(titles(restarted), contains('Offline Song'));
@@ -315,7 +323,6 @@ void main() {
     expect(File(path).existsSync(), isFalse);
     expect(container.read(downloadsProvider).saved, isEmpty);
     expect(titles(container), ['Local']);
-    final prefs = container.read(sharedPreferencesProvider);
-    expect(prefs.getStringList('downloads.tracks'), isEmpty);
+    expect(database.downloadRecords, isEmpty);
   });
 }

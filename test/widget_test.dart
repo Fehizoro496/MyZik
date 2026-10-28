@@ -9,6 +9,9 @@ import 'package:my_zik/data/sample_music_repository.dart';
 import 'package:my_zik/main.dart';
 import 'package:my_zik/providers/library_provider.dart';
 import 'package:my_zik/providers/shared_preferences_provider.dart';
+import 'package:my_zik/providers/app_database_provider.dart';
+
+import 'support/test_database.dart';
 
 void main() {
   testWidgets('Home screen renders and navigates to Now Playing', (
@@ -27,6 +30,7 @@ void main() {
       ProviderScope(
         overrides: [
           sharedPreferencesProvider.overrideWithValue(prefs),
+          appDatabaseProvider.overrideWithValue(await testDatabase(tester)),
           // The phone layout's library, whatever platform runs the test.
           musicRepositoryProvider.overrideWithValue(SampleMusicRepository()),
         ],

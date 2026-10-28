@@ -17,6 +17,9 @@ import 'package:my_zik/providers/navigation_provider.dart';
 import 'package:my_zik/providers/shared_preferences_provider.dart';
 import 'package:my_zik/screens/collection_screen.dart';
 import 'package:my_zik/screens/song_detail_screen.dart';
+import 'package:my_zik/providers/app_database_provider.dart';
+
+import 'support/test_database.dart';
 
 class _FakeRepo implements MusicRepository {
   @override
@@ -58,6 +61,7 @@ void main() {
       ProviderScope(
         overrides: [
           sharedPreferencesProvider.overrideWithValue(prefs),
+          appDatabaseProvider.overrideWithValue(await testDatabase(tester)),
           musicRepositoryProvider.overrideWithValue(_FakeRepo()),
         ],
         child: const MaterialApp(home: PlayerShell()),

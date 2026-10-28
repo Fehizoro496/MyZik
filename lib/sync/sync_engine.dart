@@ -18,6 +18,10 @@ abstract class SyncData {
   /// applies to: the same recording under another song key on this device
   /// (another encoding or tags), so its lyrics still show.
   Future<List<String>> aliases(String id, Object? value) async => const [];
+
+  /// Runs [body] so the writes it makes (to the data and to the journal)
+  /// are saved together or not at all.
+  Future<void> transaction(Future<void> Function() body) => body();
 }
 
 /// Moves records between the [store] journal and the app [data]: what to
@@ -73,8 +77,12 @@ class SyncEngine {
       ];
       for (final target in targets) {
         if (!store.wins(target)) continue;
-        await data.apply(target.id, target.value, deleted: target.deleted);
-        store.accept(target, publish: publish);
+        // The data and its journal entry are saved together: a crash can't
+        // leave one without the other.
+        await data.transaction(() async {
+          await data.apply(target.id, target.value, deleted: target.deleted);
+          store.accept(target, publish: publish);
+        });
         applied.add(target.id);
       }
     }
