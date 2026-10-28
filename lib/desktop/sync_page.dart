@@ -1,3 +1,4 @@
+import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:qr_flutter/qr_flutter.dart';
@@ -5,6 +6,7 @@ import 'package:qr_flutter/qr_flutter.dart';
 import '../icons.dart';
 import '../providers/sync_providers.dart';
 import '../sync/sync_server.dart';
+import '../sync/usb_bridge.dart';
 import '../theme.dart';
 import 'desktop_style.dart';
 import 'pages.dart';
@@ -25,7 +27,7 @@ class SyncPage extends ConsumerWidget {
           title: 'Sync with phone',
           subtitle:
               'Likes, playlists, your lyrics and music files, kept in step '
-              'with My Zik on your phone over Wi-Fi.',
+              'with My Zik on your phone over Wi-Fi or a USB cable.',
         ),
         Padding(
           padding: const EdgeInsets.fromLTRB(28, 16, 28, 0),
@@ -33,6 +35,8 @@ class SyncPage extends ConsumerWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               _Card(child: _ServerStatus(sync)),
+              const SizedBox(height: 16),
+              _Card(child: _UsbSync(sync.usb)),
               const SizedBox(height: 16),
               _Card(
                 child: sync.pairing == null
@@ -59,7 +63,10 @@ class SyncPage extends ConsumerWidget {
                           ),
                         ],
                       )
-                    : _Pairing(sync.pairing!),
+                    : _Pairing(
+                        sync.pairing!,
+                        usb: sync.usb.connected.isNotEmpty,
+                      ),
               ),
               const SizedBox(height: 28),
               Text(
@@ -173,10 +180,130 @@ class _ServerStatus extends ConsumerWidget {
   }
 }
 
+/// Sync by USB cable: `adb reverse` for each Android phone plugged in.
+class _UsbSync extends ConsumerWidget {
+  const _UsbSync(this.usb);
+
+  final UsbSyncState usb;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final notifier = ref.read(syncServerProvider.notifier);
+    final muted = TextStyle(color: AppColors.whiteAlpha(0.55), fontSize: 13);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            const Icon(AppIcons.cable, size: 22),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Sync by USB cable',
+                    style: TextStyle(fontWeight: FontWeight.w700),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    'For an Android phone plugged into this computer, with '
+                    'USB debugging on. No Wi-Fi needed.',
+                    style: muted,
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 16),
+            Switch(value: usb.enabled, onChanged: notifier.setUsb),
+          ],
+        ),
+        if (usb.enabled) ...[
+          const SizedBox(height: 14),
+          if (usb.adbMissing)
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    'adb (Android SDK Platform-Tools) was not found. Install '
+                    'it, or show where adb is.',
+                    style: muted,
+                  ),
+                ),
+                const SizedBox(width: 16),
+                OutlinedButton(
+                  onPressed: () async {
+                    final file = await openFile(confirmButtonText: 'Use adb');
+                    if (file != null) await notifier.chooseAdb(file.path);
+                  },
+                  child: const Text('Locate adb…'),
+                ),
+              ],
+            )
+          else if (usb.adb == null)
+            Text('Looking for phones…', style: muted)
+          else if (usb.devices.isEmpty)
+            Text(
+              'Plug in your phone. On the phone, turn on USB debugging in '
+              'Settings → Developer options.',
+              style: muted,
+            ),
+          for (final device in usb.devices)
+            Padding(
+              padding: const EdgeInsets.only(top: 4),
+              child: Row(
+                children: [
+                  Container(
+                    width: 8,
+                    height: 8,
+                    decoration: BoxDecoration(
+                      color: usb.connected.contains(device.serial)
+                          ? DesktopColors.success
+                          : AppColors.whiteAlpha(0.4),
+                      shape: BoxShape.circle,
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Text(
+                    device.name,
+                    style: const TextStyle(fontWeight: FontWeight.w600),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(child: Text(_describe(device), style: muted)),
+                ],
+              ),
+            ),
+          if (usb.error != null) ...[
+            const SizedBox(height: 6),
+            Text(
+              usb.error!,
+              style: const TextStyle(color: DesktopColors.error, fontSize: 12),
+            ),
+          ],
+        ],
+      ],
+    );
+  }
+
+  String _describe(UsbDevice device) {
+    if (usb.connected.contains(device.serial)) {
+      return 'Connected: in My Zik on the phone, choose USB cable in Sync.';
+    }
+    return switch (device.state) {
+      'unauthorized' => 'Allow USB debugging on the phone.',
+      'device' => 'Connecting…',
+      _ => 'Waiting for the phone…',
+    };
+  }
+}
+
 class _Pairing extends ConsumerWidget {
-  const _Pairing(this.payload);
+  const _Pairing(this.payload, {this.usb = false});
 
   final PairingPayload payload;
+
+  /// A phone is plugged in: it can also pair through the cable.
+  final bool usb;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -224,6 +351,14 @@ class _Pairing extends ConsumerWidget {
                 ' · port ${payload.port} · code ${payload.code}',
                 style: DesktopText.mono.copyWith(fontSize: 15),
               ),
+              if (usb) ...[
+                const SizedBox(height: 6),
+                SelectableText(
+                  'By USB cable: ${UsbBridge.phoneHost}'
+                  ' · port ${payload.port} · code ${payload.code}',
+                  style: DesktopText.mono.copyWith(fontSize: 15),
+                ),
+              ],
               const SizedBox(height: 18),
               TextButton(
                 onPressed: () =>

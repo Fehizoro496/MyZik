@@ -10,6 +10,7 @@ import 'sync_engine.dart';
 import 'sync_files.dart';
 import 'sync_server.dart' show PairingPayload;
 import 'sync_store.dart';
+import 'usb_bridge.dart' show UsbBridge;
 
 /// Which audio files a sync transfers on its own.
 enum TransferMode {
@@ -21,6 +22,17 @@ enum TransferMode {
 
   /// Every file missing on the other side.
   everything,
+}
+
+/// How the phone reaches the computer.
+enum SyncTransport {
+  /// The local network: the computer's last address, mDNS, then the QR
+  /// code's addresses.
+  wifi,
+
+  /// A USB cable: the computer forwards the phone's own `127.0.0.1` to its
+  /// server with `adb reverse` (Android, with USB debugging on).
+  usb,
 }
 
 /// The computer this phone is paired with.
@@ -176,6 +188,9 @@ class SyncClient {
   final SyncDiscovery? discovery;
   final HttpClient _http;
 
+  /// How the computer is reached, for pairing and every sync.
+  SyncTransport transport = SyncTransport.wifi;
+
   String get _stateKey => '${store.keyPrefix}sync.client.v1';
 
   SyncStore get store => engine.store;
@@ -210,7 +225,10 @@ class SyncClient {
     required String deviceName,
   }) async {
     SyncException? failure;
-    for (final host in payload.hosts) {
+    final hosts = transport == SyncTransport.usb
+        ? const [UsbBridge.phoneHost]
+        : payload.hosts;
+    for (final host in hosts) {
       final base = Uri(scheme: 'http', host: host, port: payload.port);
       try {
         final reply = await _request(
@@ -228,7 +246,7 @@ class SyncClient {
           hosts: payload.hosts,
           port: payload.port,
           token: reply['token'] as String,
-          lastHost: host,
+          lastHost: transport == SyncTransport.usb ? null : host,
         );
         // A new computer: start its exchange from scratch.
         _prefs.setString(
@@ -241,6 +259,9 @@ class SyncClient {
         // Refused by the computer: other addresses won't do better.
         if (!e.message.startsWith('Could not reach')) rethrow;
       }
+    }
+    if (transport == SyncTransport.usb && failure != null) {
+      throw const SyncException(_usbUnreachable);
     }
     throw failure ??
         const SyncException('The pairing code has no address to reach.');
@@ -474,8 +495,14 @@ class SyncClient {
     }
   }
 
-  /// The computer's address: last one that worked, then what network
-  /// discovery finds, then the QR code's.
+  static const _usbUnreachable =
+      'Could not reach the computer over USB. Check the cable, that USB '
+      'debugging is on and that “Sync by USB cable” is on in My Zik on the '
+      'computer.';
+
+  /// The computer's address. Over USB, the phone's own forwarded port;
+  /// over Wi-Fi, the last one that worked, then what network discovery
+  /// finds, then the QR code's.
   Future<Uri> _resolve() async {
     final connection = this.connection;
     if (connection == null) {
@@ -492,6 +519,14 @@ class SyncClient {
       } catch (_) {
         return false;
       }
+    }
+
+    if (transport == SyncTransport.usb) {
+      const host = UsbBridge.phoneHost;
+      if (await answers(host, connection.port)) {
+        return Uri(scheme: 'http', host: host, port: connection.port);
+      }
+      throw const SyncException(_usbUnreachable);
     }
 
     final tried = <String>{};

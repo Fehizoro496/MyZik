@@ -81,6 +81,10 @@ class AppIcons {
   static const IconData sync = CupertinoIcons.arrow_2_circlepath;
   static const IconData qrCode = CupertinoIcons.qrcode_viewfinder;
   static const IconData phone = CupertinoIcons.device_phone_portrait;
+  static const IconData wifi = CupertinoIcons.wifi;
+
+  /// Sync by USB cable.
+  static const IconData cable = CupertinoIcons.link;
 
   static const IconData video = CupertinoIcons.play_rectangle;
   static const IconData offline = CupertinoIcons.wifi_slash;
