@@ -23,57 +23,54 @@ class PlaylistScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final id = ref.watch(selectedPlaylistIdProvider);
     final playlist = id == null ? null : ref.watch(playlistByIdProvider(id));
+    final songs = playlist == null
+        ? const <Song>[]
+        : ref.watch(playlistSongsProvider(playlist.id));
     return DecoratedBox(
       decoration: const BoxDecoration(color: AppColors.musicBackground),
-      child: SafeArea(
-        bottom: false,
-        child: Column(
-          children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(24, 12, 24, 8),
-              child: Row(
-                children: [
-                  GlassIconButton(
-                    icon: AppIcons.back,
+      child: FrostedHeaderLayout(
+        header: Padding(
+          padding: const EdgeInsets.fromLTRB(24, 12, 24, 8),
+          child: Row(
+            children: [
+              GlassIconButton(
+                icon: AppIcons.back,
+                size: 44,
+                iconSize: 22,
+                onTap: () => ref.read(navigationProvider.notifier).back(),
+              ),
+              const SizedBox(width: 12),
+              const Expanded(
+                child: Text(
+                  'Playlist',
+                  style: TextStyle(
+                    color: AppColors.white,
+                    fontSize: 18,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+              if (playlist != null)
+                Builder(
+                  builder: (buttonContext) => GlassIconButton(
+                    icon: AppIcons.moreHoriz,
                     size: 44,
                     iconSize: 22,
-                    onTap: () => ref.read(navigationProvider.notifier).back(),
+                    onTap: () => _showMenu(buttonContext, ref, playlist),
                   ),
-                  const SizedBox(width: 12),
-                  const Expanded(
-                    child: Text(
-                      'Playlist',
-                      style: TextStyle(
-                        color: AppColors.white,
-                        fontSize: 18,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                  ),
-                  if (playlist != null)
-                    Builder(
-                      builder: (buttonContext) => GlassIconButton(
-                        icon: AppIcons.moreHoriz,
-                        size: 44,
-                        iconSize: 22,
-                        onTap: () => _showMenu(buttonContext, ref, playlist),
-                      ),
-                    ),
-                ],
-              ),
-            ),
-            Expanded(
-              child: playlist == null
-                  ? _empty()
-                  : _content(
-                      context,
-                      ref,
-                      playlist,
-                      ref.watch(playlistSongsProvider(playlist.id)),
-                    ),
-            ),
-          ],
+                ),
+            ],
+          ),
         ),
+        body: (context, top) => playlist == null
+            ? Padding(
+                padding: EdgeInsets.only(top: top),
+                child: Padding(
+                  padding: EdgeInsets.only(top: top),
+                  child: _empty(),
+                ),
+              )
+            : _content(context, ref, playlist, songs, top),
       ),
     );
   }
@@ -83,10 +80,11 @@ class PlaylistScreen extends ConsumerWidget {
     WidgetRef ref,
     Playlist playlist,
     List<Song> songs,
+    double top,
   ) {
     if (songs.isEmpty) {
       return ListView(
-        padding: const EdgeInsets.fromLTRB(24, 8, 24, 40),
+        padding: EdgeInsets.fromLTRB(24, top + 8, 24, 40),
         physics: const BouncingScrollPhysics(),
         children: [
           _hero(context, ref, playlist, songs),
@@ -110,7 +108,7 @@ class PlaylistScreen extends ConsumerWidget {
     // the handle starts a reorder (buildDefaultDragHandles: false), so tap-to-
     // play and swipe-to-remove keep working.
     return ReorderableListView.builder(
-      padding: const EdgeInsets.fromLTRB(24, 8, 24, 40),
+      padding: EdgeInsets.fromLTRB(24, top + 8, 24, 40),
       physics: const BouncingScrollPhysics(),
       buildDefaultDragHandles: false,
       header: Column(

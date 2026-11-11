@@ -1,6 +1,7 @@
 import 'dart:ui';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'icons.dart';
@@ -376,6 +377,123 @@ class _TrackMenuButton extends ConsumerWidget {
         }
       case 'like':
         ref.read(likedProvider.notifier).toggle(song);
+    }
+  }
+}
+
+/// A page whose content scrolls *behind* a frosted header instead of stopping
+/// under it. The [header] (just its row(s): the status-bar inset is added here)
+/// floats over the top of the page on a blurred, darkening gradient; [body]
+/// fills the whole page and receives `top`, the header's measured height, to
+/// use as its scrollable's top padding.
+///
+/// Place it as the first child of the page's [Stack] (under any floating
+/// mini-player / nav bar), or alone. Wrap the page in a [BackdropGroup] to let
+/// the header share its backdrop read with the other glass surfaces.
+class FrostedHeaderLayout extends StatefulWidget {
+  const FrostedHeaderLayout({
+    super.key,
+    required this.header,
+    required this.body,
+    this.color = AppColors.musicBackground,
+  });
+
+  final Widget header;
+  final Widget Function(BuildContext context, double top) body;
+
+  /// Page background colour the header's gradient is tinted with.
+  final Color color;
+
+  @override
+  State<FrostedHeaderLayout> createState() => _FrostedHeaderLayoutState();
+}
+
+class _FrostedHeaderLayoutState extends State<FrostedHeaderLayout> {
+  double? _headerHeight;
+
+  void _onHeaderSize(Size size) {
+    if (size.height == _headerHeight) return;
+    // Reported during layout: rebuild the body with the new inset next frame.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) setState(() => _headerHeight = size.height);
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final color = widget.color;
+    return Stack(
+      children: [
+        Positioned.fill(
+          child: widget.body(
+            context,
+            _headerHeight ?? MediaQuery.paddingOf(context).top,
+          ),
+        ),
+        Positioned(
+          top: 0,
+          left: 0,
+          right: 0,
+          child: _SizeReporter(
+            onSize: _onHeaderSize,
+            child: ClipRect(
+              child: BackdropFilter.grouped(
+                filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
+                child: DecoratedBox(
+                  // Darker at the top (status bar) easing off toward the
+                  // bottom edge, where the frosted content still shows.
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                      colors: [
+                        color.withValues(alpha: 0.95),
+                        color.withValues(alpha: 0.8),
+                      ],
+                    ),
+                  ),
+                  child: SafeArea(bottom: false, child: widget.header),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+/// Calls [onSize] with its child's size after each layout that changes it.
+class _SizeReporter extends SingleChildRenderObjectWidget {
+  const _SizeReporter({required this.onSize, super.child});
+
+  final ValueChanged<Size> onSize;
+
+  @override
+  RenderObject createRenderObject(BuildContext context) =>
+      _RenderSizeReporter(onSize);
+
+  @override
+  void updateRenderObject(
+    BuildContext context,
+    _RenderSizeReporter renderObject,
+  ) {
+    renderObject.onSize = onSize;
+  }
+}
+
+class _RenderSizeReporter extends RenderProxyBox {
+  _RenderSizeReporter(this.onSize);
+
+  ValueChanged<Size> onSize;
+  Size? _last;
+
+  @override
+  void performLayout() {
+    super.performLayout();
+    if (size != _last) {
+      _last = size;
+      onSize(size);
     }
   }
 }

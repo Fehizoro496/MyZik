@@ -133,73 +133,79 @@ class _DiscoverScreenState extends ConsumerState<DiscoverScreen> {
 
     return DecoratedBox(
       decoration: const BoxDecoration(color: AppColors.musicBackground),
-      child: Stack(
-        children: [
-          SafeArea(
-            bottom: false,
-            child: Column(
-              children: [
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(24, 12, 24, 6),
-                  child: Row(
-                    children: [
-                      GlassIconButton(
-                        icon: AppIcons.back,
-                        size: 44,
-                        iconSize: 22,
-                        onTap: () =>
-                            ref.read(navigationProvider.notifier).back(),
-                      ),
-                      const SizedBox(width: 12),
-                      const Text(
-                        'Discover',
-                        style: TextStyle(
-                          color: AppColors.white,
-                          fontSize: 22,
-                          fontWeight: FontWeight.w800,
-                          letterSpacing: -0.3,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(24, 6, 24, 16),
-                  child: _searchField(),
-                ),
-                if (_playError != null)
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(24, 0, 24, 12),
-                    child: Text(
-                      _playError!,
-                      textAlign: TextAlign.center,
-                      style: const TextStyle(
-                        color: Color(0xFFFF8A9B),
-                        fontSize: 13,
+      // Header, mini-player and nav bar all blur the list scrolling under
+      // them: grouping lets them share a single backdrop read per frame.
+      child: BackdropGroup(
+        child: Stack(
+          children: [
+            Positioned.fill(
+              child: FrostedHeaderLayout(
+                header: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(24, 12, 24, 6),
+                      child: Row(
+                        children: [
+                          GlassIconButton(
+                            icon: AppIcons.back,
+                            size: 44,
+                            iconSize: 22,
+                            onTap: () =>
+                                ref.read(navigationProvider.notifier).back(),
+                          ),
+                          const SizedBox(width: 12),
+                          const Text(
+                            'Discover',
+                            style: TextStyle(
+                              color: AppColors.white,
+                              fontSize: 22,
+                              fontWeight: FontWeight.w800,
+                              letterSpacing: -0.3,
+                            ),
+                          ),
+                        ],
                       ),
                     ),
-                  ),
-                Expanded(child: _results(search)),
-              ],
-            ),
-          ),
-          const BottomFade(),
-          const Positioned(
-            left: 22,
-            right: 22,
-            bottom: 0,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Padding(
-                  padding: EdgeInsets.only(bottom: 8),
-                  child: MiniPlayer(),
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(24, 6, 24, 16),
+                      child: _searchField(),
+                    ),
+                    if (_playError != null)
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(24, 0, 24, 12),
+                        child: Text(
+                          _playError!,
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(
+                            color: Color(0xFFFF8A9B),
+                            fontSize: 13,
+                          ),
+                        ),
+                      ),
+                  ],
                 ),
-                NavBar(),
-              ],
+                body: (context, top) => _results(search, top),
+              ),
             ),
-          ),
-        ],
+            const BottomFade(),
+            const Positioned(
+              left: 22,
+              right: 22,
+              bottom: 0,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Padding(
+                    padding: EdgeInsets.only(bottom: 8),
+                    child: MiniPlayer(),
+                  ),
+                  NavBar(),
+                ],
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -263,17 +269,25 @@ class _DiscoverScreenState extends ConsumerState<DiscoverScreen> {
     );
   }
 
-  Widget _results(AsyncValue<List<YouTubeTrack>>? search) {
-    if (search == null) return _downloadsOrPrompt();
+  /// The page body under the frosted header; [top] is the header's height.
+  Widget _results(AsyncValue<List<YouTubeTrack>>? search, double top) {
+    // Non-scrolling states just sit below the header.
+    Widget below(Widget child) => Padding(
+      padding: EdgeInsets.only(top: top),
+      child: child,
+    );
+    if (search == null) return _downloadsOrPrompt(top, below);
     return search.when(
-      loading: () => const Center(
-        child: CircularProgressIndicator(color: AppColors.accentA),
+      loading: () => below(
+        const Center(
+          child: CircularProgressIndicator(color: AppColors.accentA),
+        ),
       ),
-      error: (_, _) => _searchError(),
+      error: (_, _) => below(_searchError()),
       data: (tracks) {
-        if (tracks.isEmpty) return _noResults();
+        if (tracks.isEmpty) return below(_noResults());
         return ListView.separated(
-          padding: const EdgeInsets.fromLTRB(24, 0, 24, 170),
+          padding: EdgeInsets.fromLTRB(24, top, 24, 170),
           physics: const BouncingScrollPhysics(),
           itemCount: tracks.length + 1,
           itemBuilder: (context, index) {
@@ -302,12 +316,12 @@ class _DiscoverScreenState extends ConsumerState<DiscoverScreen> {
 
   /// With no query: in-flight and failed downloads, so they can be followed,
   /// retried or dismissed after leaving the search that started them.
-  Widget _downloadsOrPrompt() {
+  Widget _downloadsOrPrompt(double top, Widget Function(Widget) below) {
     final active = ref.watch(downloadsProvider.select((d) => d.active));
-    if (active.isEmpty) return _searchPrompt();
+    if (active.isEmpty) return below(_searchPrompt());
     final downloads = active.values.toList();
     return ListView.separated(
-      padding: const EdgeInsets.fromLTRB(24, 0, 24, 170),
+      padding: EdgeInsets.fromLTRB(24, top, 24, 170),
       physics: const BouncingScrollPhysics(),
       itemCount: downloads.length + 1,
       itemBuilder: (context, index) {

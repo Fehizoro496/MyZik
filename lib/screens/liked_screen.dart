@@ -28,13 +28,14 @@ class _LikedScreenState extends ConsumerState<LikedScreen> {
         .toList();
     return DecoratedBox(
       decoration: const BoxDecoration(color: AppColors.musicBackground),
-      child: Stack(
-        children: [
-          SafeArea(
-            bottom: false,
-            child: Column(
-              children: [
-                Padding(
+      // Header, mini-player and nav bar all blur the list scrolling under
+      // them: grouping lets them share a single backdrop read per frame.
+      child: BackdropGroup(
+        child: Stack(
+          children: [
+            Positioned.fill(
+              child: FrostedHeaderLayout(
+                header: Padding(
                   padding: const EdgeInsets.fromLTRB(24, 12, 24, 18),
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -64,48 +65,46 @@ class _LikedScreenState extends ConsumerState<LikedScreen> {
                     ],
                   ),
                 ),
-                Expanded(
-                  child: ListView(
-                    padding: const EdgeInsets.fromLTRB(24, 0, 24, 170),
-                    physics: const BouncingScrollPhysics(),
-                    children: [
-                      _likedCard(songs),
-                      const SizedBox(height: 26),
-                      if (songs.isEmpty)
-                        _emptyState()
-                      else
-                        for (var i = 0; i < songs.length; i++) ...[
-                          TrackRow(
-                            song: songs[i],
-                            onTap: () => ref
-                                .read(playbackProvider.notifier)
-                                .playSong(songs[i], context: songs),
-                          ),
-                          if (i != songs.length - 1) const SizedBox(height: 20),
-                        ],
-                    ],
+                body: (context, top) => ListView(
+                  padding: EdgeInsets.fromLTRB(24, top, 24, 170),
+                  physics: const BouncingScrollPhysics(),
+                  children: [
+                    _likedCard(songs),
+                    const SizedBox(height: 26),
+                    if (songs.isEmpty)
+                      _emptyState()
+                    else
+                      for (var i = 0; i < songs.length; i++) ...[
+                        TrackRow(
+                          song: songs[i],
+                          onTap: () => ref
+                              .read(playbackProvider.notifier)
+                              .playSong(songs[i], context: songs),
+                        ),
+                        if (i != songs.length - 1) const SizedBox(height: 20),
+                      ],
+                  ],
+                ),
+              ),
+            ),
+            const BottomFade(),
+            const Positioned(
+              left: 22,
+              right: 22,
+              bottom: 0,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Padding(
+                    padding: EdgeInsets.only(bottom: 8),
+                    child: MiniPlayer(),
                   ),
-                ),
-              ],
+                  NavBar(),
+                ],
+              ),
             ),
-          ),
-          const BottomFade(),
-          const Positioned(
-            left: 22,
-            right: 22,
-            bottom: 0,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Padding(
-                  padding: EdgeInsets.only(bottom: 8),
-                  child: MiniPlayer(),
-                ),
-                NavBar(),
-              ],
-            ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }

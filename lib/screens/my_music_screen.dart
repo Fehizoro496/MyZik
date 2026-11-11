@@ -1,5 +1,3 @@
-import 'dart:ui';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -27,9 +25,6 @@ class MyMusicScreen extends ConsumerStatefulWidget {
 class _MyMusicScreenState extends ConsumerState<MyMusicScreen> {
   static const _tabs = ['Songs', 'Albums', 'Artists', 'Playlists'];
 
-  /// Height of the header row: 12 + 46 (search button) + 18 of padding.
-  static const _headerHeight = 76.0;
-
   @override
   Widget build(BuildContext context) {
     final library = ref.watch(libraryProvider);
@@ -38,8 +33,6 @@ class _MyMusicScreenState extends ConsumerState<MyMusicScreen> {
     final tab = ref.watch(myMusicTabProvider);
     final ready =
         library.status == LibraryStatus.ready && library.songs.isNotEmpty;
-    // Where content starts: below the status bar and the header row.
-    final top = MediaQuery.paddingOf(context).top + _headerHeight;
     return DecoratedBox(
       decoration: const BoxDecoration(color: AppColors.musicBackground),
       // The tab capsule, mini-player and nav bar all blur the list scrolling
@@ -47,86 +40,65 @@ class _MyMusicScreenState extends ConsumerState<MyMusicScreen> {
       child: BackdropGroup(
         child: Stack(
           children: [
-            // Content fills the whole screen and scrolls behind the header and
-            // the frosted tab capsule (its top padding clears them).
+            // Content fills the whole screen and scrolls behind the frosted
+            // header and tab capsule (its top padding clears them).
             Positioned.fill(
-              child: ready
-                  ? _tabBody(library.songs, tab, top)
-                  : Padding(
-                      padding: EdgeInsets.only(top: top),
-                      child: _stateBody(library),
-                    ),
-            ),
-            // Header over a frosted, slightly see-through background, so the
-            // list scrolling under it shows through blurred.
-            Positioned(
-              top: 0,
-              left: 0,
-              right: 0,
-              child: ClipRect(
-                child: BackdropFilter.grouped(
-                  filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
-                  child: DecoratedBox(
-                    // Darker at the top (status bar) easing off toward the
-                    // tabs, so the frosted list still shows at the bottom edge.
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        begin: Alignment.topCenter,
-                        end: Alignment.bottomCenter,
-                        colors: [
-                          AppColors.musicBackground.withValues(alpha: 0.95),
-                          AppColors.musicBackground.withValues(alpha: 0.8),
-                        ],
+              child: FrostedHeaderLayout(
+                header: Padding(
+                  padding: const EdgeInsets.fromLTRB(24, 12, 24, 18),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      GlassIconButton(
+                        icon: AppIcons.back,
+                        size: 44,
+                        iconSize: 22,
+                        onTap: () =>
+                            ref.read(navigationProvider.notifier).back(),
                       ),
-                    ),
-                    child: SafeArea(
-                      bottom: false,
-                      child: Padding(
-                        padding: const EdgeInsets.fromLTRB(24, 12, 24, 18),
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            GlassIconButton(
-                              icon: AppIcons.back,
-                              size: 44,
-                              iconSize: 22,
-                              onTap: () =>
-                                  ref.read(navigationProvider.notifier).back(),
-                            ),
-                            const Text(
-                              'My Music',
-                              style: TextStyle(
-                                color: AppColors.white,
-                                fontSize: 18,
-                                fontWeight: FontWeight.w700,
-                              ),
-                            ),
-                            GlassIconButton(
-                              icon: AppIcons.search,
-                              onTap: () => ref
-                                  .read(navigationProvider.notifier)
-                                  .goTo(AppScreen.search),
-                            ),
-                          ],
+                      const Text(
+                        'My Music',
+                        style: TextStyle(
+                          color: AppColors.white,
+                          fontSize: 18,
+                          fontWeight: FontWeight.w700,
                         ),
                       ),
-                    ),
+                      GlassIconButton(
+                        icon: AppIcons.search,
+                        onTap: () => ref
+                            .read(navigationProvider.notifier)
+                            .goTo(AppScreen.search),
+                      ),
+                    ],
                   ),
                 ),
+                body: (context, top) => !ready
+                    ? Padding(
+                        padding: EdgeInsets.only(top: top),
+                        child: _stateBody(library),
+                      )
+                    : Stack(
+                        children: [
+                          Positioned.fill(
+                            child: _tabBody(library.songs, tab, top),
+                          ),
+                          Positioned(
+                            top: top + 4,
+                            left: 24,
+                            right: 24,
+                            child: SegmentedTabs(
+                              tabs: _tabs,
+                              selected: tab,
+                              onSelected: (i) =>
+                                  ref.read(myMusicTabProvider.notifier).state =
+                                      i,
+                            ),
+                          ),
+                        ],
+                      ),
               ),
             ),
-            if (ready)
-              Positioned(
-                top: top + 4,
-                left: 24,
-                right: 24,
-                child: SegmentedTabs(
-                  tabs: _tabs,
-                  selected: tab,
-                  onSelected: (i) =>
-                      ref.read(myMusicTabProvider.notifier).state = i,
-                ),
-              ),
             const BottomFade(),
             // Mini-player floats above the shared nav bar.
             const Positioned(

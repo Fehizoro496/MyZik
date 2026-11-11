@@ -20,41 +20,40 @@ class CollectionScreen extends ConsumerWidget {
     final collection = ref.watch(selectedCollectionProvider);
     return DecoratedBox(
       decoration: const BoxDecoration(color: AppColors.musicBackground),
-      child: SafeArea(
-        bottom: false,
-        child: Column(
-          children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(24, 12, 24, 8),
-              child: Row(
-                children: [
-                  GlassIconButton(
-                    icon: AppIcons.back,
-                    size: 44,
-                    iconSize: 22,
-                    onTap: () => ref.read(navigationProvider.notifier).back(),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Text(
-                      collection?.isArtist == true ? 'Artist' : 'Album',
-                      style: const TextStyle(
-                        color: AppColors.white,
-                        fontSize: 18,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                  ),
-                ],
+      child: FrostedHeaderLayout(
+        header: Padding(
+          padding: const EdgeInsets.fromLTRB(24, 12, 24, 8),
+          child: Row(
+            children: [
+              GlassIconButton(
+                icon: AppIcons.back,
+                size: 44,
+                iconSize: 22,
+                onTap: () => ref.read(navigationProvider.notifier).back(),
               ),
-            ),
-            Expanded(
-              child: collection == null
-                  ? _empty()
-                  : _content(context, ref, collection),
-            ),
-          ],
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  collection?.isArtist == true ? 'Artist' : 'Album',
+                  style: const TextStyle(
+                    color: AppColors.white,
+                    fontSize: 18,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+            ],
+          ),
         ),
+        body: (context, top) => collection == null
+            ? Padding(
+                padding: EdgeInsets.only(top: top),
+                child: Padding(
+                  padding: EdgeInsets.only(top: top),
+                  child: _empty(),
+                ),
+              )
+            : _content(context, ref, collection, top),
       ),
     );
   }
@@ -63,10 +62,11 @@ class CollectionScreen extends ConsumerWidget {
     BuildContext context,
     WidgetRef ref,
     MusicCollection collection,
+    double top,
   ) {
     final songs = collection.songs;
     return ListView.separated(
-      padding: const EdgeInsets.fromLTRB(24, 8, 24, 40),
+      padding: EdgeInsets.fromLTRB(24, top + 8, 24, 40),
       physics: const BouncingScrollPhysics(),
       // One extra leading item for the hero header.
       itemCount: songs.length + 1,

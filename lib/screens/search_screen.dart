@@ -55,40 +55,31 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
     final hasQuery = _query.trim().isNotEmpty;
     return DecoratedBox(
       decoration: const BoxDecoration(color: AppColors.musicBackground),
-      child: SafeArea(
-        bottom: false,
-        child: Column(
-          children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(20, 12, 20, 16),
-              child: Row(
-                children: [
-                  GlassIconButton(
-                    icon: AppIcons.back,
-                    size: 44,
-                    iconSize: 22,
-                    onTap: () => ref.read(navigationProvider.notifier).back(),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(child: _searchField()),
-                ],
+      child: FrostedHeaderLayout(
+        header: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 12, 20, 16),
+          child: Row(
+            children: [
+              GlassIconButton(
+                icon: AppIcons.back,
+                size: 44,
+                iconSize: 22,
+                onTap: () => ref.read(navigationProvider.notifier).back(),
               ),
-            ),
-            Expanded(
-              child: !hasQuery
-                  ? _message(
-                      'Search your library',
-                      'Find songs, artists and albums.',
-                    )
-                  : results.isEmpty
-                  ? _message(
-                      'No matches',
-                      'Nothing matched "${_query.trim()}".',
-                    )
-                  : _resultList(results),
-            ),
-          ],
+              const SizedBox(width: 12),
+              Expanded(child: _searchField()),
+            ],
+          ),
         ),
+        body: (context, top) => !hasQuery
+            ? _message(
+                'Search your library',
+                'Find songs, artists and albums.',
+                top,
+              )
+            : results.isEmpty
+            ? _message('No matches', 'Nothing matched "${_query.trim()}".', top)
+            : _resultList(results, top),
       ),
     );
   }
@@ -152,42 +143,39 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
     );
   }
 
-  Widget _resultList(List<Song> results) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(24, 4, 24, 12),
-          child: Text(
+  Widget _resultList(List<Song> results, double top) {
+    // The result count is the list's first item so it scrolls away under the
+    // header with the tracks.
+    return ListView.separated(
+      padding: EdgeInsets.fromLTRB(24, top + 4, 24, 24),
+      physics: const BouncingScrollPhysics(),
+      itemCount: results.length + 1,
+      itemBuilder: (context, i) {
+        if (i == 0) {
+          return Text(
             '${results.length} ${results.length == 1 ? 'result' : 'results'}',
             style: TextStyle(
               color: AppColors.whiteAlpha(0.5),
               fontSize: 13,
               fontWeight: FontWeight.w600,
             ),
-          ),
-        ),
-        Expanded(
-          child: ListView.separated(
-            padding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
-            physics: const BouncingScrollPhysics(),
-            itemCount: results.length,
-            itemBuilder: (context, i) => TrackRow(
-              song: results[i],
-              onTap: () => ref
-                  .read(playbackProvider.notifier)
-                  .playSong(results[i], context: results),
-            ),
-            separatorBuilder: (_, _) => const SizedBox(height: 20),
-          ),
-        ),
-      ],
+          );
+        }
+        final song = results[i - 1];
+        return TrackRow(
+          song: song,
+          onTap: () => ref
+              .read(playbackProvider.notifier)
+              .playSong(song, context: results),
+        );
+      },
+      separatorBuilder: (_, i) => SizedBox(height: i == 0 ? 12 : 20),
     );
   }
 
-  Widget _message(String title, String subtitle) {
+  Widget _message(String title, String subtitle, double top) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(40, 0, 40, 40),
+      padding: EdgeInsets.fromLTRB(40, top, 40, 40),
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
