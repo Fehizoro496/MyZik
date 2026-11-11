@@ -340,6 +340,8 @@ class _LyricsColumn extends ConsumerWidget {
       );
     } else {
       body = ListView(
+        // A new track's lyrics open at the top.
+        key: ValueKey(lyrics),
         padding: const EdgeInsets.only(top: 24, bottom: 80),
         children: [
           for (final stanza in parseLyricsStructure(lyrics.plain ?? ''))

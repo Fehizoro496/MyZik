@@ -216,7 +216,8 @@ class _LyricsPanel extends ConsumerWidget {
               }
               return lyrics.synced
                   ? DesktopSyncedLyrics(key: ValueKey(lyrics), lyrics: lyrics)
-                  : _PlainLyrics(lyrics.plain ?? '');
+                  // A new track's lyrics open at the top.
+                  : _PlainLyrics(lyrics.plain ?? '', key: ValueKey(lyrics));
             },
           ),
         ),
@@ -335,7 +336,7 @@ class _DesktopSyncedLyricsState extends ConsumerState<DesktopSyncedLyrics> {
 }
 
 class _PlainLyrics extends StatelessWidget {
-  const _PlainLyrics(this.plain);
+  const _PlainLyrics(this.plain, {super.key});
 
   final String plain;
 

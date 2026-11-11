@@ -325,9 +325,10 @@ Future<bool> confirmAutoSync(BuildContext context, WidgetRef ref) async {
 /// Empty LRC lines mark instrumental breaks; show a note instead of a gap.
 String _display(LyricLine line) => line.text.isEmpty ? '♪' : line.text;
 
-/// Full lyrics as a frosted bottom sheet. Synced lyrics follow the playhead
-/// (pausing for a few seconds after the user scrolls by hand) and tapping a
-/// line seeks to it.
+/// Full lyrics as a frosted bottom sheet, for the track playing: it moves
+/// to the next track when playback does (unless that one is being timed or
+/// saved). Synced lyrics follow the playhead (pausing for a few seconds after
+/// the user scrolls by hand) and tapping a line seeks to it.
 class LyricsSheet extends ConsumerStatefulWidget {
   const LyricsSheet({super.key, required this.song});
 
@@ -347,6 +348,10 @@ class LyricsSheet extends ConsumerStatefulWidget {
 }
 
 class _LyricsSheetState extends ConsumerState<LyricsSheet> {
+  /// The track shown: the one the sheet was opened for, then whichever is
+  /// playing (see [_followPlayback]).
+  late Song _song = widget.song;
+
   final _lineKeys = <int, GlobalKey>{};
   final _syncKeys = <int, GlobalKey>{};
 
@@ -405,6 +410,30 @@ class _LyricsSheetState extends ConsumerState<LyricsSheet> {
 
   bool get _hasUnsavedSync => _isSynchronizing && _synchronizedLines.isNotEmpty;
 
+  /// Timing or saving the shown track: it stays until that is done.
+  bool get _busy => _isSynchronizing || _autoSyncing || _saving;
+
+  /// Moves the sheet to the track now playing, when it changed and nothing
+  /// is in progress on the shown one, starting clean.
+  void _followPlayback() {
+    if (!mounted || _busy) return;
+    final playing = ref.read(playbackProvider).current;
+    if (playing == null || playing.id == _song.id) return;
+    setState(() {
+      _song = playing;
+      _lineKeys.clear();
+      _syncKeys.clear();
+      _synchronizedLines.clear();
+      _userScrolledAt = DateTime.fromMillisecondsSinceEpoch(0);
+      _firstScroll = true;
+      _saveError = null;
+      _notice = null;
+      _syncNote = null;
+      _stanzasOf = null;
+      _stanzas = const {};
+    });
+  }
+
   void _follow(int index, {required bool animate}) {
     if (index < 0) return;
     if (DateTime.now().difference(_userScrolledAt) <
@@ -433,15 +462,18 @@ class _LyricsSheetState extends ConsumerState<LyricsSheet> {
 
   @override
   Widget build(BuildContext context) {
-    final state = ref.watch(lyricsProvider(widget.song));
+    // Follows the playing track. While the shown one is being timed or
+    // saved it stays, and catches up once that is done.
+    final playingId = ref.watch(playbackProvider.select((p) => p.current?.id));
+    if (playingId != null && playingId != _song.id && !_busy) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => _followPlayback());
+    }
+    final state = ref.watch(lyricsProvider(_song));
     final lyrics = state.asData?.value;
     final maxHeight = MediaQuery.of(context).size.height * 0.85;
-    // The sheet stays on the song it was opened for, while playback may move
-    // on to another track: following, seeking and timing only apply while
-    // this song is the one playing.
-    final isCurrent = ref.watch(
-      playbackProvider.select((p) => p.current?.id == widget.song.id),
-    );
+    // Following, seeking and timing only apply while the shown track is the
+    // one playing.
+    final isCurrent = playingId == _song.id;
     final canResync =
         lyrics != null &&
         lyrics.synced &&
@@ -453,9 +485,7 @@ class _LyricsSheetState extends ConsumerState<LyricsSheet> {
         lyrics != null &&
         !_isSynchronizing &&
         !_autoSyncing &&
-        ref
-            .read(lyricsRepositoryProvider)
-            .canAutoSynchronize(widget.song, lyrics);
+        ref.read(lyricsRepositoryProvider).canAutoSynchronize(_song, lyrics);
 
     // Unsaved timings must not vanish with a stray back gesture, barrier tap
     // or swipe down.
@@ -521,7 +551,7 @@ class _LyricsSheetState extends ConsumerState<LyricsSheet> {
                   child: Column(
                     children: [
                       Text(
-                        widget.song.title,
+                        _song.title,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: const TextStyle(
@@ -532,7 +562,7 @@ class _LyricsSheetState extends ConsumerState<LyricsSheet> {
                       ),
                       const SizedBox(height: 3),
                       Text(
-                        widget.song.artist,
+                        _song.artist,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(
@@ -555,19 +585,24 @@ class _LyricsSheetState extends ConsumerState<LyricsSheet> {
                   ),
                 ),
                 Expanded(
-                  child: state.isLoading
-                      ? _loading()
-                      : _autoSyncing
-                      ? _loading('Listening to the track…')
-                      : lyrics == null
-                      ? _empty(state.error)
-                      : lyrics.instrumental
-                      ? _message('Instrumental')
-                      : _isSynchronizing
-                      ? _synchronizer(lyrics, isCurrent)
-                      : lyrics.synced
-                      ? _synced(lyrics, isCurrent)
-                      : _plain(lyrics, canAutoSync),
+                  // A new track gets a new scroll view: its lyrics open at
+                  // the top, not where the previous track's were left.
+                  child: KeyedSubtree(
+                    key: ValueKey(_song.id),
+                    child: state.isLoading
+                        ? _loading()
+                        : _autoSyncing
+                        ? _loading('Listening to the track…')
+                        : lyrics == null
+                        ? _empty(state.error)
+                        : lyrics.instrumental
+                        ? _message('Instrumental')
+                        : _isSynchronizing
+                        ? _synchronizer(lyrics, isCurrent)
+                        : lyrics.synced
+                        ? _synced(lyrics, isCurrent)
+                        : _plain(lyrics, canAutoSync),
+                  ),
                 ),
                 if (canResync)
                   Padding(
@@ -578,11 +613,8 @@ class _LyricsSheetState extends ConsumerState<LyricsSheet> {
                         LyricsPill(
                           label: 'Edit',
                           icon: AppIcons.edit,
-                          onTap: () => LyricsEditorScreen.open(
-                            context,
-                            widget.song,
-                            lyrics,
-                          ),
+                          onTap: () =>
+                              LyricsEditorScreen.open(context, _song, lyrics),
                         ),
                         LyricsPill(
                           label: 'Resynchronize',
@@ -617,8 +649,7 @@ class _LyricsSheetState extends ConsumerState<LyricsSheet> {
   Widget _synced(Lyrics lyrics, bool isCurrent) {
     final index = ref.watch(
       playbackProvider.select(
-        (p) =>
-            p.current?.id == widget.song.id ? lyrics.indexAt(p.position) : -1,
+        (p) => p.current?.id == _song.id ? lyrics.indexAt(p.position) : -1,
       ),
     );
     final stanzas = _stanzaStartsFor(lyrics);
@@ -730,7 +761,7 @@ class _LyricsSheetState extends ConsumerState<LyricsSheet> {
   /// Nothing found (or the last attempt failed): search again (LRCLIB, then
   /// the web), and explain when the web search is unavailable.
   Widget _empty(Object? error) {
-    final notifier = ref.read(lyricsProvider(widget.song).notifier);
+    final notifier = ref.read(lyricsProvider(_song).notifier);
     final hint = ref.read(lyricsRepositoryProvider).canSearchWeb
         ? null
         : 'Add a Groq API key to also search the web for lyrics.';
@@ -762,8 +793,7 @@ class _LyricsSheetState extends ConsumerState<LyricsSheet> {
                 LyricsPill(
                   label: 'Write lyrics',
                   icon: AppIcons.edit,
-                  onTap: () =>
-                      LyricsEditorScreen.open(context, widget.song, null),
+                  onTap: () => LyricsEditorScreen.open(context, _song, null),
                 ),
               ],
             ),
@@ -795,8 +825,7 @@ class _LyricsSheetState extends ConsumerState<LyricsSheet> {
             LyricsPill(
               label: 'Edit',
               icon: AppIcons.edit,
-              onTap: () =>
-                  LyricsEditorScreen.open(context, widget.song, lyrics),
+              onTap: () => LyricsEditorScreen.open(context, _song, lyrics),
             ),
             LyricsPill(
               label: 'Synchronize',
@@ -866,12 +895,12 @@ class _LyricsSheetState extends ConsumerState<LyricsSheet> {
     try {
       final alignment = await ref
           .read(lyricsRepositoryProvider)
-          .autoSynchronize(widget.song, lyrics);
+          .autoSynchronize(_song, lyrics);
       if (!mounted) return;
       final percent = (alignment.confidence * 100).round();
       if (alignment.confidence >= _autoSaveConfidence) {
         await ref
-            .read(lyricsProvider(widget.song).notifier)
+            .read(lyricsProvider(_song).notifier)
             .saveSynchronization(alignment.lines);
         if (!mounted) return;
         setState(() {
@@ -994,7 +1023,7 @@ class _LyricsSheetState extends ConsumerState<LyricsSheet> {
     });
     try {
       await ref
-          .read(lyricsProvider(widget.song).notifier)
+          .read(lyricsProvider(_song).notifier)
           .saveSynchronization(List.of(_synchronizedLines));
       if (!mounted) return;
       setState(() {
@@ -1032,7 +1061,7 @@ class _LyricsSheetState extends ConsumerState<LyricsSheet> {
         _saveError ??
         _syncNote ??
         (!isCurrent
-            ? 'Another track is playing. Play "${widget.song.title}" to '
+            ? 'Another track is playing. Play "${_song.title}" to '
                   'continue timing it.'
             : complete
             ? 'All lines are timed. Mark a final break if the song ends '
