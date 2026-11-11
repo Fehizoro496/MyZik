@@ -1,3 +1,5 @@
+import 'dart:ui';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -25,6 +27,9 @@ class MyMusicScreen extends ConsumerStatefulWidget {
 class _MyMusicScreenState extends ConsumerState<MyMusicScreen> {
   static const _tabs = ['Songs', 'Albums', 'Artists', 'Playlists'];
 
+  /// Height of the header row: 12 + 46 (search button) + 18 of padding.
+  static const _headerHeight = 76.0;
+
   @override
   Widget build(BuildContext context) {
     final library = ref.watch(libraryProvider);
@@ -33,6 +38,8 @@ class _MyMusicScreenState extends ConsumerState<MyMusicScreen> {
     final tab = ref.watch(myMusicTabProvider);
     final ready =
         library.status == LibraryStatus.ready && library.songs.isNotEmpty;
+    // Where content starts: below the status bar and the header row.
+    final top = MediaQuery.paddingOf(context).top + _headerHeight;
     return DecoratedBox(
       decoration: const BoxDecoration(color: AppColors.musicBackground),
       // The tab capsule, mini-player and nav bar all blur the list scrolling
@@ -40,66 +47,86 @@ class _MyMusicScreenState extends ConsumerState<MyMusicScreen> {
       child: BackdropGroup(
         child: Stack(
           children: [
-            SafeArea(
-              bottom: false,
-              child: Column(
-                children: [
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(24, 12, 24, 18),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        GlassIconButton(
-                          icon: AppIcons.back,
-                          size: 44,
-                          iconSize: 22,
-                          onTap: () =>
-                              ref.read(navigationProvider.notifier).back(),
-                        ),
-                        const Text(
-                          'My Music',
-                          style: TextStyle(
-                            color: AppColors.white,
-                            fontSize: 18,
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                        GlassIconButton(
-                          icon: AppIcons.search,
-                          onTap: () => ref
-                              .read(navigationProvider.notifier)
-                              .goTo(AppScreen.search),
-                        ),
-                      ],
+            // Content fills the whole screen and scrolls behind the header and
+            // the frosted tab capsule (its top padding clears them).
+            Positioned.fill(
+              child: ready
+                  ? _tabBody(library.songs, tab, top)
+                  : Padding(
+                      padding: EdgeInsets.only(top: top),
+                      child: _stateBody(library),
                     ),
-                  ),
-                  if (ready)
-                    Expanded(
-                      child: Stack(
-                        children: [
-                          // The list fills the area and scrolls *behind* the
-                          // frosted tab capsule (its top padding clears the bar).
-                          Positioned.fill(child: _tabBody(library.songs, tab)),
-                          Positioned(
-                            top: 4,
-                            left: 24,
-                            right: 24,
-                            child: SegmentedTabs(
-                              tabs: _tabs,
-                              selected: tab,
-                              onSelected: (i) =>
-                                  ref.read(myMusicTabProvider.notifier).state =
-                                      i,
-                            ),
-                          ),
+            ),
+            // Header over a frosted, slightly see-through background, so the
+            // list scrolling under it shows through blurred.
+            Positioned(
+              top: 0,
+              left: 0,
+              right: 0,
+              child: ClipRect(
+                child: BackdropFilter.grouped(
+                  filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
+                  child: DecoratedBox(
+                    // Darker at the top (status bar) easing off toward the
+                    // tabs, so the frosted list still shows at the bottom edge.
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                        colors: [
+                          AppColors.musicBackground.withValues(alpha: 0.95),
+                          AppColors.musicBackground.withValues(alpha: 0.8),
                         ],
                       ),
-                    )
-                  else
-                    Expanded(child: _stateBody(library)),
-                ],
+                    ),
+                    child: SafeArea(
+                      bottom: false,
+                      child: Padding(
+                        padding: const EdgeInsets.fromLTRB(24, 12, 24, 18),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            GlassIconButton(
+                              icon: AppIcons.back,
+                              size: 44,
+                              iconSize: 22,
+                              onTap: () =>
+                                  ref.read(navigationProvider.notifier).back(),
+                            ),
+                            const Text(
+                              'My Music',
+                              style: TextStyle(
+                                color: AppColors.white,
+                                fontSize: 18,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                            GlassIconButton(
+                              icon: AppIcons.search,
+                              onTap: () => ref
+                                  .read(navigationProvider.notifier)
+                                  .goTo(AppScreen.search),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
               ),
             ),
+            if (ready)
+              Positioned(
+                top: top + 4,
+                left: 24,
+                right: 24,
+                child: SegmentedTabs(
+                  tabs: _tabs,
+                  selected: tab,
+                  onSelected: (i) =>
+                      ref.read(myMusicTabProvider.notifier).state = i,
+                ),
+              ),
             const BottomFade(),
             // Mini-player floats above the shared nav bar.
             const Positioned(
@@ -129,7 +156,7 @@ class _MyMusicScreenState extends ConsumerState<MyMusicScreen> {
   List<MusicCollection>? _albums;
   List<MusicCollection>? _artists;
 
-  Widget _tabBody(List<Song> songs, int tab) {
+  Widget _tabBody(List<Song> songs, int tab, double top) {
     if (!identical(songs, _groupedFrom)) {
       _groupedFrom = songs;
       _albums = null;
@@ -138,14 +165,16 @@ class _MyMusicScreenState extends ConsumerState<MyMusicScreen> {
     return switch (tab) {
       1 => _AlbumsGrid(
         albums: _albums ??= albumsFrom(songs),
+        top: top,
         onOpen: _openCollection,
       ),
       2 => _ArtistsList(
         artists: _artists ??= artistsFrom(songs),
+        top: top,
         onOpen: _openCollection,
       ),
-      3 => const _PlaylistsTab(),
-      _ => _songsList(songs),
+      3 => _PlaylistsTab(top: top),
+      _ => _songsList(songs, top),
     };
   }
 
@@ -154,12 +183,12 @@ class _MyMusicScreenState extends ConsumerState<MyMusicScreen> {
     ref.read(navigationProvider.notifier).goTo(AppScreen.collection);
   }
 
-  Widget _songsList(List<Song> songs) {
+  Widget _songsList(List<Song> songs, double top) {
     // Fixed extent (56px row + 20px gap, split above/below the centred row) so
     // the list never has to measure rows while scrolling. Padding is trimmed by
     // half a gap to keep the same visual offsets as before.
     return ListView.builder(
-      padding: const EdgeInsets.fromLTRB(24, 60, 24, 160),
+      padding: EdgeInsets.fromLTRB(24, top + 60, 24, 160),
       physics: const BouncingScrollPhysics(),
       itemExtent: 76,
       itemCount: songs.length,
@@ -232,15 +261,22 @@ class _MyMusicScreenState extends ConsumerState<MyMusicScreen> {
 /// Albums as a two-column grid of cover + title + artist. Tapping a card opens
 /// the album's detail screen.
 class _AlbumsGrid extends StatelessWidget {
-  const _AlbumsGrid({required this.albums, required this.onOpen});
+  const _AlbumsGrid({
+    required this.albums,
+    required this.top,
+    required this.onOpen,
+  });
 
   final List<MusicCollection> albums;
+
+  /// Height of the header the grid scrolls under.
+  final double top;
   final ValueChanged<MusicCollection> onOpen;
 
   @override
   Widget build(BuildContext context) {
     return GridView.builder(
-      padding: const EdgeInsets.fromLTRB(24, 70, 24, 170),
+      padding: EdgeInsets.fromLTRB(24, top + 70, 24, 170),
       physics: const BouncingScrollPhysics(),
       gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
         crossAxisCount: 2,
@@ -296,16 +332,23 @@ class _AlbumsGrid extends StatelessWidget {
 /// Artists as a list of circular avatar + name + song count. Tapping a row
 /// opens the artist's detail screen.
 class _ArtistsList extends StatelessWidget {
-  const _ArtistsList({required this.artists, required this.onOpen});
+  const _ArtistsList({
+    required this.artists,
+    required this.top,
+    required this.onOpen,
+  });
 
   final List<MusicCollection> artists;
+
+  /// Height of the header the list scrolls under.
+  final double top;
   final ValueChanged<MusicCollection> onOpen;
 
   @override
   Widget build(BuildContext context) {
     // Fixed extent: 54px avatar row + 20px gap, as in the songs list.
     return ListView.builder(
-      padding: const EdgeInsets.fromLTRB(24, 60, 24, 160),
+      padding: EdgeInsets.fromLTRB(24, top + 60, 24, 160),
       physics: const BouncingScrollPhysics(),
       itemExtent: 74,
       itemCount: artists.length,
@@ -360,13 +403,16 @@ class _ArtistsList extends StatelessWidget {
 /// The Playlists tab: a "New playlist" button on top of the user's playlists.
 /// Tapping a playlist opens its detail screen.
 class _PlaylistsTab extends ConsumerWidget {
-  const _PlaylistsTab();
+  const _PlaylistsTab({required this.top});
+
+  /// Height of the header the list scrolls under.
+  final double top;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final playlists = ref.watch(playlistsProvider);
     return ListView(
-      padding: const EdgeInsets.fromLTRB(24, 70, 24, 170),
+      padding: EdgeInsets.fromLTRB(24, top + 70, 24, 170),
       physics: const BouncingScrollPhysics(),
       children: [
         GestureDetector(
