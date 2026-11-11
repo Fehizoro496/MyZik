@@ -104,6 +104,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               ],
             ),
           ),
+          const BottomFade(color: AppColors.homeBackground),
           const Positioned(
             left: 22,
             right: 22,
@@ -112,7 +113,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               mainAxisSize: MainAxisSize.min,
               children: [
                 Padding(
-                  padding: EdgeInsets.only(bottom: 12),
+                  padding: EdgeInsets.only(bottom: 8),
                   child: MiniPlayer(),
                 ),
                 NavBar(),

@@ -380,10 +380,51 @@ class _TrackMenuButton extends ConsumerWidget {
   }
 }
 
-/// The frosted bottom navigation bar. Meant to be anchored to the screen's
-/// bottom edge (top corners rounded, bottom square) so a mini-player can float
-/// above it. Shown on every screen except Now Playing. The active tab is
-/// derived from [navigationProvider] and shows the accent pill.
+/// A light fade at the bottom of a page, from transparent to [color], laid
+/// under the floating mini-player / nav bar so content scrolling behind them
+/// dissolves instead of being cut off at the screen edge. Must be a direct
+/// child of a [Stack], placed before the floating controls. Ignores touches.
+class BottomFade extends StatelessWidget {
+  const BottomFade({
+    super.key,
+    this.color = AppColors.musicBackground,
+    this.height = 140,
+  });
+
+  final Color color;
+
+  /// Height above the system bottom inset.
+  final double height;
+
+  @override
+  Widget build(BuildContext context) {
+    return Positioned(
+      left: 0,
+      right: 0,
+      bottom: 0,
+      height: height + MediaQuery.viewPaddingOf(context).bottom,
+      child: IgnorePointer(
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [
+                color.withValues(alpha: 0),
+                color.withValues(alpha: 0.85),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// The frosted bottom navigation bar: a floating glass capsule lifted off the
+/// screen's bottom edge (clear of the system gesture area), with a mini-player
+/// floating above it. Shown on every screen except Now Playing. The active tab
+/// is derived from [navigationProvider] and shows the accent pill.
 class NavBar extends ConsumerWidget {
   const NavBar({super.key});
 
@@ -391,59 +432,69 @@ class NavBar extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final screen = ref.watch(navigationProvider);
     final goTo = ref.read(navigationProvider.notifier).goTo;
-    return ClipRRect(
-      borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
-      child: BackdropFilter.grouped(
-        filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
-        child: Container(
-          decoration: BoxDecoration(
-            color: const Color.fromRGBO(22, 22, 30, 0.5),
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
-            border: Border(top: BorderSide(color: AppColors.whiteAlpha(0.08))),
-          ),
-          child: SafeArea(
-            top: false,
-            child: SizedBox(
+    return SafeArea(
+      top: false,
+      minimum: const EdgeInsets.only(bottom: 16),
+      child: DecoratedBox(
+        // Soft drop shadow so the capsule lifts off the content behind it.
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(32),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.4),
+              blurRadius: 28,
+              offset: const Offset(0, 12),
+            ),
+          ],
+        ),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(32),
+          child: BackdropFilter.grouped(
+            filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
+            child: Container(
               height: 64,
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 12),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    _tab(
-                      screen,
-                      goTo,
-                      icon: AppIcons.home,
-                      activeIcon: AppIcons.homeFilled,
-                      target: AppScreen.home,
-                    ),
-                    _tab(
-                      screen,
-                      goTo,
-                      icon: AppIcons.category,
-                      activeIcon: AppIcons.categoryFilled,
-                      target: AppScreen.myMusic,
-                    ),
-                    // _action(
-                    //   AppIcons.swap,
-                    //   () => goTo(AppScreen.nowPlaying),
-                    // ),
-                    _tab(
-                      screen,
-                      goTo,
-                      icon: AppIcons.heart,
-                      activeIcon: AppIcons.heartFilled,
-                      target: AppScreen.liked,
-                    ),
-                    _tab(
-                      screen,
-                      goTo,
-                      icon: AppIcons.download,
-                      activeIcon: AppIcons.downloadFilled,
-                      target: AppScreen.discover,
-                    ),
-                  ],
-                ),
+              padding: const EdgeInsets.symmetric(horizontal: 8),
+              decoration: BoxDecoration(
+                color: const Color.fromRGBO(22, 22, 30, 0.5),
+                borderRadius: BorderRadius.circular(32),
+                border: Border.all(color: AppColors.whiteAlpha(0.08)),
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  _tab(
+                    screen,
+                    goTo,
+                    icon: AppIcons.home,
+                    activeIcon: AppIcons.homeFilled,
+                    target: AppScreen.home,
+                  ),
+                  _tab(
+                    screen,
+                    goTo,
+                    icon: AppIcons.category,
+                    activeIcon: AppIcons.categoryFilled,
+                    target: AppScreen.myMusic,
+                  ),
+                  // _action(
+                  //   AppIcons.swap,
+                  //   () => goTo(AppScreen.nowPlaying),
+                  // ),
+                  _tab(
+                    screen,
+                    goTo,
+                    icon: AppIcons.heart,
+                    activeIcon: AppIcons.heartFilled,
+                    target: AppScreen.liked,
+                  ),
+                  _tab(
+                    screen,
+                    goTo,
+                    icon: AppIcons.download,
+                    activeIcon: AppIcons.downloadFilled,
+                    target: AppScreen.discover,
+                  ),
+                ],
               ),
             ),
           ),

@@ -89,6 +89,7 @@ class _LikedScreenState extends ConsumerState<LikedScreen> {
               ],
             ),
           ),
+          const BottomFade(),
           const Positioned(
             left: 22,
             right: 22,
@@ -97,7 +98,7 @@ class _LikedScreenState extends ConsumerState<LikedScreen> {
               mainAxisSize: MainAxisSize.min,
               children: [
                 Padding(
-                  padding: EdgeInsets.only(bottom: 12),
+                  padding: EdgeInsets.only(bottom: 8),
                   child: MiniPlayer(),
                 ),
                 NavBar(),

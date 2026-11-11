@@ -100,6 +100,7 @@ class _MyMusicScreenState extends ConsumerState<MyMusicScreen> {
                 ],
               ),
             ),
+            const BottomFade(),
             // Mini-player floats above the shared nav bar.
             const Positioned(
               left: 22,
@@ -109,7 +110,7 @@ class _MyMusicScreenState extends ConsumerState<MyMusicScreen> {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Padding(
-                    padding: EdgeInsets.only(bottom: 12),
+                    padding: EdgeInsets.only(bottom: 8),
                     child: MiniPlayer(),
                   ),
                   NavBar(),
