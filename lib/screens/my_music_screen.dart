@@ -35,92 +35,114 @@ class _MyMusicScreenState extends ConsumerState<MyMusicScreen> {
         library.status == LibraryStatus.ready && library.songs.isNotEmpty;
     return DecoratedBox(
       decoration: const BoxDecoration(color: AppColors.musicBackground),
-      child: Stack(
-        children: [
-          SafeArea(
-            bottom: false,
-            child: Column(
-              children: [
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(24, 12, 24, 18),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      GlassIconButton(
-                        icon: AppIcons.back,
-                        size: 44,
-                        iconSize: 22,
-                        onTap: () =>
-                            ref.read(navigationProvider.notifier).back(),
-                      ),
-                      const Text(
-                        'My Music',
-                        style: TextStyle(
-                          color: AppColors.white,
-                          fontSize: 18,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                      GlassIconButton(
-                        icon: AppIcons.search,
-                        onTap: () => ref
-                            .read(navigationProvider.notifier)
-                            .goTo(AppScreen.search),
-                      ),
-                    ],
-                  ),
-                ),
-                if (ready)
-                  Expanded(
-                    child: Stack(
+      // The tab capsule, mini-player and nav bar all blur the list scrolling
+      // under them: grouping lets them share a single backdrop read per frame.
+      child: BackdropGroup(
+        child: Stack(
+          children: [
+            SafeArea(
+              bottom: false,
+              child: Column(
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(24, 12, 24, 18),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        // The list fills the area and scrolls *behind* the
-                        // frosted tab capsule (its top padding clears the bar).
-                        Positioned.fill(child: _tabBody(library.songs, tab)),
-                        Positioned(
-                          top: 4,
-                          left: 24,
-                          right: 24,
-                          child: SegmentedTabs(
-                            tabs: _tabs,
-                            selected: tab,
-                            onSelected: (i) =>
-                                ref.read(myMusicTabProvider.notifier).state = i,
+                        GlassIconButton(
+                          icon: AppIcons.back,
+                          size: 44,
+                          iconSize: 22,
+                          onTap: () =>
+                              ref.read(navigationProvider.notifier).back(),
+                        ),
+                        const Text(
+                          'My Music',
+                          style: TextStyle(
+                            color: AppColors.white,
+                            fontSize: 18,
+                            fontWeight: FontWeight.w700,
                           ),
+                        ),
+                        GlassIconButton(
+                          icon: AppIcons.search,
+                          onTap: () => ref
+                              .read(navigationProvider.notifier)
+                              .goTo(AppScreen.search),
                         ),
                       ],
                     ),
-                  )
-                else
-                  Expanded(child: _stateBody(library)),
-              ],
+                  ),
+                  if (ready)
+                    Expanded(
+                      child: Stack(
+                        children: [
+                          // The list fills the area and scrolls *behind* the
+                          // frosted tab capsule (its top padding clears the bar).
+                          Positioned.fill(child: _tabBody(library.songs, tab)),
+                          Positioned(
+                            top: 4,
+                            left: 24,
+                            right: 24,
+                            child: SegmentedTabs(
+                              tabs: _tabs,
+                              selected: tab,
+                              onSelected: (i) =>
+                                  ref.read(myMusicTabProvider.notifier).state =
+                                      i,
+                            ),
+                          ),
+                        ],
+                      ),
+                    )
+                  else
+                    Expanded(child: _stateBody(library)),
+                ],
+              ),
             ),
-          ),
-          // Mini-player floats above the shared nav bar.
-          const Positioned(
-            left: 22,
-            right: 22,
-            bottom: 0,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Padding(
-                  padding: EdgeInsets.only(bottom: 12),
-                  child: MiniPlayer(),
-                ),
-                NavBar(),
-              ],
+            // Mini-player floats above the shared nav bar.
+            const Positioned(
+              left: 22,
+              right: 22,
+              bottom: 0,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Padding(
+                    padding: EdgeInsets.only(bottom: 12),
+                    child: MiniPlayer(),
+                  ),
+                  NavBar(),
+                ],
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
 
+  // Album / artist groupings, recomputed only when the library list changes
+  // rather than on every rebuild of the screen.
+  List<Song>? _groupedFrom;
+  List<MusicCollection>? _albums;
+  List<MusicCollection>? _artists;
+
   Widget _tabBody(List<Song> songs, int tab) {
+    if (!identical(songs, _groupedFrom)) {
+      _groupedFrom = songs;
+      _albums = null;
+      _artists = null;
+    }
     return switch (tab) {
-      1 => _AlbumsGrid(albums: albumsFrom(songs), onOpen: _openCollection),
-      2 => _ArtistsList(artists: artistsFrom(songs), onOpen: _openCollection),
+      1 => _AlbumsGrid(
+        albums: _albums ??= albumsFrom(songs),
+        onOpen: _openCollection,
+      ),
+      2 => _ArtistsList(
+        artists: _artists ??= artistsFrom(songs),
+        onOpen: _openCollection,
+      ),
       3 => const _PlaylistsTab(),
       _ => _songsList(songs),
     };
@@ -132,15 +154,18 @@ class _MyMusicScreenState extends ConsumerState<MyMusicScreen> {
   }
 
   Widget _songsList(List<Song> songs) {
-    return ListView.separated(
-      padding: const EdgeInsets.fromLTRB(24, 70, 24, 170),
+    // Fixed extent (56px row + 20px gap, split above/below the centred row) so
+    // the list never has to measure rows while scrolling. Padding is trimmed by
+    // half a gap to keep the same visual offsets as before.
+    return ListView.builder(
+      padding: const EdgeInsets.fromLTRB(24, 60, 24, 160),
       physics: const BouncingScrollPhysics(),
+      itemExtent: 76,
       itemCount: songs.length,
       itemBuilder: (context, i) => TrackRow(
         song: songs[i],
         onTap: () => ref.read(playbackProvider.notifier).playSong(songs[i]),
       ),
-      separatorBuilder: (_, _) => const SizedBox(height: 20),
     );
   }
 
@@ -277,9 +302,11 @@ class _ArtistsList extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ListView.separated(
-      padding: const EdgeInsets.fromLTRB(24, 70, 24, 170),
+    // Fixed extent: 54px avatar row + 20px gap, as in the songs list.
+    return ListView.builder(
+      padding: const EdgeInsets.fromLTRB(24, 60, 24, 160),
       physics: const BouncingScrollPhysics(),
+      itemExtent: 74,
       itemCount: artists.length,
       itemBuilder: (context, i) {
         final artist = artists[i];
@@ -325,7 +352,6 @@ class _ArtistsList extends StatelessWidget {
           ),
         );
       },
-      separatorBuilder: (_, _) => const SizedBox(height: 20),
     );
   }
 }

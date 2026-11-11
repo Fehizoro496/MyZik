@@ -117,8 +117,16 @@ class SongArtwork extends ConsumerWidget {
     final artwork = ref.watch(coverArtProvider(song.coverKey));
     final bytes = artwork.asData?.value;
     if (bytes == null) return placeholder;
-    final image = Image.memory(
-      bytes,
+    // Decode at the on-screen pixel size rather than the full 400px source:
+    // keeps decoding and GPU uploads cheap while a list of covers scrolls.
+    final cacheSize = (size * MediaQuery.devicePixelRatioOf(context)).round();
+    final image = Image(
+      image: ResizeImage(
+        MemoryImage(bytes),
+        width: cacheSize,
+        height: cacheSize,
+        policy: ResizeImagePolicy.fit,
+      ),
       width: size,
       height: size,
       fit: BoxFit.cover,
@@ -168,9 +176,11 @@ class SegmentedTabs extends StatelessWidget {
       ),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(26),
-        child: BackdropFilter(
+        child: BackdropFilter.grouped(
           // Same blur as the MiniPlayer — this is what makes the content behind
-          // it read as frosted glass rather than a flat panel.
+          // it read as frosted glass rather than a flat panel. Grouped so it
+          // shares one backdrop read with the other glass surfaces when an
+          // ancestor [BackdropGroup] exists.
           filter: ImageFilter.blur(sigmaX: 24, sigmaY: 24),
           child: Container(
             height: 50,
@@ -383,7 +393,7 @@ class NavBar extends ConsumerWidget {
     final goTo = ref.read(navigationProvider.notifier).goTo;
     return ClipRRect(
       borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
-      child: BackdropFilter(
+      child: BackdropFilter.grouped(
         filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
         child: Container(
           decoration: BoxDecoration(
@@ -493,7 +503,7 @@ class MiniPlayer extends ConsumerWidget {
     final notifier = ref.read(playbackProvider.notifier);
     return ClipRRect(
       borderRadius: BorderRadius.circular(30),
-      child: BackdropFilter(
+      child: BackdropFilter.grouped(
         filter: ImageFilter.blur(sigmaX: 24, sigmaY: 24),
         child: GestureDetector(
           onTap: () =>
