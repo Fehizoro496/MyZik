@@ -122,15 +122,17 @@ class _MyMusicScreenState extends ConsumerState<MyMusicScreen> {
     );
   }
 
-  // Album / artist groupings, recomputed only when the library list changes
-  // rather than on every rebuild of the screen.
+  // Sorted songs and album / artist groupings, recomputed only when the library
+  // list changes rather than on every rebuild of the screen.
   List<Song>? _groupedFrom;
+  List<Song>? _sortedSongs;
   List<MusicCollection>? _albums;
   List<MusicCollection>? _artists;
 
   Widget _tabBody(List<Song> songs, int tab, double top) {
     if (!identical(songs, _groupedFrom)) {
       _groupedFrom = songs;
+      _sortedSongs = null;
       _albums = null;
       _artists = null;
     }
@@ -146,8 +148,33 @@ class _MyMusicScreenState extends ConsumerState<MyMusicScreen> {
         onOpen: _openCollection,
       ),
       3 => _PlaylistsTab(top: top),
-      _ => _songsList(songs, top),
+      _ => _songsList(_sortedSongs ??= _sortByTitle(songs), top),
     };
+  }
+
+  /// [songs] in alphabetical order of title, ignoring case and accents (so
+  /// "Été" sorts with the e's, not after "z").
+  static List<Song> _sortByTitle(List<Song> songs) {
+    final keyed = [for (final s in songs) (key: _sortKey(s.title), song: s)];
+    keyed.sort((a, b) => a.key.compareTo(b.key));
+    return [for (final k in keyed) k.song];
+  }
+
+  static const _accents = {
+    'à': 'a', 'á': 'a', 'â': 'a', 'ã': 'a', 'ä': 'a', 'å': 'a', //
+    'ç': 'c', 'è': 'e', 'é': 'e', 'ê': 'e', 'ë': 'e', //
+    'ì': 'i', 'í': 'i', 'î': 'i', 'ï': 'i', 'ñ': 'n', //
+    'ò': 'o', 'ó': 'o', 'ô': 'o', 'õ': 'o', 'ö': 'o', //
+    'ù': 'u', 'ú': 'u', 'û': 'u', 'ü': 'u', 'ý': 'y', 'ÿ': 'y', //
+  };
+
+  static String _sortKey(String title) {
+    final lower = title.trim().toLowerCase();
+    final out = StringBuffer();
+    for (final ch in lower.split('')) {
+      out.write(_accents[ch] ?? ch);
+    }
+    return out.toString();
   }
 
   void _openCollection(MusicCollection collection) {

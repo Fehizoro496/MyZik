@@ -74,9 +74,10 @@ void main() {
     container.read(navigationProvider.notifier).goTo(AppScreen.myMusic);
     await tester.pumpAndSettle();
 
-    // Open the first track's ⋮ menu and pick "Song details".
+    // Open "Starlit Reverie"'s ⋮ menu (second row: the list is sorted by
+    // title) and pick "Song details".
     expect(find.byIcon(AppIcons.moreVert), findsNWidgets(2));
-    await tester.tap(find.byIcon(AppIcons.moreVert).first);
+    await tester.tap(find.byIcon(AppIcons.moreVert).last);
     await tester.pumpAndSettle();
     await tester.tap(find.text('Song details'));
     await tester.pumpAndSettle();
