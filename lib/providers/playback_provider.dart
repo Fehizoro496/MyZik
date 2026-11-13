@@ -107,6 +107,27 @@ class PlaybackNotifier extends Notifier<PlaybackState> {
   Timer? _persistTimer;
   bool _restoreAttempted = false;
 
+  /// The whole queue handed to the player, so it moves on to the next track
+  /// natively. Advancing from Dart instead left a gap between tracks in which
+  /// a sleeping phone could freeze the app and never start the next one.
+  ConcatenatingAudioSource? _playlist;
+
+  /// The songs of [_playlist], in play order: the queue order, or a shuffled
+  /// order of it while shuffling. Songs without a uri are left out.
+  List<Song> _playOrder = const [];
+
+  /// While non-zero the player is being (re)loaded or its playlist rearranged,
+  /// so its index and idle/error events are transient and ignored.
+  int _busy = 0;
+
+  /// Playlist mutations run one after the other, each against the order the
+  /// previous one left.
+  Future<void> _mutations = Future.value();
+
+  /// Tracks skipped in a row because they failed to load; stops skipping once
+  /// the whole queue has been tried.
+  int _failedInARow = 0;
+
   @override
   PlaybackState build() {
     _player = AudioPlayer(
@@ -127,8 +148,13 @@ class PlaybackNotifier extends Notifier<PlaybackState> {
     _player.durationStream.listen((d) {
       if (d != null) state = state.copyWith(duration: d);
     });
+    _player.currentIndexStream.listen(_onPlayerIndex);
     _player.processingStateStream.listen((s) {
-      if (s == ProcessingState.completed) _onTrackFinished();
+      if (s == ProcessingState.ready) _failedInARow = 0;
+      // An unreadable track leaves the player idle. Reacting to the idle state
+      // rather than to the error itself lets just_audio first release the
+      // failed platform player, which would otherwise interrupt the reload.
+      if (s == ProcessingState.idle) _skipUnplayable();
     });
 
     _persistTimer = Timer.periodic(
@@ -184,17 +210,7 @@ class PlaybackNotifier extends Notifier<PlaybackState> {
       duration: song.duration,
       position: position,
     );
-
-    final uri = song.uri;
-    if (uri == null) return;
-    try {
-      await _player.setAudioSource(
-        AudioSource.uri(Uri.parse(uri)),
-        initialPosition: position,
-      );
-    } catch (_) {
-      // Ignore unreadable sources; keep the UI responsive.
-    }
+    await _loadQueue(song, play: false, position: position);
   }
 
   /// Open [song] and start playback, setting the play queue to [context] — the
@@ -222,7 +238,7 @@ class PlaybackNotifier extends Notifier<PlaybackState> {
     );
     if (throwOnLoadError) {
       try {
-        await _load(song, play: true, throwOnError: true);
+        await _loadQueue(song, play: true, throwOnError: true);
       } catch (_) {
         state = previousState;
         rethrow;
@@ -236,7 +252,7 @@ class PlaybackNotifier extends Notifier<PlaybackState> {
 
     ref.read(navigationProvider.notifier).goTo(AppScreen.nowPlaying);
     _persistSongId(song.id);
-    await _load(song, play: true);
+    await _loadQueue(song, play: true);
   }
 
   /// Jump to a track already in the queue by its index, preserving queue order
@@ -245,15 +261,24 @@ class PlaybackNotifier extends Notifier<PlaybackState> {
     final queue = state.queue;
     if (index < 0 || index >= queue.length) return;
     final song = queue[index];
+    _setCurrent(song, index);
+    ref.read(navigationProvider.notifier).goTo(AppScreen.nowPlaying);
+    final child = _playOrder.indexOf(song);
+    if (_playlist == null || child == -1) {
+      await _loadQueue(song, play: true);
+    } else {
+      await _playChild(child);
+    }
+  }
+
+  void _setCurrent(Song song, int index) {
     state = state.copyWith(
       current: song,
       currentIndex: index,
       duration: song.duration,
       position: Duration.zero,
     );
-    ref.read(navigationProvider.notifier).goTo(AppScreen.nowPlaying);
     _persistSongId(song.id);
-    await _load(song, play: true);
   }
 
   /// Reorder the queue (ReorderableListView indices). Keeps the currently
@@ -272,27 +297,170 @@ class PlaybackNotifier extends Notifier<PlaybackState> {
       queue: queue,
       currentIndex: newCurrent == -1 ? state.currentIndex : newCurrent,
     );
+    // While shuffling the play order is independent of the queue order.
+    if (!state.shuffle) _syncPlayOrder(queue);
   }
 
-  /// Load [song]'s file into the player (and optionally start it). Sample /
-  /// desktop data has no uri yet, so this is a no-op there.
-  Future<void> _load(
+  /// Hand the whole queue to the player and start it from [song]. Sample data
+  /// has no uri, so nothing is loaded for it.
+  Future<void> _loadQueue(
     Song song, {
     required bool play,
+    Duration? position,
     bool throwOnError = false,
   }) async {
-    final uri = song.uri;
-    if (uri == null) return;
+    if (song.uri == null) {
+      _playlist = null;
+      _playOrder = const [];
+      return;
+    }
+    _playOrder = playOrderFor(state.queue, song, shuffle: state.shuffle);
+    _playlist = ConcatenatingAudioSource(
+      children: [
+        for (final s in _playOrder) AudioSource.uri(Uri.parse(s.uri!)),
+      ],
+    );
+    await _loadChild(
+      _playOrder.indexOf(song),
+      play: play,
+      position: position,
+      throwOnError: throwOnError,
+    );
+  }
+
+  /// (Re)load [_playlist] in the player, starting at its [child]-th track.
+  Future<void> _loadChild(
+    int child, {
+    required bool play,
+    Duration? position,
+    bool throwOnError = false,
+  }) async {
+    final playlist = _playlist;
+    if (playlist == null) return;
+    _busy++;
     try {
-      await _player.setAudioSource(AudioSource.uri(Uri.parse(uri)));
+      await _player.setLoopMode(_loopModeFor(state.repeatMode));
+      await _player.setAudioSource(
+        playlist,
+        initialIndex: child,
+        initialPosition: position,
+      );
       // just_audio's play() future completes when playback ends, not when it
       // starts. Do not keep UI actions pending for the duration of the track.
       if (play) unawaited(_player.play());
     } catch (error, stackTrace) {
       if (throwOnError) Error.throwWithStackTrace(error, stackTrace);
-      // Local library entries may become unreadable after a rescan. Keep the
-      // existing best-effort behaviour for those callers.
+      // Superseded by another load: that one decides what plays.
+      if (error is PlayerInterruptedException) return;
+      if (!identical(playlist, _playlist)) return;
+      // Local library entries may become unreadable after a rescan: move on
+      // to the next track rather than stopping silently.
+      if (play) _skipFrom(child);
+    } finally {
+      _busy--;
     }
+  }
+
+  /// Start the [child]-th track of the loaded playlist from its beginning.
+  Future<void> _playChild(int child) async {
+    if (_player.processingState == ProcessingState.idle) {
+      // Nothing loaded (or a failed track): seeking alone would not play.
+      return _loadChild(child, play: true);
+    }
+    _busy++;
+    try {
+      await _player.seek(Duration.zero, index: child);
+    } finally {
+      _busy--;
+    }
+    unawaited(_player.play());
+  }
+
+  /// Mirror a track the player moved to on its own (end of the previous one)
+  /// into the state.
+  void _onPlayerIndex(int? child) {
+    if (_busy > 0 || child == null || child >= _playOrder.length) return;
+    final song = _playOrder[child];
+    if (identical(song, state.current)) return;
+    final index = state.queue.indexOf(song);
+    if (index == -1) return;
+    _setCurrent(song, index);
+  }
+
+  /// The current track failed to load: go on with the next one, the way the
+  /// player itself would at the end of a track.
+  void _skipUnplayable() {
+    if (_busy > 0 || _playlist == null) return;
+    final current = state.current;
+    final child = current == null ? -1 : _playOrder.indexOf(current);
+    if (child != -1) _skipFrom(child);
+  }
+
+  void _skipFrom(int child) {
+    if (++_failedInARow >= _playOrder.length) return; // nothing plays
+    final atEnd = child == _playOrder.length - 1;
+    if (atEnd && state.repeatMode == PlaybackRepeatMode.off) return;
+    final next = (child + 1) % _playOrder.length;
+    final song = _playOrder[next];
+    _setCurrent(song, state.queue.indexOf(song));
+    unawaited(_loadChild(next, play: true));
+  }
+
+  /// Rearrange the loaded playlist to follow [queue] (non-shuffled order)
+  /// without interrupting the current track.
+  void _syncPlayOrder(List<Song> queue) {
+    _mutate((playlist) async {
+      final target = playOrderFor(queue, state.current, shuffle: false);
+      for (final (from, to) in movesToMatch(_playOrder, target)) {
+        await playlist.move(from, to);
+      }
+      _playOrder = target;
+    });
+  }
+
+  /// Re-deal the play order around the current track after shuffle was
+  /// toggled: a fresh random order, or back to the queue order.
+  void _reshuffle() {
+    final queue = state.queue;
+    final shuffle = state.shuffle;
+    _mutate((playlist) async {
+      final current = state.current;
+      final child = current == null ? -1 : _playOrder.indexOf(current);
+      if (child == -1) return;
+      final order = playOrderFor(queue, current, shuffle: shuffle);
+      final at = order.indexOf(current!);
+      await playlist.removeRange(child + 1, playlist.length);
+      await playlist.removeRange(0, child);
+      if (at > 0) {
+        await playlist.insertAll(0, [
+          for (final s in order.take(at)) AudioSource.uri(Uri.parse(s.uri!)),
+        ]);
+      }
+      await playlist.addAll([
+        for (final s in order.skip(at + 1)) AudioSource.uri(Uri.parse(s.uri!)),
+      ]);
+      _playOrder = order;
+    });
+  }
+
+  /// Run [op] on the loaded playlist once the previous mutation is done. The
+  /// player's index events are ignored meanwhile (they refer to half-updated
+  /// orders) and the current track is re-read at the end.
+  void _mutate(Future<void> Function(ConcatenatingAudioSource) op) {
+    final playlist = _playlist;
+    if (playlist == null) return;
+    _mutations = _mutations.then((_) async {
+      if (!identical(playlist, _playlist)) return;
+      _busy++;
+      try {
+        await op(playlist);
+      } catch (_) {
+        // Best-effort: the current track keeps playing either way.
+      } finally {
+        _busy--;
+      }
+      _onPlayerIndex(_player.currentIndex);
+    });
   }
 
   Future<void> togglePlay() async {
@@ -369,53 +537,42 @@ class PlaybackNotifier extends Notifier<PlaybackState> {
     }
   }
 
-  /// Skip to the next song: a random one when shuffling, otherwise the next
-  /// in the queue order (wraps around).
-  Future<void> next() async {
-    final queue = state.queue;
-    final idx = state.currentIndex;
-    if (queue.isEmpty || idx == null) return;
-    final i = state.shuffle
-        ? _randomIndexExcluding(queue.length, idx)
-        : (idx + 1) % queue.length;
-    await playQueueIndex(i);
-  }
+  /// Skip to the next song in the play order (the shuffled one when
+  /// shuffling), wrapping around.
+  Future<void> next() => _step(1);
 
   /// Restart the current song if we're past 3s, otherwise go to the previous
-  /// (a random one when shuffling, otherwise the prior queue entry).
+  /// one in the play order.
   Future<void> previous() async {
-    final queue = state.queue;
-    final idx = state.currentIndex;
-    if (queue.isEmpty || idx == null) return;
+    if (state.queue.isEmpty || state.currentIndex == null) return;
     if (state.position.inSeconds > 3) {
       await _player.seek(Duration.zero);
       return;
     }
-    final i = state.shuffle
-        ? _randomIndexExcluding(queue.length, idx)
-        : (idx - 1 + queue.length) % queue.length;
-    await playQueueIndex(i);
+    await _step(-1);
   }
 
-  /// Called when a track finishes playing on its own (not a manual skip):
-  /// honours [PlaybackRepeatMode.one] by looping and [PlaybackRepeatMode.off] by stopping at
-  /// the end of the library instead of wrapping around.
-  Future<void> _onTrackFinished() async {
-    if (state.repeatMode == PlaybackRepeatMode.one) {
-      await _player.seek(Duration.zero);
-      await _player.play();
-      return;
-    }
+  Future<void> _step(int delta) async {
     final queue = state.queue;
     final idx = state.currentIndex;
     if (queue.isEmpty || idx == null) return;
-    final atLastTrack = !state.shuffle && idx == queue.length - 1;
-    if (atLastTrack && state.repeatMode == PlaybackRepeatMode.off) return;
-    await next();
+    final current = state.current;
+    final child = current == null ? -1 : _playOrder.indexOf(current);
+    if (_playlist != null && child != -1) {
+      final length = _playOrder.length;
+      final song = _playOrder[(child + delta + length) % length];
+      return playQueueIndex(queue.indexOf(song));
+    }
+    // No playlist loaded (sample data without files): walk the queue itself.
+    final i = state.shuffle
+        ? _randomIndexExcluding(queue.length, idx)
+        : (idx + delta + queue.length) % queue.length;
+    await playQueueIndex(i);
   }
 
   void toggleShuffle() {
     state = state.copyWith(shuffle: !state.shuffle);
+    _reshuffle();
   }
 
   void cycleRepeatMode() {
@@ -425,7 +582,15 @@ class PlaybackNotifier extends Notifier<PlaybackState> {
       PlaybackRepeatMode.one => PlaybackRepeatMode.off,
     };
     state = state.copyWith(repeatMode: next);
+    // The player handles the end of a track itself, so it needs the mode.
+    if (_playlist != null) unawaited(_player.setLoopMode(_loopModeFor(next)));
   }
+
+  static LoopMode _loopModeFor(PlaybackRepeatMode mode) => switch (mode) {
+    PlaybackRepeatMode.off => LoopMode.off,
+    PlaybackRepeatMode.all => LoopMode.all,
+    PlaybackRepeatMode.one => LoopMode.one,
+  };
 
   int _randomIndexExcluding(int length, int exclude) {
     if (length <= 1) return exclude;
@@ -467,6 +632,52 @@ class PlaybackNotifier extends Notifier<PlaybackState> {
     ref
         .read(sharedPreferencesProvider)
         .setInt(_kLastPositionMs, state.position.inMilliseconds);
+  }
+}
+
+/// The order the player goes through [queue]: the queue order, or with
+/// [shuffle] a random order starting at [current]. Songs without a uri (sample
+/// data) can't be played and are left out.
+List<Song> playOrderFor(
+  List<Song> queue,
+  Song? current, {
+  required bool shuffle,
+}) {
+  final playable = [
+    for (final s in queue)
+      if (s.uri != null) s,
+  ];
+  if (!shuffle) return playable;
+  final rest = [
+    for (final s in playable)
+      if (!identical(s, current)) s,
+  ]..shuffle();
+  return [if (current != null && current.uri != null) current, ...rest];
+}
+
+/// The `(from, to)` moves that rearrange [order] into [target] (the same
+/// songs), applied one after the other. A single reorder of the queue takes a
+/// single move.
+List<(int, int)> movesToMatch(List<Song> order, List<Song> target) {
+  final work = List<Song>.of(order);
+  final moves = <(int, int)>[];
+  while (true) {
+    var first = 0;
+    while (first < work.length && identical(work[first], target[first])) {
+      first++;
+    }
+    if (first == work.length) return moves;
+    var last = work.length - 1;
+    while (identical(work[last], target[last])) {
+      last--;
+    }
+    // Either the first mismatch moved down to the last one, or the last one
+    // moved up to the first.
+    final (from, to) = identical(work[first], target[last])
+        ? (first, last)
+        : (work.indexOf(target[first]), first);
+    work.insert(to, work.removeAt(from));
+    moves.add((from, to));
   }
 }
 
