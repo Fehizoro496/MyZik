@@ -6,8 +6,10 @@ import '../models.dart';
 import '../providers/library_provider.dart';
 import '../providers/navigation_provider.dart';
 import '../providers/playback_provider.dart';
+import '../providers/profile_provider.dart';
 import '../theme.dart';
 import '../widgets.dart';
+import 'settings_screen.dart' show ProfileAvatar;
 
 /// The landing page: a greeting, a shuffled run through the library, then
 /// shelves of its albums and artists and a few of its songs.
@@ -69,9 +71,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                     children: [
                       _header(),
                       const SizedBox(height: 22),
-                      const Text(
-                        'Hi, Fehizoro',
-                        style: TextStyle(
+                      Text(
+                        'Hi, ${ref.watch(profileProvider.select((p) => p.name))}',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
                           color: AppColors.white,
                           fontSize: 30,
                           fontWeight: FontWeight.w800,
@@ -193,10 +197,15 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          const CircleAvatar(
-            radius: 22,
-            backgroundColor: Color(0xFF1A1730),
-            backgroundImage: AssetImage('assets/images/avatar.png'),
+          Semantics(
+            button: true,
+            label: 'Settings',
+            child: GestureDetector(
+              onTap: () => ref
+                  .read(navigationProvider.notifier)
+                  .goTo(AppScreen.settings),
+              child: const ProfileAvatar(),
+            ),
           ),
           Row(
             children: [

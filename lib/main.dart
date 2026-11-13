@@ -23,6 +23,7 @@ import 'screens/discover_screen.dart';
 import 'screens/liked_screen.dart';
 import 'screens/playlist_screen.dart';
 import 'screens/search_screen.dart';
+import 'screens/settings_screen.dart';
 import 'screens/delete_song_dialog.dart';
 import 'screens/edit_song_screen.dart';
 import 'screens/song_detail_screen.dart';
@@ -140,6 +141,8 @@ class PlayerShell extends ConsumerWidget {
         return const EditSongScreen();
       case AppScreen.sync:
         return const SyncScreen();
+      case AppScreen.settings:
+        return const SettingsScreen();
     }
   }
 

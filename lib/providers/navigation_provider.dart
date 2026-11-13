@@ -12,6 +12,7 @@ enum AppScreen {
   songDetail,
   songEdit,
   sync,
+  settings,
 }
 
 /// The screen currently shown by [PlayerShell]. Pure in-memory UI state — not

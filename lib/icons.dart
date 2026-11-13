@@ -86,6 +86,11 @@ class AppIcons {
   /// Sync by USB cable.
   static const IconData cable = CupertinoIcons.link;
 
+  /// Settings page and its profile section.
+  static const IconData settings = CupertinoIcons.gear;
+  static const IconData person = CupertinoIcons.person;
+  static const IconData camera = CupertinoIcons.camera;
+
   static const IconData video = CupertinoIcons.play_rectangle;
   static const IconData offline = CupertinoIcons.wifi_slash;
 }

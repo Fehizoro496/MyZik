@@ -295,12 +295,15 @@ class LyricText extends StatelessWidget {
   }
 }
 
+/// Whether the user agreed to send audio to Groq for AI synchronization
+/// (asked once by [confirmAutoSync], revocable in Settings).
+const autoSyncConsentKey = 'lyrics.autoSyncConsent';
+
 /// Before a track's audio leaves the device for AI synchronization: says so
 /// once, and remembers the answer.
 Future<bool> confirmAutoSync(BuildContext context, WidgetRef ref) async {
-  const consentKey = 'lyrics.autoSyncConsent';
   final prefs = ref.read(sharedPreferencesProvider);
-  if (prefs.getBool(consentKey) ?? false) return true;
+  if (prefs.getBool(autoSyncConsentKey) ?? false) return true;
   final accepted = await showDialog<bool>(
     context: context,
     builder: (context) => AlertDialog(
@@ -323,7 +326,7 @@ Future<bool> confirmAutoSync(BuildContext context, WidgetRef ref) async {
     ),
   );
   if (accepted != true) return false;
-  await prefs.setBool(consentKey, true);
+  await prefs.setBool(autoSyncConsentKey, true);
   return true;
 }
 

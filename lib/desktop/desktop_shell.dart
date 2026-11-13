@@ -10,6 +10,7 @@ import '../providers/playback_provider.dart';
 import '../providers/playlists_provider.dart';
 import '../theme.dart';
 import '../widgets.dart';
+import '../screens/settings_screen.dart' show ProfileAvatar;
 import 'desktop_navigation.dart';
 import 'dialogs.dart';
 import 'desktop_style.dart';
@@ -235,10 +236,7 @@ class _TopBar extends ConsumerWidget {
             ),
           ),
           const Spacer(),
-          const CircleAvatar(
-            radius: 17,
-            backgroundImage: AssetImage('assets/images/avatar.png'),
-          ),
+          const ProfileAvatar(radius: 17),
         ],
       ),
     );
