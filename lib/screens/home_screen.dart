@@ -207,20 +207,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               child: const ProfileAvatar(),
             ),
           ),
-          Row(
-            children: [
-              GlassIconButton(
-                icon: AppIcons.sync,
-                onTap: () =>
-                    ref.read(navigationProvider.notifier).goTo(AppScreen.sync),
-              ),
-              GlassIconButton(
-                icon: AppIcons.search,
-                onTap: () => ref
-                    .read(navigationProvider.notifier)
-                    .goTo(AppScreen.search),
-              ),
-            ],
+          GlassIconButton(
+            icon: AppIcons.search,
+            onTap: () =>
+                ref.read(navigationProvider.notifier).goTo(AppScreen.search),
           ),
         ],
       ),
