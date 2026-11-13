@@ -9,6 +9,7 @@ import '../icons.dart';
 import '../models.dart';
 import '../providers/library_provider.dart';
 import '../providers/liked_provider.dart';
+import '../providers/lyrics_mode_provider.dart';
 import '../providers/navigation_provider.dart';
 import '../providers/playback_provider.dart';
 import '../theme.dart';
@@ -27,6 +28,7 @@ class NowPlayingScreen extends ConsumerWidget {
     }
     final notifier = ref.read(playbackProvider.notifier);
     final artwork = ref.watch(coverArtProvider(track.coverKey)).asData?.value;
+    final lyricsOpen = ref.watch(lyricsModeProvider);
     return Container(
       color: const Color(0xFF0A0A0C),
       child: Stack(
@@ -60,8 +62,10 @@ class NowPlayingScreen extends ConsumerWidget {
                             icon: AppIcons.back,
                             size: 44,
                             iconSize: 22,
-                            onTap: () =>
-                                ref.read(navigationProvider.notifier).back(),
+                            // Like the back gesture: closes the lyrics first.
+                            onTap: () => lyricsOpen
+                                ? ref.read(lyricsModeProvider.notifier).close()
+                                : ref.read(navigationProvider.notifier).back(),
                           ),
                           Row(
                             mainAxisSize: MainAxisSize.min,
@@ -93,80 +97,204 @@ class NowPlayingScreen extends ConsumerWidget {
                     ],
                   ),
                 ),
-                // Sticky-footer pattern: the artwork/info area fills tall
-                // screens (controls pinned to the bottom via the Spacer) and
-                // scrolls on shorter ones instead of overflowing.
+                // The cover and the lyrics share this stage; the controls
+                // below stay put whichever one has the room.
                 Expanded(
-                  child: LayoutBuilder(
-                    builder: (context, constraints) {
-                      return SingleChildScrollView(
-                        physics: const ClampingScrollPhysics(),
-                        child: ConstrainedBox(
-                          constraints: BoxConstraints(
-                            minHeight: constraints.maxHeight,
-                          ),
-                          child: IntrinsicHeight(
-                            child: Column(
-                              children: [
-                                const SizedBox(height: 28),
-                                // Circular artwork.
-                                Container(
-                                  width: 270,
-                                  height: 270,
-                                  decoration: BoxDecoration(
-                                    shape: BoxShape.circle,
-                                    boxShadow: [
-                                      BoxShadow(
-                                        color: Colors.black.withValues(
-                                          alpha: 0.5,
-                                        ),
-                                        blurRadius: 70,
-                                        offset: const Offset(0, 30),
-                                      ),
-                                    ],
-                                  ),
-                                  child: SongArtwork(
-                                    song: track,
-                                    size: 270,
-                                    circle: true,
-                                  ),
-                                ),
-                                const SizedBox(height: 24),
-                                Text(
-                                  track.title,
-                                  style: const TextStyle(
-                                    color: AppColors.white,
-                                    fontSize: 26,
-                                    fontWeight: FontWeight.w800,
-                                    letterSpacing: -0.3,
-                                  ),
-                                ),
-                                const SizedBox(height: 8),
-                                Text(
-                                  track.artist,
-                                  style: TextStyle(
-                                    color: AppColors.whiteAlpha(0.55),
-                                    fontSize: 15,
-                                  ),
-                                ),
-                                const SizedBox(height: 22),
-                                LyricsPreview(song: track),
-                                const Spacer(),
-                                _progressAndControls(playback, notifier),
-                                const SizedBox(height: 10),
-                              ],
-                            ),
-                          ),
-                        ),
-                      );
-                    },
+                  child: TweenAnimationBuilder<double>(
+                    tween: Tween(end: lyricsOpen ? 1 : 0),
+                    duration: const Duration(milliseconds: 460),
+                    curve: Curves.easeInOutCubic,
+                    builder: (context, t, _) => LayoutBuilder(
+                      builder: (context, constraints) => _stage(
+                        ref,
+                        track,
+                        playback.playing,
+                        t,
+                        constraints.biggest,
+                      ),
+                    ),
                   ),
                 ),
+                _progressAndControls(playback, notifier),
+                const SizedBox(height: 10),
               ],
             ),
           ),
         ],
       ),
+    );
+  }
+
+  static const _stagePadding = 24.0;
+  static const _headerArtSize = 52.0;
+  static const _headerTop = 12.0;
+
+  /// The cover (with title, artist and lyrics teaser) or, at [t] = 1, the
+  /// lyrics mode: the cover shrunk to a turning disc in a header row and the
+  /// lyrics below it. In between, the cover travels from one place to the
+  /// other while the two layouts cross-fade.
+  Widget _stage(WidgetRef ref, Song track, bool playing, double t, Size size) {
+    // The full cover gives up some size on short screens so the title and
+    // lyrics teaser under it always fit.
+    final coverSize = (size.height - 250).clamp(140.0, 270.0);
+    final artSize = lerpDouble(coverSize, _headerArtSize, t)!;
+    final artLeft = lerpDouble((size.width - coverSize) / 2, _stagePadding, t)!;
+    final artTop = lerpDouble(28, _headerTop, t)!;
+    const lyricsTop = _headerTop + _headerArtSize + 10;
+    // The cover layout leaves quickly, the lyrics layout arrives late, so the
+    // two never sit on top of each other at half opacity.
+    final coverOpacity = (1 - t * 2.5).clamp(0.0, 1.0);
+    final lyricsOpacity = ((t - 0.4) / 0.6).clamp(0.0, 1.0);
+    final close = ref.read(lyricsModeProvider.notifier).close;
+
+    return Stack(
+      children: [
+        // Title, artist and lyrics teaser under the full cover.
+        Positioned(
+          top: 28 + coverSize + 24 - 16 * t,
+          left: _stagePadding,
+          right: _stagePadding,
+          child: coverOpacity == 0
+              ? const SizedBox.shrink()
+              : IgnorePointer(
+                  ignoring: t > 0,
+                  child: Opacity(
+                    opacity: coverOpacity,
+                    child: Column(
+                      children: [
+                        Text(
+                          track.title,
+                          textAlign: TextAlign.center,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            color: AppColors.white,
+                            fontSize: 26,
+                            fontWeight: FontWeight.w800,
+                            letterSpacing: -0.3,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          track.artist,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            color: AppColors.whiteAlpha(0.55),
+                            fontSize: 15,
+                          ),
+                        ),
+                        const SizedBox(height: 22),
+                        LyricsPreview(song: track),
+                      ],
+                    ),
+                  ),
+                ),
+        ),
+        // Lyrics mode: the header row beside the small disc, then the lyrics.
+        Positioned.fill(
+          child: t == 0
+              ? const SizedBox.shrink()
+              : IgnorePointer(
+                  ignoring: t < 1,
+                  child: Opacity(
+                    opacity: lyricsOpacity,
+                    child: Stack(
+                      children: [
+                        Positioned(
+                          top: _headerTop,
+                          left: _stagePadding + _headerArtSize + 14,
+                          right: _stagePadding,
+                          height: _headerArtSize,
+                          child: GestureDetector(
+                            behavior: HitTestBehavior.opaque,
+                            onTap: close,
+                            child: Row(
+                              children: [
+                                Expanded(
+                                  child: Column(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        track.title,
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: const TextStyle(
+                                          color: AppColors.white,
+                                          fontSize: 17,
+                                          fontWeight: FontWeight.w800,
+                                        ),
+                                      ),
+                                      const SizedBox(height: 2),
+                                      Text(
+                                        track.artist,
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: TextStyle(
+                                          color: AppColors.whiteAlpha(0.55),
+                                          fontSize: 13,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                GlassIconButton(
+                                  icon: AppIcons.chevronDown,
+                                  size: 44,
+                                  iconSize: 20,
+                                  onTap: close,
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                        Positioned.fill(
+                          top: lyricsTop,
+                          child: LyricsPanel(song: track),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+        ),
+        // The cover itself, drawn last so it travels over both layouts.
+        Positioned(
+          top: artTop,
+          left: artLeft,
+          width: artSize,
+          height: artSize,
+          child: GestureDetector(
+            onTap: t == 1 ? close : null,
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.5),
+                    blurRadius: lerpDouble(70, 18, t)!,
+                    offset: Offset(0, lerpDouble(30, 6, t)!),
+                  ),
+                ],
+              ),
+              child: _TurningDisc(
+                spinning: playing && t == 1,
+                unwind: t,
+                // Decoded once at the full size and scaled, rather than
+                // re-decoded at every size the animation goes through.
+                child: FittedBox(
+                  child: SongArtwork(
+                    song: track,
+                    size: coverSize,
+                    circle: true,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ],
     );
   }
 
@@ -395,6 +523,72 @@ class NowPlayingScreen extends ConsumerWidget {
         padding: const EdgeInsets.all(15),
         child: Icon(icon, size: size, color: color ?? AppColors.white),
       ),
+    );
+  }
+}
+
+/// The cover in lyrics mode turns slowly while the track plays, like a
+/// record. [unwind] (the lyrics mode's progress) scales the angle down to
+/// zero as the cover grows back, so the full-size cover is always upright.
+class _TurningDisc extends StatefulWidget {
+  const _TurningDisc({
+    required this.spinning,
+    required this.unwind,
+    required this.child,
+  });
+
+  final bool spinning;
+  final double unwind;
+  final Widget child;
+
+  @override
+  State<_TurningDisc> createState() => _TurningDiscState();
+}
+
+class _TurningDiscState extends State<_TurningDisc>
+    with SingleTickerProviderStateMixin {
+  late final _turns = AnimationController(
+    vsync: this,
+    duration: const Duration(seconds: 24),
+  );
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _update();
+  }
+
+  @override
+  void didUpdateWidget(_TurningDisc oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    _update();
+  }
+
+  void _update() {
+    final spin = widget.spinning && !MediaQuery.disableAnimationsOf(context);
+    if (spin && !_turns.isAnimating) {
+      _turns.repeat();
+    } else if (!spin && _turns.isAnimating) {
+      // A paused record stops where it is.
+      _turns.stop();
+    }
+  }
+
+  @override
+  void dispose() {
+    _turns.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _turns,
+      builder: (context, child) => Transform.rotate(
+        angle: _turns.value * 2 * math.pi * widget.unwind,
+        child: child,
+      ),
+      child: widget.child,
     );
   }
 }

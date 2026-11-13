@@ -1,5 +1,3 @@
-import 'dart:ui';
-
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -8,6 +6,7 @@ import '../data/lyrics_repository.dart';
 import '../data/lyrics_structure.dart';
 import '../icons.dart';
 import '../models.dart';
+import '../providers/lyrics_mode_provider.dart';
 import '../providers/lyrics_provider.dart';
 import '../providers/playback_provider.dart';
 import '../providers/shared_preferences_provider.dart';
@@ -15,7 +14,8 @@ import '../theme.dart';
 import 'lyrics_editor_screen.dart';
 
 /// Three-line lyrics teaser on the Now Playing screen: previous, current and
-/// next line around the playhead. Tapping it opens the full [LyricsSheet].
+/// next line around the playhead. Tapping it gives the screen to the full
+/// [LyricsPanel] (see [lyricsModeProvider]).
 /// Has a fixed height so the layout doesn't jump as lyrics load.
 class LyricsPreview extends ConsumerWidget {
   const LyricsPreview({super.key, required this.song});
@@ -39,7 +39,7 @@ class LyricsPreview extends ConsumerWidget {
             if (lyrics.instrumental) return _status('Instrumental');
             return GestureDetector(
               behavior: HitTestBehavior.opaque,
-              onTap: () => LyricsSheet.show(context, song),
+              onTap: ref.read(lyricsModeProvider.notifier).open,
               child: lyrics.synced
                   ? _SyncedPreview(lyrics: lyrics)
                   : _plainPreview(lyrics.plain ?? ''),
@@ -50,7 +50,7 @@ class LyricsPreview extends ConsumerWidget {
     );
   }
 
-  /// No lyrics (or a failed lookup): say so, and offer the sheet where the
+  /// No lyrics (or a failed lookup): say so, and offer the panel where the
   /// user can search again.
   Widget _missing(BuildContext context, WidgetRef ref, {Object? error}) {
     return Column(
@@ -66,7 +66,7 @@ class LyricsPreview extends ConsumerWidget {
         const SizedBox(height: 10),
         LyricsPill(
           label: 'Get lyrics',
-          onTap: () => LyricsSheet.show(context, song),
+          onTap: ref.read(lyricsModeProvider.notifier).open,
         ),
       ],
     );
@@ -325,30 +325,21 @@ Future<bool> confirmAutoSync(BuildContext context, WidgetRef ref) async {
 /// Empty LRC lines mark instrumental breaks; show a note instead of a gap.
 String _display(LyricLine line) => line.text.isEmpty ? '♪' : line.text;
 
-/// Full lyrics as a frosted bottom sheet, for the track playing: it moves
-/// to the next track when playback does (unless that one is being timed or
-/// saved). Synced lyrics follow the playhead (pausing for a few seconds after
-/// the user scrolls by hand) and tapping a line seeks to it.
-class LyricsSheet extends ConsumerStatefulWidget {
-  const LyricsSheet({super.key, required this.song});
+/// Full lyrics filling Now Playing's lyrics mode, for the track playing: it
+/// moves to the next track when playback does (unless that one is being timed
+/// or saved). Synced lyrics follow the playhead (pausing for a few seconds
+/// after the user scrolls by hand) and tapping a line seeks to it.
+class LyricsPanel extends ConsumerStatefulWidget {
+  const LyricsPanel({super.key, required this.song});
 
   final Song song;
 
-  static void show(BuildContext context, Song song) {
-    showModalBottomSheet<void>(
-      context: context,
-      backgroundColor: Colors.transparent,
-      isScrollControlled: true,
-      builder: (_) => LyricsSheet(song: song),
-    );
-  }
-
   @override
-  ConsumerState<LyricsSheet> createState() => _LyricsSheetState();
+  ConsumerState<LyricsPanel> createState() => _LyricsPanelState();
 }
 
-class _LyricsSheetState extends ConsumerState<LyricsSheet> {
-  /// The track shown: the one the sheet was opened for, then whichever is
+class _LyricsPanelState extends ConsumerState<LyricsPanel> {
+  /// The track shown: the one the panel was opened for, then whichever is
   /// playing (see [_followPlayback]).
   late Song _song = widget.song;
 
@@ -384,10 +375,28 @@ class _LyricsSheetState extends ConsumerState<LyricsSheet> {
 
   GlobalKey _keyFor(int i) => _lineKeys.putIfAbsent(i, GlobalKey.new);
 
-  /// The sheet's route, read here rather than in the post-frame scroll
+  /// The screen's route, read here rather than in the post-frame scroll
   /// callbacks: looking up inherited widgets outside build/dependency
   /// changes leaves dangling dependencies (`_dependents.isEmpty` asserts).
   ModalRoute<Object?>? _route;
+
+  late final LyricsModeNotifier _mode;
+
+  @override
+  void initState() {
+    super.initState();
+    // Unsaved timings must not vanish when the lyrics are closed (collapse
+    // button, header tap or back gesture).
+    _mode = ref.read(lyricsModeProvider.notifier)..closeGuard = _mayClose;
+  }
+
+  @override
+  void dispose() {
+    if (_mode.closeGuard == _mayClose) _mode.closeGuard = null;
+    super.dispose();
+  }
+
+  Future<bool> _mayClose() async => !_hasUnsavedSync || await _confirmDiscard();
 
   @override
   void didChangeDependencies() {
@@ -413,7 +422,7 @@ class _LyricsSheetState extends ConsumerState<LyricsSheet> {
   /// Timing or saving the shown track: it stays until that is done.
   bool get _busy => _isSynchronizing || _autoSyncing || _saving;
 
-  /// Moves the sheet to the track now playing, when it changed and nothing
+  /// Moves the panel to the track now playing, when it changed and nothing
   /// is in progress on the shown one, starting clean.
   void _followPlayback() {
     if (!mounted || _busy) return;
@@ -450,7 +459,7 @@ class _LyricsSheetState extends ConsumerState<LyricsSheet> {
     );
   }
 
-  /// Whether [line] can be scrolled into view now. The sheet keeps
+  /// Whether [line] can be scrolled into view now. The panel keeps
   /// following playback while covered (the lyrics editor is pushed on top),
   /// and its lines may then have no attached render object, which
   /// [Scrollable.ensureVisible] asserts on.
@@ -470,16 +479,18 @@ class _LyricsSheetState extends ConsumerState<LyricsSheet> {
     }
     final state = ref.watch(lyricsProvider(_song));
     final lyrics = state.asData?.value;
-    final maxHeight = MediaQuery.of(context).size.height * 0.85;
     // Following, seeking and timing only apply while the shown track is the
     // one playing.
     final isCurrent = playingId == _song.id;
-    final canResync =
+    // Edit and (re)time the lyrics shown; synced lyrics are retimed from
+    // their text, so they need some.
+    final canTime =
         lyrics != null &&
-        lyrics.synced &&
+        !state.isLoading &&
+        !lyrics.instrumental &&
         !_isSynchronizing &&
         !_autoSyncing &&
-        (lyrics.plain?.trim().isNotEmpty ?? false);
+        (!lyrics.synced || (lyrics.plain?.trim().isNotEmpty ?? false));
     // Only for audio files on the device: streamed tracks are never sent.
     final canAutoSync =
         lyrics != null &&
@@ -487,162 +498,95 @@ class _LyricsSheetState extends ConsumerState<LyricsSheet> {
         !_autoSyncing &&
         ref.read(lyricsRepositoryProvider).canAutoSynchronize(_song, lyrics);
 
-    // Unsaved timings must not vanish with a stray back gesture, barrier tap
-    // or swipe down.
-    return PopScope(
-      canPop: !_hasUnsavedSync,
-      onPopInvokedWithResult: (didPop, _) async {
-        if (didPop) return;
-        if (await _confirmDiscard() && context.mounted) {
-          Navigator.of(context).pop();
-        }
-      },
-      // The sheet's own drag-to-dismiss calls Navigator.pop directly,
-      // bypassing PopScope; an inner vertical drag recognizer wins the
-      // gesture arena and swallows it.
-      child: GestureDetector(
-        onVerticalDragStart: _hasUnsavedSync ? (_) {} : null,
-        child: _sheet(
-          state,
-          lyrics,
-          maxHeight,
-          isCurrent,
-          canResync,
-          canAutoSync,
-        ),
-      ),
-    );
-  }
-
-  Widget _sheet(
-    AsyncValue<Lyrics?> state,
-    Lyrics? lyrics,
-    double maxHeight,
-    bool isCurrent,
-    bool canResync,
-    bool canAutoSync,
-  ) {
-    return ClipRRect(
-      borderRadius: const BorderRadius.vertical(top: Radius.circular(30)),
-      child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 30, sigmaY: 30),
-        child: Container(
-          height: maxHeight,
-          decoration: BoxDecoration(
-            color: const Color.fromRGBO(15, 15, 21, 0.88),
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(30)),
-            border: Border(top: BorderSide(color: AppColors.whiteAlpha(0.09))),
+    return Column(
+      children: [
+        // The screen's header names the track playing; this line only shows
+        // up while the panel holds on to another one (being timed or saved).
+        if (!isCurrent && playingId != null)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(28, 4, 28, 0),
+            child: Text(
+              'Still on ${_song.title}',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                color: AppColors.whiteAlpha(0.6),
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
           ),
-          child: SafeArea(
-            top: false,
-            child: Column(
-              children: [
-                const SizedBox(height: 10),
-                Container(
-                  width: 38,
-                  height: 4,
-                  decoration: BoxDecoration(
-                    color: AppColors.whiteAlpha(0.22),
-                    borderRadius: BorderRadius.circular(2),
-                  ),
-                ),
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(24, 16, 24, 8),
-                  child: Column(
-                    children: [
-                      Text(
-                        _song.title,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          color: AppColors.white,
-                          fontSize: 17,
-                          fontWeight: FontWeight.w800,
-                        ),
-                      ),
-                      const SizedBox(height: 3),
-                      Text(
-                        _song.artist,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          color: AppColors.whiteAlpha(0.5),
-                          fontSize: 13,
-                        ),
-                      ),
-                      if (_notice != null) ...[
-                        const SizedBox(height: 8),
-                        Text(
-                          _notice!,
-                          textAlign: TextAlign.center,
-                          style: TextStyle(
-                            color: AppColors.whiteAlpha(0.6),
-                            fontSize: 12.5,
-                          ),
-                        ),
-                      ],
-                    ],
-                  ),
-                ),
-                Expanded(
-                  // A new track gets a new scroll view: its lyrics open at
-                  // the top, not where the previous track's were left.
-                  child: KeyedSubtree(
-                    key: ValueKey(_song.id),
-                    child: state.isLoading
-                        ? _loading()
-                        : _autoSyncing
-                        ? _loading('Listening to the track…')
-                        : lyrics == null
-                        ? _empty(state.error)
-                        : lyrics.instrumental
-                        ? _message('Instrumental')
-                        : _isSynchronizing
-                        ? _synchronizer(lyrics, isCurrent)
-                        : lyrics.synced
-                        ? _synced(lyrics, isCurrent)
-                        : _plain(lyrics, canAutoSync),
-                  ),
-                ),
-                if (canResync)
-                  Padding(
-                    padding: const EdgeInsets.only(bottom: 10),
-                    child: Wrap(
-                      spacing: 10,
-                      children: [
-                        LyricsPill(
-                          label: 'Edit',
-                          icon: AppIcons.edit,
-                          onTap: () =>
-                              LyricsEditorScreen.open(context, _song, lyrics),
-                        ),
-                        LyricsPill(
-                          label: 'Resynchronize',
-                          icon: AppIcons.timer,
-                          onTap: _startSynchronization,
-                        ),
-                        if (canAutoSync) _autoSyncButton(lyrics!),
-                      ],
-                    ),
-                  ),
-                if (lyrics != null && _credit(lyrics) != null)
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(24, 0, 24, 10),
-                    child: Text(
-                      _credit(lyrics)!,
-                      textAlign: TextAlign.center,
-                      maxLines: 2,
-                      style: TextStyle(
-                        color: AppColors.whiteAlpha(0.35),
-                        fontSize: 11.5,
-                      ),
-                    ),
-                  ),
-              ],
+        if (_notice != null)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(28, 6, 28, 0),
+            child: Text(
+              _notice!,
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: AppColors.whiteAlpha(0.6),
+                fontSize: 12.5,
+              ),
+            ),
+          ),
+        Expanded(
+          // A new track gets a new scroll view: its lyrics open at the top,
+          // not where the previous track's were left.
+          child: _FadedEdges(
+            child: KeyedSubtree(
+              key: ValueKey(_song.id),
+              child: state.isLoading
+                  ? _loading()
+                  : _autoSyncing
+                  ? _loading('Listening to the track…')
+                  : lyrics == null
+                  ? _empty(state.error)
+                  : lyrics.instrumental
+                  ? _message('Instrumental')
+                  : _isSynchronizing
+                  ? _synchronizer(lyrics, isCurrent)
+                  : lyrics.synced
+                  ? _synced(lyrics, isCurrent)
+                  : _plain(lyrics),
             ),
           ),
         ),
-      ),
+        // The actions sit at the bottom, within reach of the thumb.
+        if (canTime)
+          Padding(
+            padding: const EdgeInsets.only(top: 6, bottom: 10),
+            child: Wrap(
+              alignment: WrapAlignment.center,
+              spacing: 10,
+              runSpacing: 10,
+              children: [
+                LyricsPill(
+                  label: 'Edit',
+                  icon: AppIcons.edit,
+                  onTap: () => LyricsEditorScreen.open(context, _song, lyrics),
+                ),
+                LyricsPill(
+                  label: lyrics.synced ? 'Resynchronize' : 'Synchronize',
+                  icon: AppIcons.timer,
+                  onTap: _startSynchronization,
+                ),
+                if (canAutoSync) _autoSyncButton(lyrics),
+              ],
+            ),
+          ),
+        if (lyrics != null && _credit(lyrics) != null)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(24, 0, 24, 10),
+            child: Text(
+              _credit(lyrics)!,
+              textAlign: TextAlign.center,
+              maxLines: 2,
+              style: TextStyle(
+                color: AppColors.whiteAlpha(0.35),
+                fontSize: 11.5,
+              ),
+            ),
+          ),
+      ],
     );
   }
 
@@ -654,7 +598,7 @@ class _LyricsSheetState extends ConsumerState<LyricsSheet> {
     );
     final stanzas = _stanzaStartsFor(lyrics);
     // Scroll after layout so the target line has a render object. The first
-    // jump is instant so the sheet opens already on the current line.
+    // jump is instant so the panel opens already on the current line.
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       _follow(index, animate: !_firstScroll);
@@ -708,8 +652,8 @@ class _LyricsSheetState extends ConsumerState<LyricsSheet> {
                                     : AppColors.whiteAlpha(
                                         i < index ? 0.3 : 0.5,
                                       ),
-                                fontSize: 22,
-                                height: 1.3,
+                                fontSize: 24,
+                                height: 1.28,
                                 fontWeight: i == index
                                     ? FontWeight.w800
                                     : FontWeight.w700,
@@ -814,56 +758,31 @@ class _LyricsSheetState extends ConsumerState<LyricsSheet> {
     );
   }
 
-  Widget _plain(Lyrics lyrics, bool canAutoSync) {
-    return Column(
-      children: [
-        Wrap(
-          alignment: WrapAlignment.center,
-          spacing: 10,
-          runSpacing: 10,
-          children: [
-            LyricsPill(
-              label: 'Edit',
-              icon: AppIcons.edit,
-              onTap: () => LyricsEditorScreen.open(context, _song, lyrics),
-            ),
-            LyricsPill(
-              label: 'Synchronize',
-              icon: AppIcons.timer,
-              onTap: _startSynchronization,
-            ),
-            if (canAutoSync) _autoSyncButton(lyrics),
+  Widget _plain(Lyrics lyrics) {
+    return SingleChildScrollView(
+      physics: const BouncingScrollPhysics(),
+      padding: const EdgeInsets.fromLTRB(28, 24, 28, 40),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          for (final (i, stanza) in parseLyricsStructure(
+            lyrics.plain ?? '',
+          ).indexed) ...[
+            if (i > 0) const SizedBox(height: 22),
+            if (stanza.label != null) LyricsSectionLabel(stanza.label!),
+            for (final line in stanza.lines)
+              LyricText(
+                line,
+                style: TextStyle(
+                  color: AppColors.whiteAlpha(0.8),
+                  fontSize: 18,
+                  height: 1.6,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
           ],
-        ),
-        const SizedBox(height: 12),
-        Expanded(
-          child: SingleChildScrollView(
-            physics: const BouncingScrollPhysics(),
-            padding: const EdgeInsets.fromLTRB(28, 12, 28, 40),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                for (final (i, stanza) in parseLyricsStructure(
-                  lyrics.plain ?? '',
-                ).indexed) ...[
-                  if (i > 0) const SizedBox(height: 22),
-                  if (stanza.label != null) LyricsSectionLabel(stanza.label!),
-                  for (final line in stanza.lines)
-                    LyricText(
-                      line,
-                      style: TextStyle(
-                        color: AppColors.whiteAlpha(0.8),
-                        fontSize: 18,
-                        height: 1.6,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                ],
-              ],
-            ),
-          ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 
@@ -1049,7 +968,7 @@ class _LyricsSheetState extends ConsumerState<LyricsSheet> {
     final next = marks.where((line) => line.text.isNotEmpty).length;
     final complete = next == textLines.length;
     // Only the play/pause label depends on playback; marks read the live
-    // position when tapped, so the sheet doesn't rebuild on every tick.
+    // position when tapped, so the panel doesn't rebuild on every tick.
     final playing = ref.watch(playbackProvider.select((p) => p.playing));
     // Timed lines (breaks included) first, then the lines still to time.
     final entries = <({Duration? time, String text})>[
@@ -1178,6 +1097,36 @@ class _LyricsSheetState extends ConsumerState<LyricsSheet> {
           ),
         ),
       ],
+    );
+  }
+}
+
+/// Lyrics dissolve into the header above and the controls below instead of
+/// being cut by a hard edge.
+class _FadedEdges extends StatelessWidget {
+  const _FadedEdges({required this.child});
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return ShaderMask(
+      blendMode: BlendMode.dstIn,
+      shaderCallback: (bounds) {
+        final h = bounds.height <= 0 ? 1.0 : bounds.height;
+        return LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: const [
+            Colors.transparent,
+            Colors.white,
+            Colors.white,
+            Colors.transparent,
+          ],
+          stops: [0, (24 / h).clamp(0, 0.5), (1 - 40 / h).clamp(0.5, 1), 1],
+        ).createShader(bounds);
+      },
+      child: child,
     );
   }
 }

@@ -3,10 +3,13 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:my_zik/data/lyrics_repository.dart';
 import 'package:my_zik/data/sample_music_repository.dart';
+import 'package:my_zik/icons.dart';
+import 'package:my_zik/main.dart';
 import 'package:my_zik/models.dart';
 import 'package:my_zik/providers/app_database_provider.dart';
 import 'package:my_zik/providers/library_provider.dart';
 import 'package:my_zik/providers/lyrics_provider.dart';
+import 'package:my_zik/providers/navigation_provider.dart';
 import 'package:my_zik/providers/playback_provider.dart';
 import 'package:my_zik/providers/shared_preferences_provider.dart';
 import 'package:my_zik/screens/lyrics_view.dart';
@@ -30,9 +33,9 @@ class _FakeLyrics extends LyricsNotifier {
   );
 }
 
-/// Opens the app with a button showing the lyrics sheet for [_first];
-/// returns how to change the track playing.
-Future<void Function(Song)> _pumpSheet(WidgetTester tester) async {
+/// Opens the phone app on Now Playing with [_first] playing; returns how to
+/// change the track playing.
+Future<void Function(Song)> _pumpNowPlaying(WidgetTester tester) async {
   tester.view.physicalSize = const Size(390, 844);
   tester.view.devicePixelRatio = 1.0;
   addTearDown(tester.view.resetPhysicalSize);
@@ -47,22 +50,12 @@ Future<void Function(Song)> _pumpSheet(WidgetTester tester) async {
         musicRepositoryProvider.overrideWithValue(SampleMusicRepository()),
         lyricsProvider.overrideWith(_FakeLyrics.new),
       ],
-      child: MaterialApp(
-        home: Builder(
-          builder: (context) => Scaffold(
-            body: Center(
-              child: TextButton(
-                onPressed: () => LyricsSheet.show(context, _first),
-                child: const Text('Open'),
-              ),
-            ),
-          ),
-        ),
-      ),
+      child: const MyZikApp(desktop: false),
     ),
   );
+  await tester.pump();
   final container = ProviderScope.containerOf(
-    tester.element(find.text('Open')),
+    tester.element(find.byType(MyZikApp)),
   );
   void play(Song song) {
     // Sets the track without loading audio, which tests can't play.
@@ -73,41 +66,109 @@ Future<void Function(Song)> _pumpSheet(WidgetTester tester) async {
     );
   }
 
+  play(_first);
+  container.read(navigationProvider.notifier).goTo(AppScreen.nowPlaying);
+  await tester.pumpAndSettle();
   return play;
 }
 
+Future<void> _openLyrics(WidgetTester tester) async {
+  await tester.tap(find.textContaining('Words of First Song'));
+  await tester.pumpAndSettle();
+}
+
 void main() {
-  testWidgets('the lyrics sheet follows the track playing', (tester) async {
-    final play = await _pumpSheet(tester);
-    play(_first);
-    await tester.tap(find.text('Open'));
-    await tester.pumpAndSettle();
+  testWidgets('tapping the lyrics teaser gives the screen to the lyrics', (
+    tester,
+  ) async {
+    await _pumpNowPlaying(tester);
+    expect(find.byType(LyricsPanel), findsNothing);
+
+    await _openLyrics(tester);
+    expect(find.byType(LyricsPanel), findsOneWidget);
+    expect(find.byType(LyricsPreview), findsNothing);
+    expect(find.text('Line 20 of First Song'), findsOneWidget);
+    // The title moved up into the header row, next to the small cover.
     expect(find.text('First Song'), findsOneWidget);
+
+    await tester.tap(find.byIcon(AppIcons.chevronDown));
+    await tester.pumpAndSettle();
+    expect(find.byType(LyricsPanel), findsNothing);
+    expect(find.byType(LyricsPreview), findsOneWidget);
+
+    await tester.pumpWidget(const SizedBox.shrink());
+  });
+
+  testWidgets('back closes the lyrics before leaving Now Playing', (
+    tester,
+  ) async {
+    await _pumpNowPlaying(tester);
+    await _openLyrics(tester);
+
+    await tester.binding.handlePopRoute();
+    await tester.pumpAndSettle();
+    expect(find.text('Now Playing'), findsOneWidget);
+    expect(find.byType(LyricsPanel), findsNothing);
+
+    await tester.binding.handlePopRoute();
+    await tester.pumpAndSettle();
+    expect(find.text('Now Playing'), findsNothing);
+
+    await tester.pumpWidget(const SizedBox.shrink());
+  });
+
+  testWidgets('unsaved timings are confirmed before closing the lyrics', (
+    tester,
+  ) async {
+    await _pumpNowPlaying(tester);
+    await _openLyrics(tester);
+    await tester.tap(find.text('Synchronize'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Mark line'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byIcon(AppIcons.chevronDown));
+    await tester.pumpAndSettle();
+    expect(find.text('Discard synchronization?'), findsOneWidget);
+    await tester.tap(find.text('Keep'));
+    await tester.pumpAndSettle();
+    expect(find.byType(LyricsPanel), findsOneWidget);
+
+    await tester.binding.handlePopRoute();
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Discard'));
+    await tester.pumpAndSettle();
+    expect(find.byType(LyricsPanel), findsNothing);
+
+    await tester.pumpWidget(const SizedBox.shrink());
+  });
+
+  testWidgets('the lyrics follow the track playing', (tester) async {
+    final play = await _pumpNowPlaying(tester);
+    await _openLyrics(tester);
     expect(find.text('Words of First Song'), findsOneWidget);
 
-    // The next track starts: the sheet moves to it.
+    // The next track starts: the lyrics move to it.
     play(_second);
     await tester.pumpAndSettle();
-    expect(find.text('Second Song'), findsOneWidget);
     expect(find.text('Words of Second Song'), findsOneWidget);
-    expect(find.text('First Song'), findsNothing);
+    expect(find.text('Words of First Song'), findsNothing);
 
-    // While its lyrics are being timed, the sheet keeps the track.
+    // While its lyrics are being timed, the panel keeps the track and says
+    // so, as the header now names the one playing.
     await tester.tap(find.text('Synchronize'));
     await tester.pumpAndSettle();
     play(_third);
     await tester.pumpAndSettle();
-    expect(find.text('Second Song'), findsOneWidget);
-    expect(find.text('Third Song'), findsNothing);
+    expect(find.text('Still on Second Song'), findsOneWidget);
+    expect(find.text('Third Song'), findsOneWidget);
 
     await tester.pumpWidget(const SizedBox.shrink());
   });
 
   testWidgets('a new track\'s lyrics open at the top', (tester) async {
-    final play = await _pumpSheet(tester);
-    play(_first);
-    await tester.tap(find.text('Open'));
-    await tester.pumpAndSettle();
+    final play = await _pumpNowPlaying(tester);
+    await _openLyrics(tester);
 
     ScrollPosition lyricsScroll() => tester
         .state<ScrollableState>(
@@ -124,10 +185,10 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Line 60 of First Song'), findsOneWidget);
 
-    // The next track's lyrics are already loaded, as Now Playing's preview
-    // loads them: the sheet swaps lyrics without a loading state between.
+    // The next track's lyrics are already loaded, as Now Playing's teaser
+    // loads them: the panel swaps lyrics without a loading state between.
     final container = ProviderScope.containerOf(
-      tester.element(find.text('Open')),
+      tester.element(find.byType(MyZikApp)),
     );
     final preload = container.listen(lyricsProvider(_second), (_, _) {});
     addTearDown(preload.close);
