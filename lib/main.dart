@@ -11,7 +11,7 @@ import 'providers/audio_handler.dart';
 import 'data/app_database.dart';
 import 'data/app_database_migration.dart';
 import 'providers/app_database_provider.dart';
-import 'providers/lyrics_mode_provider.dart';
+import 'providers/now_playing_panel_provider.dart';
 import 'providers/navigation_provider.dart';
 import 'providers/shared_preferences_provider.dart';
 import 'providers/sync_providers.dart';
@@ -159,9 +159,10 @@ class PlayerShell extends ConsumerWidget {
       canPop: !canGoBack,
       onPopInvokedWithResult: (didPop, _) {
         if (didPop) return;
-        // Now Playing's lyrics close before the screen itself goes back.
-        if (screen == AppScreen.nowPlaying && ref.read(lyricsModeProvider)) {
-          ref.read(lyricsModeProvider.notifier).close();
+        // Now Playing's lyrics or queue close before the screen goes back.
+        if (screen == AppScreen.nowPlaying &&
+            ref.read(nowPlayingPanelProvider) != null) {
+          ref.read(nowPlayingPanelProvider.notifier).close();
           return;
         }
         ref.read(navigationProvider.notifier).back();

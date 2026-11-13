@@ -1384,3 +1384,33 @@ class _PlaylistPickRow extends ConsumerWidget {
     );
   }
 }
+
+/// Scrolling content (lyrics, the queue) dissolves into what sits above and
+/// below it instead of being cut by a hard edge.
+class FadedEdges extends StatelessWidget {
+  const FadedEdges({super.key, required this.child});
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return ShaderMask(
+      blendMode: BlendMode.dstIn,
+      shaderCallback: (bounds) {
+        final h = bounds.height <= 0 ? 1.0 : bounds.height;
+        return LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: const [
+            Colors.transparent,
+            Colors.white,
+            Colors.white,
+            Colors.transparent,
+          ],
+          stops: [0, (24 / h).clamp(0, 0.5), (1 - 40 / h).clamp(0.5, 1), 1],
+        ).createShader(bounds);
+      },
+      child: child,
+    );
+  }
+}

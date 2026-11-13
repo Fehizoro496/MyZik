@@ -1,5 +1,5 @@
-// Verifies the Now Playing queue button: tapping it opens the queue sheet,
-// which lists the library in play order and marks the current track.
+// Verifies the Now Playing queue button: tapping it gives the stage to the
+// queue panel, which lists what plays next and lets it be reordered.
 
 import 'dart:typed_data';
 
@@ -38,9 +38,7 @@ class _FakeRepo implements MusicRepository {
 }
 
 void main() {
-  testWidgets('queue button opens a sheet listing the play queue', (
-    tester,
-  ) async {
+  testWidgets('queue button gives the stage to the play queue', (tester) async {
     tester.view.physicalSize = const Size(390, 844);
     tester.view.devicePixelRatio = 1.0;
     addTearDown(tester.view.resetPhysicalSize);
@@ -69,28 +67,34 @@ void main() {
     await container.read(playbackProvider.notifier).playSong(songs[0]);
     await tester.pumpAndSettle();
 
-    // The header queue button is now visible; the sheet is not yet open.
+    // The top-bar queue button is visible; the queue is not shown yet.
     expect(find.byIcon(AppIcons.queue), findsOneWidget);
-    expect(find.text('NOW PLAYING'), findsNothing);
+    expect(find.text('Up next'), findsNothing);
 
     await tester.tap(find.byIcon(AppIcons.queue));
     await tester.pumpAndSettle();
 
-    // Sheet is open: hero shows the current track, the up-next tracks are
-    // listed after it in queue order, each with a drag handle.
-    expect(find.text('NOW PLAYING'), findsOneWidget);
-    // The current track shows both in the screen body and the sheet hero.
-    expect(find.text('Starlit Reverie'), findsNWidgets(2));
-    expect(find.text('Midnight Confessions'), findsOneWidget); // up next
-    expect(find.text('Lost in the Echo'), findsOneWidget); // up next
+    // The current track moved up into the header row; the tracks after it
+    // are listed in queue order, each with a drag handle.
+    expect(find.text('Up next'), findsOneWidget);
+    expect(find.text('2 tracks'), findsOneWidget);
+    expect(find.text('Starlit Reverie'), findsOneWidget);
+    expect(find.text('Midnight Confessions'), findsOneWidget);
+    expect(find.text('Lost in the Echo'), findsOneWidget);
     expect(find.byIcon(AppIcons.dragHandle), findsNWidgets(2));
 
-    // Tapping a queued track jumps to it (preserving the queue) and dismisses
-    // the sheet.
+    // Tapping a queued track jumps to it (preserving the queue); the queue
+    // stays on screen, now with nothing after it.
     await tester.tap(find.text('Lost in the Echo'));
     await tester.pumpAndSettle();
-    expect(find.text('NOW PLAYING'), findsNothing);
     expect(container.read(playbackProvider).currentIndex, 2);
+    expect(find.text('Up next'), findsOneWidget);
+    expect(find.text('Nothing queued after this track.'), findsOneWidget);
+
+    // The lit queue button gives the stage back to the cover.
+    await tester.tap(find.byIcon(AppIcons.queue));
+    await tester.pumpAndSettle();
+    expect(find.text('Up next'), findsNothing);
 
     // Unmount so the notifier's periodic persist timer is cancelled before the
     // binding's end-of-test check.

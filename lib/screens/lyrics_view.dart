@@ -6,16 +6,17 @@ import '../data/lyrics_repository.dart';
 import '../data/lyrics_structure.dart';
 import '../icons.dart';
 import '../models.dart';
-import '../providers/lyrics_mode_provider.dart';
+import '../providers/now_playing_panel_provider.dart';
 import '../providers/lyrics_provider.dart';
 import '../providers/playback_provider.dart';
 import '../providers/shared_preferences_provider.dart';
 import '../theme.dart';
+import '../widgets.dart';
 import 'lyrics_editor_screen.dart';
 
 /// Three-line lyrics teaser on the Now Playing screen: previous, current and
 /// next line around the playhead. Tapping it gives the screen to the full
-/// [LyricsPanel] (see [lyricsModeProvider]).
+/// [LyricsPanel] (see [nowPlayingPanelProvider]).
 /// Has a fixed height so the layout doesn't jump as lyrics load.
 class LyricsPreview extends ConsumerWidget {
   const LyricsPreview({super.key, required this.song});
@@ -39,7 +40,9 @@ class LyricsPreview extends ConsumerWidget {
             if (lyrics.instrumental) return _status('Instrumental');
             return GestureDetector(
               behavior: HitTestBehavior.opaque,
-              onTap: ref.read(lyricsModeProvider.notifier).open,
+              onTap: () => ref
+                  .read(nowPlayingPanelProvider.notifier)
+                  .show(NowPlayingPanel.lyrics),
               child: lyrics.synced
                   ? _SyncedPreview(lyrics: lyrics)
                   : _plainPreview(lyrics.plain ?? ''),
@@ -66,7 +69,9 @@ class LyricsPreview extends ConsumerWidget {
         const SizedBox(height: 10),
         LyricsPill(
           label: 'Get lyrics',
-          onTap: ref.read(lyricsModeProvider.notifier).open,
+          onTap: () => ref
+              .read(nowPlayingPanelProvider.notifier)
+              .show(NowPlayingPanel.lyrics),
         ),
       ],
     );
@@ -380,19 +385,22 @@ class _LyricsPanelState extends ConsumerState<LyricsPanel> {
   /// changes leaves dangling dependencies (`_dependents.isEmpty` asserts).
   ModalRoute<Object?>? _route;
 
-  late final LyricsModeNotifier _mode;
+  late final NowPlayingPanelNotifier _panels;
 
   @override
   void initState() {
     super.initState();
-    // Unsaved timings must not vanish when the lyrics are closed (collapse
-    // button, header tap or back gesture).
-    _mode = ref.read(lyricsModeProvider.notifier)..closeGuard = _mayClose;
+    // Unsaved timings must not vanish when the lyrics are closed or swapped
+    // for the queue.
+    _panels = ref.read(nowPlayingPanelProvider.notifier)
+      ..leaveLyricsGuard = _mayClose;
   }
 
   @override
   void dispose() {
-    if (_mode.closeGuard == _mayClose) _mode.closeGuard = null;
+    if (_panels.leaveLyricsGuard == _mayClose) {
+      _panels.leaveLyricsGuard = null;
+    }
     super.dispose();
   }
 
@@ -531,7 +539,7 @@ class _LyricsPanelState extends ConsumerState<LyricsPanel> {
         Expanded(
           // A new track gets a new scroll view: its lyrics open at the top,
           // not where the previous track's were left.
-          child: _FadedEdges(
+          child: FadedEdges(
             child: KeyedSubtree(
               key: ValueKey(_song.id),
               child: state.isLoading
@@ -1097,36 +1105,6 @@ class _LyricsPanelState extends ConsumerState<LyricsPanel> {
           ),
         ),
       ],
-    );
-  }
-}
-
-/// Lyrics dissolve into the header above and the controls below instead of
-/// being cut by a hard edge.
-class _FadedEdges extends StatelessWidget {
-  const _FadedEdges({required this.child});
-
-  final Widget child;
-
-  @override
-  Widget build(BuildContext context) {
-    return ShaderMask(
-      blendMode: BlendMode.dstIn,
-      shaderCallback: (bounds) {
-        final h = bounds.height <= 0 ? 1.0 : bounds.height;
-        return LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: const [
-            Colors.transparent,
-            Colors.white,
-            Colors.white,
-            Colors.transparent,
-          ],
-          stops: [0, (24 / h).clamp(0, 0.5), (1 - 40 / h).clamp(0.5, 1), 1],
-        ).createShader(bounds);
-      },
-      child: child,
     );
   }
 }

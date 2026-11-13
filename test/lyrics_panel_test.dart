@@ -91,7 +91,8 @@ void main() {
     // The title moved up into the header row, next to the small cover.
     expect(find.text('First Song'), findsOneWidget);
 
-    await tester.tap(find.byIcon(AppIcons.chevronDown));
+    // The lit lyrics button in the top bar gives the stage back to the cover.
+    await tester.tap(find.byIcon(AppIcons.lyrics));
     await tester.pumpAndSettle();
     expect(find.byType(LyricsPanel), findsNothing);
     expect(find.byType(LyricsPreview), findsOneWidget);
@@ -127,7 +128,15 @@ void main() {
     await tester.tap(find.text('Mark line'));
     await tester.pumpAndSettle();
 
-    await tester.tap(find.byIcon(AppIcons.chevronDown));
+    await tester.tap(find.byIcon(AppIcons.lyrics));
+    await tester.pumpAndSettle();
+    expect(find.text('Discard synchronization?'), findsOneWidget);
+    await tester.tap(find.text('Keep'));
+    await tester.pumpAndSettle();
+    expect(find.byType(LyricsPanel), findsOneWidget);
+
+    // Swapping to the queue would lose them as well.
+    await tester.tap(find.byIcon(AppIcons.queue));
     await tester.pumpAndSettle();
     expect(find.text('Discard synchronization?'), findsOneWidget);
     await tester.tap(find.text('Keep'));
