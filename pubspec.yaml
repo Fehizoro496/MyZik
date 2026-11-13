@@ -98,6 +98,8 @@ dev_dependencies:
 
   # In-memory preferences store that tests can wrap to count writes.
   shared_preferences_platform_interface: ^2.4.2
+  # Fake audio player standing in for ExoPlayer / media_kit in tests.
+  just_audio_platform_interface: ^4.6.0
 
   # The "flutter_lints" package below contains a set of recommended lints to
   # encourage good coding practices. The lint set provided by the package is
