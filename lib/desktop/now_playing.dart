@@ -13,6 +13,7 @@ import '../theme.dart';
 import '../widgets.dart';
 import 'desktop_navigation.dart';
 import 'desktop_style.dart';
+import 'dialogs.dart';
 import 'lyrics_editor.dart';
 import 'side_panel.dart';
 
@@ -135,6 +136,13 @@ class _PlayerColumnState extends ConsumerState<_PlayerColumn> {
     final playback = ref.watch(playbackProvider);
     final notifier = ref.read(playbackProvider.notifier);
     final liked = ref.watch(isLikedProvider(track.songKey));
+    final editable =
+        track.hasStableKey &&
+        ref.watch(
+          libraryProvider.select(
+            (s) => s.songs.any((song) => song.songKey == track.songKey),
+          ),
+        );
     final muted = TextStyle(
       color: AppColors.whiteAlpha(0.7),
       fontSize: 12,
@@ -199,6 +207,16 @@ class _PlayerColumnState extends ConsumerState<_PlayerColumn> {
                     ],
                   ),
                 ),
+                if (editable)
+                  IconButton(
+                    tooltip: 'Edit info',
+                    iconSize: 22,
+                    onPressed: () => showEditTagsDialog(context, track),
+                    icon: Icon(
+                      AppIcons.edit,
+                      color: AppColors.whiteAlpha(0.78),
+                    ),
+                  ),
                 IconButton(
                   tooltip: liked ? 'Remove from liked' : 'Add to liked',
                   iconSize: 24,

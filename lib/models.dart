@@ -78,6 +78,39 @@ class Song {
     contentKey: contentKey,
   );
 
+  /// This song's title, artist and album.
+  SongTags get tags => SongTags(title: title, artist: artist, album: album);
+
+  /// This song shown with [tags] instead of its own, and with the cover at
+  /// [coverUrl] when given; everything else, [songKey] included, is kept.
+  Song withTags(SongTags tags, {String? coverUrl}) => Song(
+    id: id,
+    title: tags.title,
+    artist: tags.artist,
+    album: tags.album,
+    duration: duration,
+    uri: uri,
+    filePath: filePath,
+    artworkUrl: coverUrl ?? artworkUrl,
+    youtubeVideoId: youtubeVideoId,
+    contentKey: contentKey,
+  );
+
+  /// This song shown the way [other] is: its tags and cover.
+  Song withLabelsOf(Song other) =>
+      withTags(other.tags, coverUrl: other.artworkUrl);
+
+  /// Whether [other] shows the same tags and cover.
+  bool sameLabels(Song other) =>
+      title == other.title &&
+      artist == other.artist &&
+      album == other.album &&
+      artworkUrl == other.artworkUrl;
+
+  /// Whether the listener can edit this song's tags: they are stored under
+  /// [songKey], which must not depend on the tags themselves.
+  bool get hasStableKey => !songKey.startsWith('meta:');
+
   /// Key for [coverArtProvider]/[coverAccentProvider]: the remote artwork URL
   /// when there is one, otherwise the MediaStore id.
   CoverKey get coverKey => (id: id, url: artworkUrl);
@@ -92,6 +125,80 @@ class Song {
     final m = s ~/ 60;
     return '$m:${(s % 60).toString().padLeft(2, '0')}';
   }
+}
+
+/// The tags of a song the listener can edit. Edits are kept by the app (and
+/// synchronized), never written into the audio file: that would change the
+/// file's fingerprint, i.e. its [Song.songKey].
+class SongTags {
+  const SongTags({
+    required this.title,
+    required this.artist,
+    this.album,
+    this.cover,
+  });
+
+  final String title;
+  final String artist;
+
+  /// Null for no album.
+  final String? album;
+
+  /// File name of the cover the listener picked, among the app's edited
+  /// covers; null to keep the file's own cover.
+  final String? cover;
+
+  /// Trimmed tags, or null when the title or artist is left empty.
+  static SongTags? tryClean({
+    required String title,
+    required String artist,
+    String? album,
+    String? cover,
+  }) {
+    final t = title.trim(), a = artist.trim(), al = album?.trim() ?? '';
+    if (t.isEmpty || a.isEmpty) return null;
+    return SongTags(
+      title: t,
+      artist: a,
+      album: al.isEmpty ? null : al,
+      cover: cover,
+    );
+  }
+
+  /// These tags with [cover] instead (null: the file's own cover).
+  SongTags withCover(String? cover) =>
+      SongTags(title: title, artist: artist, album: album, cover: cover);
+
+  Map<String, dynamic> toJson() => {
+    'title': title,
+    'artist': artist,
+    if (album != null) 'album': album,
+    if (cover != null) 'cover': cover,
+  };
+
+  static SongTags? tryFromJson(Object? json) {
+    if (json is! Map) return null;
+    final title = json['title'], artist = json['artist'];
+    final album = json['album'], cover = json['cover'];
+    if (title is! String || artist is! String) return null;
+    return tryClean(
+      title: title,
+      artist: artist,
+      album: album is String ? album : null,
+      cover: cover is String ? cover : null,
+    );
+  }
+
+  @override
+  bool operator ==(Object other) =>
+      other is SongTags &&
+      other.title == title &&
+      other.artist == artist &&
+      other.album == album &&
+      other.cover == cover;
+
+  @override
+  int get hashCode => Object.hash(title, artist, album, cover);
 }
 
 /// Identifies a song's cover regardless of where it comes from. A record so

@@ -145,6 +145,10 @@ abstract class SyncFiles {
   /// Adds the complete [file] of [track] to this device's library, with its
   /// [cover] image when the other device had one.
   Future<void> receive(TrackFile track, File file, {List<int>? cover});
+
+  /// Keys of the songs whose file the listener deleted on this device:
+  /// automatic transfers don't bring them back.
+  Future<Set<String>> removedKeys();
 }
 
 /// Files received from another device, kept in [directory] with an index of
@@ -226,6 +230,28 @@ class ReceivedTracksStore {
       );
     }
     return stored;
+  }
+
+  /// Deletes the file of [track] and its cover, and forgets it.
+  Future<void> remove(TrackFile track) async {
+    for (final path in [track.path, track.coverPath]) {
+      if (path == null) continue;
+      final file = File(path);
+      if (file.existsSync()) await file.delete();
+    }
+    final tracks = [
+      for (final t in await load())
+        if (t.songKey != track.songKey) t,
+    ];
+    if (database case final db?) {
+      db.replaceReceivedFiles({
+        for (final t in tracks) t.songKey: jsonEncode(t.toJson(withPath: true)),
+      });
+    } else {
+      await _index.writeAsString(
+        jsonEncode([for (final t in tracks) t.toJson(withPath: true)]),
+      );
+    }
   }
 
   static String _safeName(String key) =>

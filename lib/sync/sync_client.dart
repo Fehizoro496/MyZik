@@ -319,7 +319,7 @@ class SyncClient {
     });
     var report = SyncReport(sent: out.records.length, received: applied.length);
     if (mode != TransferMode.off) {
-      final missing = (await _differences(base)).only(mode);
+      final missing = (await _differences(base, skipRemoved: true)).only(mode);
       report = report.plus(
         await _transfer(base, missing, onProgress: onProgress),
       );
@@ -336,7 +336,12 @@ class SyncClient {
     void Function(SyncProgress progress)? onProgress,
   }) async => _transfer(await _resolve(), picked, onProgress: onProgress);
 
-  Future<FileDifferences> _differences(Uri base) async {
+  /// With [skipRemoved], files the listener deleted on the device that
+  /// misses them are left out: an automatic transfer doesn't undo that.
+  Future<FileDifferences> _differences(
+    Uri base, {
+    bool skipRemoved = false,
+  }) async {
     final reply = await _request('GET', base.resolve('/api/files'));
     final remote = [
       for (final json in reply['files'] as List? ?? const [])
@@ -345,6 +350,13 @@ class SyncClient {
     final local = await files.localFiles();
     final localKeys = {for (final f in local) f.songKey};
     final remoteKeys = {for (final f in remote) f.songKey};
+    if (skipRemoved) {
+      localKeys.addAll(await files.removedKeys());
+      remoteKeys.addAll([
+        for (final key in reply['removed'] as List? ?? const [])
+          if (key is String) key,
+      ]);
+    }
     return FileDifferences(
       toDownload: [
         for (final f in remote)

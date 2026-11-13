@@ -60,6 +60,10 @@ class _FolderFiles implements SyncFiles {
   final ReceivedTracksStore received;
   final own = <TrackFile>[];
   final covers = <String, List<int>>{};
+  final removed = <String>{};
+
+  @override
+  Future<Set<String>> removedKeys() async => removed;
 
   @override
   Future<List<TrackFile>> localFiles() async => [
@@ -449,6 +453,29 @@ void main() {
       expect(onPhone['fp:bare']!.coverPath, isNull);
       final onDesktop = (await desktop.files.received.load()).single;
       expect(File(onDesktop.coverPath!).readAsBytesSync(), [0x89, 0x50, 7]);
+    });
+
+    test('files deleted on a side are not brought back on their own', () async {
+      final desktopDir = Directory('${root.path}/desktop');
+      final phoneDir = Directory('${root.path}/phone');
+      desktop.ownFile(desktopDir, 'fp:gone-from-phone', [1, 2]);
+      desktop.ownFile(desktopDir, 'fp:new', [3]);
+      phone.ownFile(phoneDir, 'fp:gone-from-desk', [4]);
+      phone.files.removed.add('fp:gone-from-phone');
+      desktop.files.removed.add('fp:gone-from-desk');
+      await client.pair(await openPairing(), deviceName: 'Phone');
+
+      final report = await client.sync(mode: TransferMode.everything);
+      expect((report.downloaded, report.uploaded), (1, 0));
+      expect((await phone.files.received.load()).map((t) => t.songKey), [
+        'fp:new',
+      ]);
+      expect(await desktop.files.received.load(), isEmpty);
+
+      // Picking them by hand still works.
+      final missing = await client.differences();
+      expect(missing.toDownload.single.songKey, 'fp:gone-from-phone');
+      expect(missing.toUpload.single.songKey, 'fp:gone-from-desk');
     });
 
     test('audio files transfer both ways, keep their key and resume', () async {

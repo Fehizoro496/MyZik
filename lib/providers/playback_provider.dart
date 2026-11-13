@@ -178,10 +178,10 @@ class PlaybackNotifier extends Notifier<PlaybackState> {
     // Mirror playback state out to the OS session on every change.
     listenSelf((previous, next) => _broadcast(previous, next));
 
-    ref.listen<LibraryState>(
-      libraryProvider,
-      (previous, next) => _maybeRestore(next.songs),
-    );
+    ref.listen<LibraryState>(libraryProvider, (previous, next) {
+      _maybeRestore(next.songs);
+      _followTags(next.songs);
+    });
     // Covers the case where the library is already loaded by the time this
     // notifier builds. Deferred so `state` is initialized before it runs (the
     // library is scanned asynchronously, so this always loses the race
@@ -215,6 +215,91 @@ class PlaybackNotifier extends Notifier<PlaybackState> {
       position: position,
     );
     await _loadQueue(song, play: false, position: position);
+  }
+
+  /// Gives the queued songs the tags and cover [library] now shows for them
+  /// (the listener edited them, here or on another device). Only what is
+  /// shown changes: the player keeps going.
+  void _followTags(List<Song> library) {
+    if (state.queue.isEmpty) return;
+    final shownByKey = <String, Song>{};
+    for (final song in library) {
+      if (song.hasStableKey) shownByKey.putIfAbsent(song.songKey, () => song);
+    }
+    final replaced = <Song, Song>{};
+    Song follow(Song song) {
+      if (replaced[song] case final done?) return done;
+      if (!song.hasStableKey) return song;
+      final shown = shownByKey[song.songKey];
+      final next = shown == null || shown.sameLabels(song)
+          ? song
+          : song.withLabelsOf(shown);
+      if (!identical(next, song)) replaced[song] = next;
+      return next;
+    }
+
+    final queue = [for (final song in state.queue) follow(song)];
+    final current = state.current == null ? null : follow(state.current!);
+    if (replaced.isEmpty) return;
+    _playOrder = [for (final song in _playOrder) replaced[song] ?? song];
+    state = state.copyWith(queue: queue, current: current);
+  }
+
+  /// Takes [song], whose file is about to be deleted, out of the queue. When
+  /// it is the current track, the next one takes its place (playing only if
+  /// it was) and the player lets go of the file.
+  Future<void> removeSong(Song song) async {
+    bool isDeleted(Song s) => s.id == song.id && s.uri == song.uri;
+    if (!state.queue.any(isDeleted)) return;
+    final queue = [
+      for (final s in state.queue)
+        if (!isDeleted(s)) s,
+    ];
+    final current = state.current;
+    if (current == null || !isDeleted(current)) {
+      final order = _playOrder;
+      final children = [
+        for (var i = order.length - 1; i >= 0; i--)
+          if (isDeleted(order[i])) i,
+      ];
+      _playOrder = [
+        for (final s in order)
+          if (!isDeleted(s)) s,
+      ];
+      state = state.copyWith(
+        queue: queue,
+        currentIndex: current == null ? null : queue.indexOf(current),
+      );
+      _mutate((playlist) async {
+        for (final child in children) {
+          await playlist.removeAt(child);
+        }
+      });
+      return;
+    }
+
+    // The play order once loaded, else the queue itself.
+    final order = _playOrder.contains(current) ? _playOrder : state.queue;
+    final at = order.indexOf(current);
+    final following = [
+      ...order.skip(at + 1),
+      ...order.take(at),
+    ].where((s) => !isDeleted(s));
+    final next = following.firstOrNull;
+    if (next == null) {
+      _playlist = null;
+      _playOrder = const [];
+      state = PlaybackState(
+        shuffle: state.shuffle,
+        repeatMode: state.repeatMode,
+      );
+      await _player.stop();
+      return;
+    }
+    final play = _isPlaying;
+    state = state.copyWith(queue: queue);
+    _setCurrent(next, queue.indexOf(next));
+    await _loadQueue(next, play: play);
   }
 
   /// Open [song] and start playback, setting the play queue to [context] — the
@@ -514,7 +599,13 @@ class PlaybackNotifier extends Notifier<PlaybackState> {
       bufferedPosition: next.position,
     );
     final song = next.current;
-    if (song != null && song.id != previous?.current?.id) {
+    final previousSong = previous?.current;
+    final changed =
+        song != null &&
+        (song.id != previousSong?.id ||
+            // Same track, edited tags or cover.
+            !identical(song, previousSong) && !song.sameLabels(previousSong!));
+    if (changed) {
       handler.setNowPlaying(
         id: song.id.toString(),
         title: song.title,

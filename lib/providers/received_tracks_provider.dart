@@ -46,6 +46,15 @@ class ReceivedTracksNotifier extends Notifier<List<TrackFile>> {
       stored,
     ];
   }
+
+  /// Deletes [track]'s file and drops it from the library.
+  Future<void> remove(TrackFile track) async {
+    await (await store).remove(track);
+    state = [
+      for (final t in state)
+        if (t.songKey != track.songKey) t,
+    ];
+  }
 }
 
 final receivedTracksProvider =

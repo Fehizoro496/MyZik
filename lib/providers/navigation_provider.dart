@@ -10,6 +10,7 @@ enum AppScreen {
   collection,
   playlist,
   songDetail,
+  songEdit,
   sync,
 }
 

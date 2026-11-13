@@ -56,6 +56,15 @@ class DeviceMusicRepository implements MusicRepository {
     );
   }
 
+  /// Tells the media library that the file at [path] is gone, once deleted.
+  static Future<void> forgetFile(String path) async {
+    try {
+      await OnAudioQuery().scanMedia(path);
+    } catch (_) {
+      // Picked up on the system's next scan.
+    }
+  }
+
   Song _toSong(SongModel m) => Song(
     id: m.id,
     title: m.title,

@@ -286,6 +286,7 @@ class SyncServer {
           final local = await files.localFiles();
           return _json(response, {
             'files': [for (final f in local) f.toJson()],
+            'removed': (await files.removedKeys()).toList(),
           });
         case ('files', 'GET', 3):
           return _sendFile(request, segments[2]);

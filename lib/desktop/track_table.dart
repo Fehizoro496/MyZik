@@ -6,6 +6,7 @@ import '../models.dart';
 import '../providers/library_provider.dart';
 import '../providers/liked_provider.dart';
 import '../providers/playback_provider.dart';
+import '../screens/delete_song_dialog.dart';
 import '../theme.dart';
 import '../widgets.dart';
 import 'desktop_navigation.dart';
@@ -84,6 +85,7 @@ class _TrackTableState extends ConsumerState<TrackTable> {
   Future<void> _openMenu(Offset position, Song song, List<Song> queue) async {
     setState(() => _selected = song);
     final liked = ref.read(isLikedProvider(song.songKey));
+    final deletable = canDeleteSong(ref, song);
     final overlay = Overlay.of(context).context.findRenderObject() as RenderBox;
     final selected = await showMenu<String>(
       context: context,
@@ -134,6 +136,11 @@ class _TrackTableState extends ConsumerState<TrackTable> {
               label: widget.removeLabel,
             ),
           ),
+        if (deletable)
+          const PopupMenuItem(
+            value: 'delete',
+            child: PopoverMenuRow(icon: AppIcons.delete, label: 'Delete…'),
+          ),
       ],
     );
     if (!mounted) return;
@@ -145,6 +152,8 @@ class _TrackTableState extends ConsumerState<TrackTable> {
         await showAddToPlaylistDialog(context, song);
       case 'like':
         ref.read(likedProvider.notifier).toggle(song);
+      case 'delete':
+        await confirmDeleteSong(context, ref, song);
       case 'album':
         _openCollection(albumsFrom(library), song.album!);
       case 'artist':

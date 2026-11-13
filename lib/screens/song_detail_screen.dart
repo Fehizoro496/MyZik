@@ -18,29 +18,19 @@ import '../widgets.dart';
 
 /// A dedicated page for one track: large cover, title/artist, quick actions
 /// (play, like, add to playlist) and an info section (album, artist, duration)
-/// whose album/artist rows jump to the matching collection. The song is read
-/// from [selectedSongProvider].
+/// whose album/artist rows jump to the matching collection. The song is
+/// [shownSongProvider].
 class SongDetailScreen extends ConsumerWidget {
   const SongDetailScreen({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final song = ref.watch(selectedSongProvider);
-    final artwork = song == null
-        ? null
-        : ref.watch(coverArtProvider(song.coverKey)).asData?.value;
-    // Dominant colour of the cover (falls back to the placeholder gradient
-    // while it's still being extracted or when the track has no artwork).
-    final accent = song == null
-        ? null
-        : ref.watch(coverAccentProvider(song.coverKey)).asData?.value ??
-              song.artGradient.first;
+    final song = ref.watch(shownSongProvider);
     return DecoratedBox(
       decoration: const BoxDecoration(color: AppColors.musicBackground),
       child: Stack(
         children: [
-          if (song != null)
-            Positioned.fill(child: _background(song, artwork, accent!)),
+          if (song != null) Positioned.fill(child: SongBackdrop(song: song)),
           SafeArea(
             bottom: false,
             child: Column(
@@ -60,64 +50,6 @@ class SongDetailScreen extends ConsumerWidget {
     );
   }
 
-  /// Ambient, per-track background, like Now Playing: the cover art scaled up
-  /// and heavily blurred so it reads as atmosphere, over a gradient tinted by
-  /// the cover's dominant colour, with a scrim on top for legibility. Falls back
-  /// to the placeholder gradient when there's no embedded artwork. Cross-fades
-  /// on [Song.id].
-  Widget _background(Song song, Uint8List? artwork, Color accent) {
-    return AnimatedSwitcher(
-      duration: const Duration(milliseconds: 500),
-      child: Container(
-        key: ValueKey(song.id),
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [accent.withValues(alpha: 0.55), AppColors.musicBackground],
-          ),
-        ),
-        child: Stack(
-          fit: StackFit.expand,
-          children: [
-            if (artwork != null)
-              Transform.scale(
-                scale: 1.3,
-                child: ImageFiltered(
-                  imageFilter: ImageFilter.blur(sigmaX: 70, sigmaY: 70),
-                  // Blurred beyond recognition anyway: a small decode is
-                  // enough and spares memory and GPU uploads.
-                  child: Image(
-                    image: ResizeImage(
-                      MemoryImage(artwork),
-                      width: 96,
-                      policy: ResizeImagePolicy.fit,
-                    ),
-                    fit: BoxFit.cover,
-                    gaplessPlayback: true,
-                  ),
-                ),
-              ),
-            DecoratedBox(
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  colors: [
-                    Colors.black.withValues(alpha: 0.35),
-                    Colors.black.withValues(alpha: 0.30),
-                    AppColors.musicBackground.withValues(alpha: 0.92),
-                  ],
-                  stops: const [0, 0.45, 1],
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
   Widget _content(BuildContext context, WidgetRef ref, Song song) {
     final liked = ref.watch(isLikedProvider(song.songKey));
     final library = ref.watch(libraryProvider.select((s) => s.songs));
@@ -127,6 +59,8 @@ class SongDetailScreen extends ConsumerWidget {
     final download = ref.watch(
       downloadsProvider.select((d) => d.bySongId(song.id)),
     );
+    final editable =
+        song.hasStableKey && library.any((s) => s.songKey == song.songKey);
 
     return ListView(
       padding: const EdgeInsets.fromLTRB(24, 8, 24, 40),
@@ -156,6 +90,14 @@ class SongDetailScreen extends ConsumerWidget {
               label: 'Add to playlist',
               onTap: () => showAddToPlaylistSheet(context, song),
             ),
+            if (editable)
+              ActionPill(
+                icon: AppIcons.edit,
+                label: 'Edit info',
+                onTap: () => ref
+                    .read(navigationProvider.notifier)
+                    .goTo(AppScreen.songEdit),
+              ),
             if (download != null)
               ActionPill(
                 icon: AppIcons.delete,
@@ -312,6 +254,80 @@ class _InfoRow extends StatelessWidget {
                   color: AppColors.whiteAlpha(0.4),
                 ),
               ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Ambient, per-track background, like Now Playing: the cover art scaled up
+/// and heavily blurred so it reads as atmosphere, over a gradient tinted by
+/// the cover's dominant colour, with a scrim on top for legibility. Falls back
+/// to the placeholder gradient when there's no artwork. [cover] (encoded
+/// image bytes) stands in for the song's own, e.g. a picture being picked.
+/// Cross-fades when the song or its cover changes.
+class SongBackdrop extends ConsumerWidget {
+  const SongBackdrop({super.key, required this.song, this.cover});
+
+  final Song song;
+  final Uint8List? cover;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final artwork =
+        cover ?? ref.watch(coverArtProvider(song.coverKey)).asData?.value;
+    // Dominant colour of the cover (falls back to the placeholder gradient
+    // while it's still being extracted or when the track has no artwork).
+    final accent =
+        ref.watch(coverAccentProvider(song.coverKey)).asData?.value ??
+        song.artGradient.first;
+    return AnimatedSwitcher(
+      duration: const Duration(milliseconds: 500),
+      child: Container(
+        key: ValueKey((song.id, song.artworkUrl, cover)),
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [accent.withValues(alpha: 0.55), AppColors.musicBackground],
+          ),
+        ),
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            if (artwork != null)
+              Transform.scale(
+                scale: 1.3,
+                child: ImageFiltered(
+                  imageFilter: ImageFilter.blur(sigmaX: 70, sigmaY: 70),
+                  // Blurred beyond recognition anyway: a small decode is
+                  // enough and spares memory and GPU uploads.
+                  child: Image(
+                    image: ResizeImage(
+                      MemoryImage(artwork),
+                      width: 96,
+                      policy: ResizeImagePolicy.fit,
+                    ),
+                    fit: BoxFit.cover,
+                    gaplessPlayback: true,
+                  ),
+                ),
+              ),
+            DecoratedBox(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [
+                    Colors.black.withValues(alpha: 0.35),
+                    Colors.black.withValues(alpha: 0.30),
+                    AppColors.musicBackground.withValues(alpha: 0.92),
+                  ],
+                  stops: const [0, 0.45, 1],
+                ),
+              ),
+            ),
           ],
         ),
       ),

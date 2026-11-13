@@ -1,4 +1,5 @@
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
     <!-- Required by release builds for YouTube search and audio streaming. -->
     <uses-permission android:name="android.permission.INTERNET" />
     <!-- On-device audio access: READ_MEDIA_AUDIO on Android 13+ (API 33),
@@ -10,6 +11,15 @@
     <uses-permission
         android:name="android.permission.READ_EXTERNAL_STORAGE"
         android:maxSdkVersion="32" />
+    <!-- Deleting songs from the device's music, asked once at first launch:
+         "All files access" from Android 11 (the app isn't meant for the
+         stores, which restrict it), the storage permission before. -->
+    <uses-permission
+        android:name="android.permission.MANAGE_EXTERNAL_STORAGE"
+        tools:ignore="ScopedStorage" />
+    <uses-permission
+        android:name="android.permission.WRITE_EXTERNAL_STORAGE"
+        android:maxSdkVersion="29" />
     <!-- Foreground media playback service + media-button handling for
          audio_service (lock-screen / notification / headset controls). -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />

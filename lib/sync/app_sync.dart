@@ -1,22 +1,27 @@
+import 'dart:convert';
 import 'dart:io';
 import 'dart:isolate';
+import 'dart:typed_data';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../data/desktop_music_repository.dart' show readArtwork;
 import '../data/song_key.dart';
+import '../models.dart';
 import '../providers/app_database_provider.dart';
 import '../providers/library_provider.dart';
 import '../providers/liked_provider.dart';
 import '../providers/lyrics_provider.dart';
 import '../providers/playlists_provider.dart';
 import '../providers/received_tracks_provider.dart';
+import '../providers/song_deletion_provider.dart';
+import '../providers/song_tags_provider.dart';
 import 'sync_engine.dart';
 import 'sync_files.dart';
 import 'sync_store.dart';
 
-/// [SyncData] over the app's providers: likes, playlists and every song's
-/// lyrics, with their timings.
+/// [SyncData] over the app's providers: likes, playlists, every song's
+/// lyrics (with their timings) and the tags the listener edited.
 class AppSyncData implements SyncData {
   AppSyncData(this._ref);
 
@@ -30,6 +35,8 @@ class AppSyncData implements SyncData {
     for (final MapEntry(key: key, value: found)
         in (await _ref.read(lyricsRepositoryProvider).storedLyrics()).entries)
       SyncIds.forLyrics(key): found,
+    for (final key in _ref.read(songTagsProvider).keys)
+      SyncIds.forTags(key): false,
   };
 
   @override
@@ -48,6 +55,19 @@ class AppSyncData implements SyncData {
     }
     if (_after(id, SyncIds.lyrics) case final key?) {
       return _ref.read(lyricsRepositoryProvider).readStoredLyrics(key);
+    }
+    if (_after(id, SyncIds.tags) case final key?) {
+      final tags = _ref.read(songTagsProvider)[key];
+      if (tags == null) return null;
+      // The picture itself travels: the other device has no such file.
+      final cover = _ref.read(songTagsProvider.notifier).coverFile(tags.cover);
+      final bytes = cover != null && cover.existsSync()
+          ? await cover.readAsBytes()
+          : null;
+      return {
+        ...tags.withCover(null).toJson(),
+        if (bytes != null) 'coverData': base64Encode(bytes),
+      };
     }
     return null;
   }
@@ -82,6 +102,21 @@ class AppSyncData implements SyncData {
       }
       // Lyrics on screen are read again.
       _ref.invalidate(lyricsProvider);
+    } else if (_after(id, SyncIds.tags) case final key?) {
+      final coverData = value is Map ? value['coverData'] : null;
+      Uint8List? cover;
+      try {
+        if (coverData is String) cover = base64Decode(coverData);
+      } on FormatException {
+        // An unreadable picture: the tags still apply.
+      }
+      await _ref
+          .read(songTagsProvider.notifier)
+          .setFromSync(
+            key,
+            deleted ? null : SongTags.tryFromJson(value),
+            cover: cover,
+          );
     }
   }
 
@@ -152,6 +187,15 @@ class AppSyncFiles implements SyncFiles {
       );
 
   @override
-  Future<void> receive(TrackFile track, File file, {List<int>? cover}) =>
-      _ref.read(receivedTracksProvider.notifier).add(track, file, cover: cover);
+  Future<void> receive(TrackFile track, File file, {List<int>? cover}) async {
+    await _ref
+        .read(receivedTracksProvider.notifier)
+        .add(track, file, cover: cover);
+    // Picked by hand: it is wanted here again.
+    await _ref.read(songDeletionProvider).restored(track.songKey);
+  }
+
+  @override
+  Future<Set<String>> removedKeys() async =>
+      _ref.read(songDeletionProvider).removedKeys;
 }

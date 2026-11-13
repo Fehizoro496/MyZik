@@ -92,10 +92,12 @@ class SyncIds {
   static const like = 'like:';
   static const playlist = 'playlist:';
   static const lyrics = 'lyrics:';
+  static const tags = 'tags:';
 
   static String forLike(String songKey) => '$like$songKey';
   static String forPlaylist(String id) => '$playlist$id';
   static String forLyrics(String songKey) => '$lyrics$songKey';
+  static String forTags(String songKey) => '$tags$songKey';
 }
 
 /// The local journal of synchronized records: for each, its last change

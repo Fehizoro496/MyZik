@@ -15,7 +15,10 @@ import 'package:my_zik/data/music_repository.dart';
 import 'package:my_zik/models.dart';
 import 'package:my_zik/providers/library_provider.dart';
 import 'package:my_zik/providers/playback_provider.dart';
+import 'package:my_zik/providers/app_database_provider.dart';
 import 'package:my_zik/providers/shared_preferences_provider.dart';
+
+import 'support/test_database.dart';
 
 class _FakeRepo implements MusicRepository {
   @override
@@ -229,6 +232,7 @@ _bootstrap() async {
   final container = ProviderContainer(
     overrides: [
       sharedPreferencesProvider.overrideWithValue(store),
+      appDatabaseProvider.overrideWithValue(await testDatabase()),
       musicRepositoryProvider.overrideWithValue(_FakeRepo()),
     ],
   );

@@ -10,6 +10,7 @@ import '../providers/playlists_provider.dart';
 import '../providers/song_detail_provider.dart';
 import '../theme.dart';
 import '../widgets.dart';
+import 'delete_song_dialog.dart';
 
 /// Detail view for a user playlist, lit by its cover: a cover hero with Play,
 /// Shuffle and Add songs over its track list. Each track's ⋮ button opens a popover menu (add to
@@ -246,25 +247,31 @@ class PlaylistScreen extends ConsumerWidget {
   ) async {
     final notifier = ref.read(playlistsProvider.notifier);
     final nav = ref.read(navigationProvider.notifier);
-    final selected = await showPopoverMenu<String>(buttonContext, const [
-      PopupMenuItem(
+    final deletable = canDeleteSong(ref, song);
+    final selected = await showPopoverMenu<String>(buttonContext, [
+      const PopupMenuItem(
         value: 'details',
         child: PopoverMenuRow(icon: AppIcons.info, label: 'Song details'),
       ),
-      PopupMenuItem(
+      const PopupMenuItem(
         value: 'add',
         child: PopoverMenuRow(
           icon: AppIcons.playlistAdd,
           label: 'Add to playlist',
         ),
       ),
-      PopupMenuItem(
+      const PopupMenuItem(
         value: 'remove',
         child: PopoverMenuRow(
           icon: AppIcons.playlistRemove,
           label: 'Remove from playlist',
         ),
       ),
+      if (deletable)
+        const PopupMenuItem(
+          value: 'delete',
+          child: PopoverMenuRow(icon: AppIcons.delete, label: 'Delete'),
+        ),
     ]);
     switch (selected) {
       case 'details':
@@ -273,6 +280,10 @@ class PlaylistScreen extends ConsumerWidget {
       case 'add':
         if (buttonContext.mounted) {
           showAddToPlaylistSheet(buttonContext, song);
+        }
+      case 'delete':
+        if (buttonContext.mounted) {
+          await confirmDeleteSong(buttonContext, ref, song);
         }
       case 'remove':
         notifier.removeSong(playlist.id, song);

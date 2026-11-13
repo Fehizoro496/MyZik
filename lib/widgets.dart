@@ -14,6 +14,7 @@ import 'providers/navigation_provider.dart';
 import 'providers/playback_provider.dart';
 import 'providers/playlists_provider.dart';
 import 'providers/song_detail_provider.dart';
+import 'screens/delete_song_dialog.dart';
 import 'theme.dart';
 
 /// A bare icon button used throughout the design, with a fixed square tap
@@ -749,7 +750,7 @@ class TrackRow extends ConsumerWidget {
 }
 
 /// [TrackRow]'s default trailing button: a ⋮ that opens the track's popover menu
-/// (song details, add to playlist, like/unlike).
+/// (song details, add to playlist, like/unlike, delete).
 class _TrackMenuButton extends ConsumerWidget {
   const _TrackMenuButton({required this.song});
 
@@ -772,6 +773,7 @@ class _TrackMenuButton extends ConsumerWidget {
 
   Future<void> _openMenu(BuildContext buttonContext, WidgetRef ref) async {
     final liked = ref.read(isLikedProvider(song.songKey));
+    final deletable = canDeleteSong(ref, song);
     final selected = await showPopoverMenu<String>(buttonContext, [
       const PopupMenuItem(
         value: 'details',
@@ -791,6 +793,11 @@ class _TrackMenuButton extends ConsumerWidget {
           label: liked ? 'Remove from liked' : 'Add to liked',
         ),
       ),
+      if (deletable)
+        const PopupMenuItem(
+          value: 'delete',
+          child: PopoverMenuRow(icon: AppIcons.delete, label: 'Delete'),
+        ),
     ]);
     switch (selected) {
       case 'details':
@@ -802,6 +809,10 @@ class _TrackMenuButton extends ConsumerWidget {
         }
       case 'like':
         ref.read(likedProvider.notifier).toggle(song);
+      case 'delete':
+        if (buttonContext.mounted) {
+          await confirmDeleteSong(buttonContext, ref, song);
+        }
     }
   }
 }

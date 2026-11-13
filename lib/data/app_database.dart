@@ -28,6 +28,7 @@ class AppDatabase {
   final Map<String, String> _downloads = {};
   final Map<String, String> _receivedFiles = {};
   final Map<String, String> _settings = {};
+  final Map<String, Map<String, dynamic>> _songTags = {};
 
   String? deviceId;
   int syncSequence = 0;
@@ -47,11 +48,18 @@ class AppDatabase {
     final db = await factory.openDatabase(
       dbPath,
       options: OpenDatabaseOptions(
-        version: 1,
+        version: _schemaVersion,
         onConfigure: _configure,
         onCreate: (database, _) => _createSchema(database),
         onUpgrade: (database, oldVersion, newVersion) async {
-          if (oldVersion < 1) await _createSchema(database);
+          if (oldVersion < 1) return _createSchema(database);
+          if (oldVersion < 2) {
+            await _createSongTagsTable(database);
+          } else if (oldVersion < 3) {
+            await database.execute(
+              'ALTER TABLE song_tags ADD COLUMN cover TEXT',
+            );
+          }
         },
       ),
     );
@@ -67,7 +75,7 @@ class AppDatabase {
     final db = await databaseFactoryFfi.openDatabase(
       inMemoryDatabasePath,
       options: OpenDatabaseOptions(
-        version: 1,
+        version: _schemaVersion,
         singleInstance: false,
         onConfigure: _configure,
         onCreate: (database, _) => _createSchema(database),
@@ -77,6 +85,8 @@ class AppDatabase {
     await appDb._loadSnapshots();
     return appDb;
   }
+
+  static const _schemaVersion = 3;
 
   static DatabaseFactory _factoryForPlatform() {
     if (Platform.isWindows || Platform.isLinux) {
@@ -176,7 +186,20 @@ class AppDatabase {
       key TEXT PRIMARY KEY NOT NULL,
       completed_at INTEGER NOT NULL
     )''');
+    await _createSongTagsTable(db);
   }
+
+  /// Tags the listener edited, by song key (added in schema version 2, with
+  /// the cover's file name since version 3).
+  static Future<void> _createSongTagsTable(DatabaseExecutor db) =>
+      db.execute('''CREATE TABLE song_tags (
+      song_key TEXT PRIMARY KEY NOT NULL,
+      title TEXT NOT NULL,
+      artist TEXT NOT NULL,
+      album TEXT,
+      cover TEXT,
+      updated_at INTEGER NOT NULL DEFAULT 0
+    )''');
 
   Future<void> _loadSnapshots() async {
     _likes.addAll(
@@ -238,6 +261,14 @@ class AppDatabase {
     for (final row in await _db.query('received_files')) {
       _receivedFiles[row['song_key']! as String] =
           row['record_json']! as String;
+    }
+    for (final row in await _db.query('song_tags')) {
+      _songTags[row['song_key']! as String] = {
+        'title': row['title'],
+        'artist': row['artist'],
+        if (row['album'] != null) 'album': row['album'],
+        if (row['cover'] != null) 'cover': row['cover'],
+      };
     }
   }
 
@@ -309,6 +340,7 @@ class AppDatabase {
     _downloads.clear();
     _receivedFiles.clear();
     _settings.clear();
+    _songTags.clear();
     syncSequence = 0;
     await _loadSnapshots();
   }
@@ -732,6 +764,33 @@ class AppDatabase {
     _settings.remove(key);
     await _enqueue(
       (txn) => txn.delete('app_settings', where: 'key = ?', whereArgs: [key]),
+    );
+  }
+
+  /// Edited tags (`title`, `artist`, optional `album` and `cover`) by song
+  /// key.
+  Map<String, Map<String, dynamic>> get songTags => {
+    for (final entry in _songTags.entries) entry.key: Map.of(entry.value),
+  };
+
+  Future<void> putSongTags(String key, Map<String, dynamic> tags) async {
+    _songTags[key] = Map.of(tags);
+    await _enqueue(
+      (txn) => txn.insert('song_tags', {
+        'song_key': key,
+        'title': tags['title'],
+        'artist': tags['artist'],
+        'album': tags['album'],
+        'cover': tags['cover'],
+        'updated_at': DateTime.now().millisecondsSinceEpoch,
+      }, conflictAlgorithm: ConflictAlgorithm.replace),
+    );
+  }
+
+  Future<void> deleteSongTags(String key) async {
+    _songTags.remove(key);
+    await _enqueue(
+      (txn) => txn.delete('song_tags', where: 'song_key = ?', whereArgs: [key]),
     );
   }
 }

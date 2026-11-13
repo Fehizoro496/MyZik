@@ -23,6 +23,8 @@ import 'screens/discover_screen.dart';
 import 'screens/liked_screen.dart';
 import 'screens/playlist_screen.dart';
 import 'screens/search_screen.dart';
+import 'screens/delete_song_dialog.dart';
+import 'screens/edit_song_screen.dart';
 import 'screens/song_detail_screen.dart';
 import 'screens/sync_screen.dart';
 import 'theme.dart';
@@ -134,6 +136,8 @@ class PlayerShell extends ConsumerWidget {
         return const PlaylistScreen();
       case AppScreen.songDetail:
         return const SongDetailScreen();
+      case AppScreen.songEdit:
+        return const EditSongScreen();
       case AppScreen.sync:
         return const SyncScreen();
     }
@@ -169,37 +173,39 @@ class PlayerShell extends ConsumerWidget {
       },
       child: Scaffold(
         backgroundColor: Colors.black,
-        body: LayoutBuilder(
-          builder: (context, constraints) {
-            final wide =
-                constraints.maxWidth > 500 || constraints.maxHeight > 900;
-            if (!wide) return app;
-            // Phone-frame presentation for desktop / web.
-            return Container(
-              decoration: const BoxDecoration(
-                gradient: RadialGradient(
-                  center: Alignment(-0.6, -1),
-                  radius: 1.4,
-                  colors: [Color(0xFF1A1730), Color(0xFF08080C)],
-                ),
-              ),
-              alignment: Alignment.center,
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(46),
-                child: SizedBox(
-                  width: 390,
-                  height: 844,
-                  child: MediaQuery(
-                    // Give the framed app a realistic notch inset.
-                    data: MediaQuery.of(context).copyWith(
-                      padding: const EdgeInsets.only(top: 0, bottom: 0),
-                    ),
-                    child: app,
+        body: DeleteAccessPrompt(
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final wide =
+                  constraints.maxWidth > 500 || constraints.maxHeight > 900;
+              if (!wide) return app;
+              // Phone-frame presentation for desktop / web.
+              return Container(
+                decoration: const BoxDecoration(
+                  gradient: RadialGradient(
+                    center: Alignment(-0.6, -1),
+                    radius: 1.4,
+                    colors: [Color(0xFF1A1730), Color(0xFF08080C)],
                   ),
                 ),
-              ),
-            );
-          },
+                alignment: Alignment.center,
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(46),
+                  child: SizedBox(
+                    width: 390,
+                    height: 844,
+                    child: MediaQuery(
+                      // Give the framed app a realistic notch inset.
+                      data: MediaQuery.of(context).copyWith(
+                        padding: const EdgeInsets.only(top: 0, bottom: 0),
+                      ),
+                      child: app,
+                    ),
+                  ),
+                ),
+              );
+            },
+          ),
         ),
       ),
     );

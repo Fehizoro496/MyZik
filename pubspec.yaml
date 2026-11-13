@@ -89,6 +89,12 @@ dependencies:
   qr_flutter: ^4.1.0
   mobile_scanner: ^7.4.2
 
+  # Picks the picture used as an edited song's cover (gallery on phones).
+  file_picker: ^13.3.3
+
+  # Android "All files access", to delete songs from the device's music.
+  permission_handler: ^13.0.2
+
 dev_dependencies:
   flutter_test:
     sdk: flutter

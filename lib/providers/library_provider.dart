@@ -13,6 +13,7 @@ import 'liked_provider.dart';
 import 'playlists_provider.dart';
 import 'received_tracks_provider.dart';
 import 'shared_preferences_provider.dart';
+import 'song_tags_provider.dart';
 
 /// Source of the track library for this platform. A single instance is
 /// shared by every provider that needs to read it.
@@ -191,7 +192,8 @@ class LibraryState {
 /// on app start (the device's media store is the source of truth, so nothing
 /// here is persisted) but callers can retry via [load] (e.g. after granting
 /// permission). Tracks saved by [downloadsProvider] are appended to the
-/// device's songs and follow its changes.
+/// device's songs and follow its changes. Songs show the tags the listener
+/// edited ([songTagsProvider]) rather than those of their files.
 class LibraryNotifier extends Notifier<LibraryState> {
   List<Song> _deviceSongs = const [];
   bool _disposed = false;
@@ -201,7 +203,7 @@ class LibraryNotifier extends Notifier<LibraryState> {
     // [load] awaits the repository; the container may be gone by then.
     ref.onDispose(() => _disposed = true);
     void refresh() {
-      final songs = _withDownloads(_deviceSongs);
+      final songs = _shown(_deviceSongs);
       state = state.copyWith(
         songs: songs,
         status: switch (state.status) {
@@ -214,6 +216,7 @@ class LibraryNotifier extends Notifier<LibraryState> {
 
     ref.listen(downloadsProvider.select((d) => d.saved), (_, _) => refresh());
     ref.listen(receivedTracksProvider, (_, _) => refresh());
+    ref.listen(songTagsProvider, (_, _) => refresh());
     Future.microtask(load);
     return const LibraryState(status: LibraryStatus.loading);
   }
@@ -225,6 +228,36 @@ class LibraryNotifier extends Notifier<LibraryState> {
     ...ref.read(downloadsProvider).songs,
     for (final track in ref.read(receivedTracksProvider)) track.toSong(),
   ];
+
+  /// What the library shows for [device]: [_withDownloads], each song with
+  /// the tags the listener gave it.
+  List<Song> _shown(List<Song> device) {
+    final tags = ref.read(songTagsProvider.notifier);
+    return [for (final song in _withDownloads(device)) tags.apply(song)];
+  }
+
+  /// The song with [songKey] as its file describes it, before the listener's
+  /// edits; null when it isn't in the library.
+  Song? fileSong(String songKey) => _withDownloads(
+    _deviceSongs,
+  ).where((s) => s.songKey == songKey).firstOrNull;
+
+  /// Drops [song], whose file was deleted, without rescanning the device.
+  void removeSong(Song song) {
+    final device = [
+      for (final s in _deviceSongs)
+        if (s.id != song.id || s.uri != song.uri) s,
+    ];
+    if (device.length == _deviceSongs.length) return;
+    _deviceSongs = device;
+    final songs = _shown(device);
+    state = state.copyWith(
+      songs: songs,
+      status: songs.isEmpty && state.status == LibraryStatus.ready
+          ? LibraryStatus.empty
+          : null,
+    );
+  }
 
   /// Bumped by every [load], so a slower, older key resolution can't
   /// overwrite a newer library.
@@ -246,12 +279,12 @@ class LibraryNotifier extends Notifier<LibraryState> {
         _deviceSongs = const [];
         state = LibraryState(
           status: LibraryStatus.permissionDenied,
-          songs: _withDownloads(const []),
+          songs: _shown(const []),
         );
       } else {
         _deviceSongs = _withRememberedKeys(await repo.fetchSongs());
         if (_disposed) return;
-        final songs = _withDownloads(_deviceSongs);
+        final songs = _shown(_deviceSongs);
         state = LibraryState(
           status: songs.isEmpty ? LibraryStatus.empty : LibraryStatus.ready,
           songs: songs,
@@ -261,7 +294,7 @@ class LibraryNotifier extends Notifier<LibraryState> {
       if (_disposed) return;
       state = LibraryState(
         status: LibraryStatus.error,
-        songs: _withDownloads(const []),
+        songs: _shown(const []),
       );
       return;
     }
@@ -306,7 +339,7 @@ class LibraryNotifier extends Notifier<LibraryState> {
       }
       if (changed) {
         _deviceSongs = device;
-        state = state.copyWith(songs: _withDownloads(_deviceSongs));
+        state = state.copyWith(songs: _shown(_deviceSongs));
       }
       if (result.migrated) {
         ref.invalidate(likedProvider);
