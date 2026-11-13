@@ -654,17 +654,19 @@ class _LyricsPanelState extends ConsumerState<LyricsPanel> {
                               LyricsSectionLabel(stanzas[i]!),
                             AnimatedDefaultTextStyle(
                               duration: const Duration(milliseconds: 250),
-                              style: TextStyle(
-                                color: i == index
-                                    ? AppColors.white
-                                    : AppColors.whiteAlpha(
-                                        i < index ? 0.3 : 0.5,
-                                      ),
-                                fontSize: 24,
-                                height: 1.28,
-                                fontWeight: i == index
-                                    ? FontWeight.w800
-                                    : FontWeight.w700,
+                              style: DefaultTextStyle.of(context).style.merge(
+                                TextStyle(
+                                  color: i == index
+                                      ? AppColors.white
+                                      : AppColors.whiteAlpha(
+                                          i < index ? 0.3 : 0.5,
+                                        ),
+                                  fontSize: 24,
+                                  height: 1.28,
+                                  fontWeight: i == index
+                                      ? FontWeight.w800
+                                      : FontWeight.w700,
+                                ),
                               ),
                               child: LyricText(_display(lyrics.lines[i])),
                             ),

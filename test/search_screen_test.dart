@@ -56,8 +56,9 @@ void main() {
     await container.read(libraryProvider.notifier).load();
     await tester.pumpAndSettle();
 
-    // Empty query shows the hint, no tracks.
-    expect(find.text('Search your library'), findsOneWidget);
+    // Empty query shows the library's artists to browse, no tracks.
+    expect(find.text('Artists'), findsOneWidget);
+    expect(find.text('Budiarti'), findsOneWidget);
     expect(find.text('Midnight Confessions'), findsNothing);
 
     // Title match.

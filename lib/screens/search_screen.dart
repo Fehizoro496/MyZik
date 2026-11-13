@@ -11,7 +11,8 @@ import '../widgets.dart';
 
 /// Full-text search over the on-device library, matching title, artist or
 /// album as the user types. Playing a result queues the current results, so
-/// next/previous stay within the search.
+/// next/previous stay within the search. Before anything is typed, the
+/// library's artists and albums are there to browse.
 class SearchScreen extends ConsumerStatefulWidget {
   const SearchScreen({super.key});
 
@@ -23,6 +24,12 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
   final _controller = TextEditingController();
   final _focus = FocusNode();
   String _query = '';
+
+  // Artist / album groupings for browsing, recomputed only when the library
+  // list changes rather than on every keystroke.
+  List<Song>? _groupedFrom;
+  List<MusicCollection> _artists = const [];
+  List<MusicCollection> _albums = const [];
 
   @override
   void initState() {
@@ -72,11 +79,13 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
           ),
         ),
         body: (context, top) => !hasQuery
-            ? _message(
-                'Search your library',
-                'Find songs, artists and albums.',
-                top,
-              )
+            ? songs.isEmpty
+                  ? _message(
+                      'Search your library',
+                      'Find songs, artists and albums.',
+                      top,
+                    )
+                  : _browse(songs, top)
             : results.isEmpty
             ? _message('No matches', 'Nothing matched "${_query.trim()}".', top)
             : _resultList(results, top),
@@ -170,6 +179,26 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
         );
       },
       separatorBuilder: (_, i) => SizedBox(height: i == 0 ? 12 : 20),
+    );
+  }
+
+  /// The library's artists and albums, while nothing is typed yet.
+  Widget _browse(List<Song> songs, double top) {
+    if (!identical(songs, _groupedFrom)) {
+      _groupedFrom = songs;
+      _artists = artistsFrom(songs);
+      _albums = albumsFrom(songs);
+    }
+    return ListView(
+      padding: EdgeInsets.only(top: top + 8, bottom: 40),
+      physics: const BouncingScrollPhysics(),
+      // Browsing hands the screen back from the keyboard.
+      keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+      children: [
+        CollectionShelf(title: 'Artists', collections: _artists, padding: 24),
+        const SizedBox(height: 28),
+        CollectionShelf(title: 'Albums', collections: _albums, padding: 24),
+      ],
     );
   }
 

@@ -8,7 +8,6 @@ import '../data/youtube_repository.dart';
 import '../icons.dart';
 import '../models.dart';
 import '../providers/downloads_provider.dart';
-import '../providers/navigation_provider.dart';
 import '../providers/playback_provider.dart';
 import '../providers/youtube_provider.dart';
 import '../theme.dart';
@@ -143,29 +142,9 @@ class _DiscoverScreenState extends ConsumerState<DiscoverScreen> {
                 header: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(24, 12, 24, 6),
-                      child: Row(
-                        children: [
-                          GlassIconButton(
-                            icon: AppIcons.back,
-                            size: 44,
-                            iconSize: 22,
-                            onTap: () =>
-                                ref.read(navigationProvider.notifier).back(),
-                          ),
-                          const SizedBox(width: 12),
-                          const Text(
-                            'Discover',
-                            style: TextStyle(
-                              color: AppColors.white,
-                              fontSize: 22,
-                              fontWeight: FontWeight.w800,
-                              letterSpacing: -0.3,
-                            ),
-                          ),
-                        ],
-                      ),
+                    const Padding(
+                      padding: EdgeInsets.fromLTRB(24, 12, 24, 6),
+                      child: PageHeader(title: 'Discover'),
                     ),
                     Padding(
                       padding: const EdgeInsets.fromLTRB(24, 6, 24, 16),

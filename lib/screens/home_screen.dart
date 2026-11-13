@@ -2,12 +2,15 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../icons.dart';
+import '../models.dart';
 import '../providers/library_provider.dart';
 import '../providers/navigation_provider.dart';
 import '../providers/playback_provider.dart';
 import '../theme.dart';
 import '../widgets.dart';
 
+/// The landing page: a greeting, a shuffled run through the library, then
+/// shelves of its albums and artists and a few of its songs.
 class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
 
@@ -16,10 +19,24 @@ class HomeScreen extends ConsumerStatefulWidget {
 }
 
 class _HomeScreenState extends ConsumerState<HomeScreen> {
+  static const _padding = 22.0;
+
+  // Album / artist groupings, recomputed only when the library list changes
+  // rather than on every rebuild.
+  List<Song>? _groupedFrom;
+  List<MusicCollection> _albums = const [];
+  List<MusicCollection> _artists = const [];
+
   @override
   Widget build(BuildContext context) {
     final library = ref.watch(libraryProvider);
-    final topSongs = library.songs.take(4).toList();
+    final songs = library.songs;
+    if (!identical(songs, _groupedFrom)) {
+      _groupedFrom = songs;
+      _albums = albumsFrom(songs);
+      _artists = artistsFrom(songs);
+    }
+    final topSongs = songs.take(4).toList();
     return DecoratedBox(
       decoration: const BoxDecoration(color: AppColors.homeBackground),
       child: Stack(
@@ -41,12 +58,14 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           ),
           SafeArea(
             bottom: false,
-            child: Column(
+            child: ListView(
+              padding: const EdgeInsets.only(top: 8, bottom: 170),
+              physics: const BouncingScrollPhysics(),
               children: [
-                Expanded(
-                  child: ListView(
-                    padding: const EdgeInsets.fromLTRB(22, 8, 22, 170),
-                    physics: const BouncingScrollPhysics(),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: _padding),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       _header(),
                       const SizedBox(height: 22),
@@ -60,14 +79,30 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                         ),
                       ),
                       const SizedBox(height: 18),
-                      _discoverCard(library),
-                      const SizedBox(height: 30),
+                      _DiscoverCard(songs: songs),
+                    ],
+                  ),
+                ),
+                if (_albums.isNotEmpty) ...[
+                  const SizedBox(height: 32),
+                  CollectionShelf(title: 'Albums', collections: _albums),
+                ],
+                if (_artists.isNotEmpty) ...[
+                  const SizedBox(height: 28),
+                  CollectionShelf(title: 'Artists', collections: _artists),
+                ],
+                const SizedBox(height: 28),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: _padding),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
                       Row(
                         crossAxisAlignment: CrossAxisAlignment.baseline,
                         textBaseline: TextBaseline.alphabetic,
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          Flexible(child: _sectionTitle('Top daily playlists')),
+                          const Flexible(child: SectionTitle('Songs')),
                           const SizedBox(width: 12),
                           GestureDetector(
                             onTap: () => ref
@@ -76,7 +111,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                             child: const Text(
                               'See all',
                               style: TextStyle(
-                                color: Color(0xFF6F9DFF),
+                                color: AppColors.playing,
                                 fontSize: 13,
                                 fontWeight: FontWeight.w600,
                               ),
@@ -183,18 +218,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     );
   }
 
-  Widget _sectionTitle(String text) {
-    return Text(
-      text,
-      style: const TextStyle(
-        color: AppColors.white,
-        fontSize: 20,
-        fontWeight: FontWeight.w700,
-        letterSpacing: -0.2,
-      ),
-    );
-  }
-
   Widget _emptyHint(LibraryStatus status) {
     final text = switch (status) {
       LibraryStatus.loading => 'Loading your library…',
@@ -212,17 +235,33 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       ),
     );
   }
+}
 
-  Widget _discoverCard(LibraryState library) {
+/// The home's lead: a shuffled run through the whole library, shown as a
+/// fan of the records it will play.
+class _DiscoverCard extends ConsumerWidget {
+  const _DiscoverCard({required this.songs});
+
+  final List<Song> songs;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    // A few distinct covers for the fan: one track per album.
+    final seen = <String?>{};
+    final fan = [
+      for (final s in songs)
+        if (seen.add(s.album ?? s.title)) s,
+    ].take(3).toList();
+    final count = songs.length;
     return GestureDetector(
-      onTap: () => library.songs.isEmpty
-          ? null
-          : ref.read(playbackProvider.notifier).playSong(library.songs.first),
+      behavior: HitTestBehavior.opaque,
+      onTap: songs.isEmpty ? null : () => playShuffled(ref, songs),
       child: Container(
-        constraints: const BoxConstraints(minHeight: 172),
-        padding: const EdgeInsets.all(22),
+        height: 172,
+        padding: const EdgeInsets.fromLTRB(22, 22, 0, 22),
+        clipBehavior: Clip.antiAlias,
         decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(24),
+          borderRadius: BorderRadius.circular(28),
           gradient: const LinearGradient(
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
@@ -231,75 +270,89 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           ),
           boxShadow: [
             BoxShadow(
-              color: const Color(0xFF4F8CFF).withValues(alpha: 0.35),
+              color: const Color(0xFF4F8CFF).withValues(alpha: 0.3),
               blurRadius: 40,
               offset: const Offset(0, 18),
             ),
           ],
         ),
-        child: Stack(
-          clipBehavior: Clip.none,
+        child: Row(
           children: [
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text(
-                  'Discover weekly',
-                  style: TextStyle(
-                    color: AppColors.white,
-                    fontSize: 22,
-                    fontWeight: FontWeight.w800,
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Discover weekly',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: AppColors.white,
+                      fontSize: 22,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: -0.3,
+                    ),
                   ),
-                ),
-                const SizedBox(height: 8),
-                SizedBox(
-                  width: 200,
-                  child: Text(
-                    'The original slow instrumental best playlists.',
+                  const SizedBox(height: 6),
+                  Text(
+                    count == 0
+                        ? 'Your library, shuffled.'
+                        : 'All $count of your tracks, shuffled.',
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
                     style: TextStyle(
                       color: AppColors.whiteAlpha(0.85),
                       fontSize: 13,
                       height: 1.4,
                     ),
                   ),
-                ),
-                const SizedBox(height: 18),
-                Row(
-                  children: [
-                    Container(
-                      width: 46,
-                      height: 46,
-                      decoration: const BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: Color(0xFF0B1220),
-                      ),
-                      child: const Icon(
-                        AppIcons.playFilled,
-                        size: 20,
-                        color: AppColors.white,
-                      ),
+                  const Spacer(),
+                  Container(
+                    width: 48,
+                    height: 48,
+                    decoration: const BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: AppColors.white,
                     ),
-                    const SizedBox(width: 16),
-                    Icon(
-                      AppIcons.heart,
+                    child: const Icon(
+                      AppIcons.shuffle,
                       size: 20,
-                      color: AppColors.whiteAlpha(0.9),
+                      color: AppColors.ink,
                     ),
-                    const SizedBox(width: 16),
-                    Icon(
-                      AppIcons.download,
-                      size: 20,
-                      color: AppColors.whiteAlpha(0.9),
+                  ),
+                ],
+              ),
+            ),
+            // The records, fanned out and bleeding off the card's edge.
+            SizedBox(
+              width: 150,
+              child: Stack(
+                clipBehavior: Clip.none,
+                children: [
+                  for (var i = fan.length - 1; i >= 0; i--)
+                    Positioned(
+                      left: 10.0 + i * 34,
+                      top: 18.0 - i * 8,
+                      child: DecoratedBox(
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withValues(alpha: 0.35),
+                              blurRadius: 18,
+                              offset: const Offset(-6, 8),
+                            ),
+                          ],
+                        ),
+                        child: SongArtwork(
+                          song: fan[i],
+                          size: 110,
+                          circle: true,
+                        ),
+                      ),
                     ),
-                    const SizedBox(width: 16),
-                    Icon(
-                      AppIcons.more,
-                      size: 22,
-                      color: AppColors.whiteAlpha(0.9),
-                    ),
-                  ],
-                ),
-              ],
+                ],
+              ),
             ),
           ],
         ),

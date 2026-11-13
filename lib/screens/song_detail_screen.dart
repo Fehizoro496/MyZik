@@ -45,28 +45,9 @@ class SongDetailScreen extends ConsumerWidget {
             bottom: false,
             child: Column(
               children: [
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(24, 12, 24, 8),
-                  child: Row(
-                    children: [
-                      GlassIconButton(
-                        icon: AppIcons.back,
-                        size: 44,
-                        iconSize: 22,
-                        onTap: () =>
-                            ref.read(navigationProvider.notifier).back(),
-                      ),
-                      const SizedBox(width: 12),
-                      const Text(
-                        'Song',
-                        style: TextStyle(
-                          color: AppColors.white,
-                          fontSize: 18,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                    ],
-                  ),
+                const Padding(
+                  padding: EdgeInsets.fromLTRB(24, 12, 24, 8),
+                  child: PageHeader(title: 'Song'),
                 ),
                 Expanded(
                   child: song == null ? _empty() : _content(context, ref, song),
@@ -104,7 +85,17 @@ class SongDetailScreen extends ConsumerWidget {
                 scale: 1.3,
                 child: ImageFiltered(
                   imageFilter: ImageFilter.blur(sigmaX: 70, sigmaY: 70),
-                  child: Image.memory(artwork, fit: BoxFit.cover),
+                  // Blurred beyond recognition anyway: a small decode is
+                  // enough and spares memory and GPU uploads.
+                  child: Image(
+                    image: ResizeImage(
+                      MemoryImage(artwork),
+                      width: 96,
+                      policy: ResizeImagePolicy.fit,
+                    ),
+                    fit: BoxFit.cover,
+                    gaplessPlayback: true,
+                  ),
                 ),
               ),
             DecoratedBox(
@@ -141,79 +132,39 @@ class SongDetailScreen extends ConsumerWidget {
       padding: const EdgeInsets.fromLTRB(24, 8, 24, 40),
       physics: const BouncingScrollPhysics(),
       children: [
-        const SizedBox(height: 8),
-        Center(
-          child: Container(
-            width: 220,
-            height: 220,
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(28),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.45),
-                  blurRadius: 50,
-                  offset: const Offset(0, 24),
-                ),
-              ],
-            ),
-            child: SongArtwork(song: song, size: 220, radius: 28),
-          ),
-        ),
-        const SizedBox(height: 26),
-        Text(
-          song.title,
-          textAlign: TextAlign.center,
-          maxLines: 2,
-          overflow: TextOverflow.ellipsis,
-          style: const TextStyle(
-            color: AppColors.white,
-            fontSize: 24,
-            fontWeight: FontWeight.w800,
-            letterSpacing: -0.3,
-          ),
-        ),
-        const SizedBox(height: 6),
-        Text(
-          song.artist,
-          textAlign: TextAlign.center,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: TextStyle(color: AppColors.whiteAlpha(0.6), fontSize: 15),
-        ),
-        const SizedBox(height: 22),
-        Wrap(
-          alignment: WrapAlignment.center,
-          spacing: 12,
-          runSpacing: 12,
-          children: [
-            _pill(
+        PageHero(
+          cover: SongArtwork(song: song, size: 220, radius: 28),
+          title: song.title,
+          subtitle: song.artist,
+          actions: [
+            ActionPill(
               icon: AppIcons.playFilled,
               label: 'Play',
-              filled: true,
+              primary: true,
               onTap: () => ref
                   .read(playbackProvider.notifier)
                   .playSong(song, context: library),
             ),
-            _pill(
+            ActionPill(
               icon: liked ? AppIcons.heartFilled : AppIcons.heart,
               label: liked ? 'Liked' : 'Like',
               iconColor: liked ? AppColors.liked : AppColors.white,
               onTap: () => ref.read(likedProvider.notifier).toggle(song),
             ),
-            _pill(
+            ActionPill(
               icon: AppIcons.playlistAdd,
               label: 'Add to playlist',
               onTap: () => showAddToPlaylistSheet(context, song),
             ),
             if (download != null)
-              _pill(
+              ActionPill(
                 icon: AppIcons.delete,
                 label: 'Remove download',
                 onTap: () => _confirmRemoveDownload(context, ref, download),
               ),
           ],
         ),
-        const SizedBox(height: 28),
+        const SizedBox(height: 30),
         _infoCard([
           _InfoRow(
             label: 'Album',
@@ -246,43 +197,6 @@ class SongDetailScreen extends ConsumerWidget {
               Divider(height: 1, color: AppColors.whiteAlpha(0.06)),
           ],
         ],
-      ),
-    );
-  }
-
-  Widget _pill({
-    required IconData icon,
-    required String label,
-    required VoidCallback onTap,
-    bool filled = false,
-    Color? iconColor,
-  }) {
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 12),
-        decoration: BoxDecoration(
-          gradient: filled ? AppColors.accentGradient : null,
-          color: filled ? null : AppColors.whiteAlpha(0.06),
-          borderRadius: BorderRadius.circular(24),
-          border: filled ? null : Border.all(color: AppColors.whiteAlpha(0.1)),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(icon, color: iconColor ?? AppColors.white, size: 20),
-            const SizedBox(width: 6),
-            Text(
-              label,
-              style: const TextStyle(
-                color: AppColors.white,
-                fontSize: 14,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-          ],
-        ),
       ),
     );
   }

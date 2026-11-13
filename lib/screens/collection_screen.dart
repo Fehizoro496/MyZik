@@ -1,17 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../icons.dart';
 import '../models.dart';
 import '../providers/collection_provider.dart';
-import '../providers/navigation_provider.dart';
 import '../providers/playback_provider.dart';
 import '../theme.dart';
 import '../widgets.dart';
 
-/// Detail view for one album or artist: a cover hero with a Play button on top
-/// of its track list. The collection to show is read from
-/// [selectedCollectionProvider], set by whoever navigated here.
+/// Detail view for one album or artist, lit by its cover: the cover, its name
+/// and Play / Shuffle over its tracks. An album's tracks are numbered (they
+/// share its cover); an artist's show each cover. The collection to show is
+/// read from [selectedCollectionProvider], set by whoever navigated here.
 class CollectionScreen extends ConsumerWidget {
   const CollectionScreen({super.key});
 
@@ -20,51 +19,34 @@ class CollectionScreen extends ConsumerWidget {
     final collection = ref.watch(selectedCollectionProvider);
     return DecoratedBox(
       decoration: const BoxDecoration(color: AppColors.musicBackground),
-      child: FrostedHeaderLayout(
-        header: Padding(
-          padding: const EdgeInsets.fromLTRB(24, 12, 24, 8),
-          child: Row(
-            children: [
-              GlassIconButton(
-                icon: AppIcons.back,
-                size: 44,
-                iconSize: 22,
-                onTap: () => ref.read(navigationProvider.notifier).back(),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Text(
-                  collection?.isArtist == true ? 'Artist' : 'Album',
-                  style: const TextStyle(
-                    color: AppColors.white,
-                    fontSize: 18,
-                    fontWeight: FontWeight.w700,
-                  ),
+      child: Stack(
+        children: [
+          if (collection != null)
+            CoverGlow(color: coverLight(ref, collection.cover)),
+          Positioned.fill(
+            child: FrostedHeaderLayout(
+              header: Padding(
+                padding: const EdgeInsets.fromLTRB(24, 12, 24, 8),
+                child: PageHeader(
+                  title: collection?.isArtist == true ? 'Artist' : 'Album',
                 ),
               ),
-            ],
+              body: (context, top) => collection == null
+                  ? Padding(
+                      padding: EdgeInsets.only(top: top),
+                      child: _empty(),
+                    )
+                  : _content(ref, collection, top),
+            ),
           ),
-        ),
-        body: (context, top) => collection == null
-            ? Padding(
-                padding: EdgeInsets.only(top: top),
-                child: Padding(
-                  padding: EdgeInsets.only(top: top),
-                  child: _empty(),
-                ),
-              )
-            : _content(context, ref, collection, top),
+        ],
       ),
     );
   }
 
-  Widget _content(
-    BuildContext context,
-    WidgetRef ref,
-    MusicCollection collection,
-    double top,
-  ) {
+  Widget _content(WidgetRef ref, MusicCollection collection, double top) {
     final songs = collection.songs;
+    final album = !collection.isArtist;
     return ListView.separated(
       padding: EdgeInsets.fromLTRB(24, top + 8, 24, 40),
       physics: const BouncingScrollPhysics(),
@@ -75,82 +57,32 @@ class CollectionScreen extends ConsumerWidget {
         final song = songs[i - 1];
         return TrackRow(
           song: song,
+          leading: album ? _TrackNumber(i) : null,
           onTap: () => ref
               .read(playbackProvider.notifier)
               .playSong(song, context: songs),
         );
       },
-      separatorBuilder: (context, i) => SizedBox(height: i == 0 ? 24 : 20),
+      separatorBuilder: (context, i) =>
+          SizedBox(height: i == 0 ? 30 : (album ? 22 : 20)),
     );
   }
 
   Widget _hero(WidgetRef ref, MusicCollection collection) {
     final isArtist = collection.isArtist;
-    final count = collection.songs.length;
-    return Column(
-      children: [
-        const SizedBox(height: 8),
-        SizedBox(
-          width: 200,
-          height: 200,
-          child: SongArtwork(
-            song: collection.cover,
-            size: 200,
-            radius: 26,
-            circle: isArtist,
-          ),
-        ),
-        const SizedBox(height: 20),
-        Text(
-          collection.title,
-          textAlign: TextAlign.center,
-          maxLines: 2,
-          overflow: TextOverflow.ellipsis,
-          style: const TextStyle(
-            color: AppColors.white,
-            fontSize: 24,
-            fontWeight: FontWeight.w800,
-            letterSpacing: -0.3,
-          ),
-        ),
-        const SizedBox(height: 6),
-        Text(
-          isArtist
-              ? collection.subtitle
-              : '${collection.subtitle} · $count ${count == 1 ? 'song' : 'songs'}',
-          textAlign: TextAlign.center,
-          style: TextStyle(color: AppColors.whiteAlpha(0.55), fontSize: 14),
-        ),
-        const SizedBox(height: 20),
-        GestureDetector(
-          behavior: HitTestBehavior.opaque,
-          onTap: () => ref
-              .read(playbackProvider.notifier)
-              .playSong(collection.cover, context: collection.songs),
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 34, vertical: 13),
-            decoration: BoxDecoration(
-              gradient: AppColors.accentGradient,
-              borderRadius: BorderRadius.circular(26),
-            ),
-            child: const Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(AppIcons.playFilled, color: AppColors.white, size: 22),
-                SizedBox(width: 6),
-                Text(
-                  'Play',
-                  style: TextStyle(
-                    color: AppColors.white,
-                    fontSize: 15,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ],
+    return PageHero(
+      cover: SongArtwork(
+        song: collection.cover,
+        size: 220,
+        radius: 28,
+        circle: isArtist,
+      ),
+      circle: isArtist,
+      title: collection.title,
+      // An artist's subtitle is already its song count.
+      subtitle: isArtist ? null : collection.subtitle,
+      meta: songsSummary(collection.songs),
+      actions: playActions(ref, collection.songs),
     );
   }
 
@@ -159,6 +91,31 @@ class CollectionScreen extends ConsumerWidget {
       child: Text(
         'Nothing to show.',
         style: TextStyle(color: AppColors.whiteAlpha(0.5), fontSize: 15),
+      ),
+    );
+  }
+}
+
+/// A track's position on its album, in place of the cover it shares with
+/// every other row.
+class _TrackNumber extends StatelessWidget {
+  const _TrackNumber(this.number);
+
+  final int number;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: 28,
+      child: Text(
+        '$number',
+        textAlign: TextAlign.center,
+        style: TextStyle(
+          color: AppColors.whiteAlpha(0.45),
+          fontSize: 15,
+          fontWeight: FontWeight.w700,
+          fontFeatures: const [FontFeature.tabularFigures()],
+        ),
       ),
     );
   }

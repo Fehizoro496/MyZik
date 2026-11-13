@@ -1,3 +1,4 @@
+import 'dart:math';
 import 'dart:ui';
 
 import 'package:flutter/material.dart';
@@ -6,6 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'icons.dart';
 import 'models.dart';
+import 'providers/collection_provider.dart';
 import 'providers/library_provider.dart';
 import 'providers/liked_provider.dart';
 import 'providers/navigation_provider.dart';
@@ -41,6 +43,418 @@ class GlassIconButton extends StatelessWidget {
         width: size,
         height: size,
         child: Icon(icon, size: iconSize, color: iconColor),
+      ),
+    );
+  }
+}
+
+/// A secondary page's top bar: back on the left, the page's name centred,
+/// an optional action on the right (an empty slot keeps the title centred).
+class PageHeader extends ConsumerWidget {
+  const PageHeader({super.key, required this.title, this.trailing});
+
+  final String title;
+  final Widget? trailing;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    return SizedBox(
+      height: 44,
+      child: Row(
+        children: [
+          GlassIconButton(
+            icon: AppIcons.back,
+            size: 44,
+            iconSize: 22,
+            onTap: () => ref.read(navigationProvider.notifier).back(),
+          ),
+          Expanded(
+            child: Text(
+              title,
+              textAlign: TextAlign.center,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                color: AppColors.white,
+                fontSize: 17,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+          trailing ?? const SizedBox(width: 44),
+        ],
+      ),
+    );
+  }
+}
+
+/// A page action as a pill: [primary] is the white one that starts playback,
+/// the others are glass. A null [onTap] dims and disables it.
+class ActionPill extends StatelessWidget {
+  const ActionPill({
+    super.key,
+    required this.icon,
+    required this.label,
+    required this.onTap,
+    this.primary = false,
+    this.iconColor,
+  });
+
+  final IconData icon;
+  final String label;
+  final VoidCallback? onTap;
+  final bool primary;
+  final Color? iconColor;
+
+  @override
+  Widget build(BuildContext context) {
+    final foreground = primary ? AppColors.ink : AppColors.white;
+    return Semantics(
+      button: true,
+      enabled: onTap != null,
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: onTap,
+        child: AnimatedOpacity(
+          opacity: onTap == null ? 0.4 : 1,
+          duration: const Duration(milliseconds: 150),
+          child: Container(
+            height: 48,
+            padding: const EdgeInsets.symmetric(horizontal: 22),
+            decoration: BoxDecoration(
+              color: primary ? AppColors.white : AppColors.whiteAlpha(0.08),
+              borderRadius: BorderRadius.circular(24),
+              border: primary
+                  ? null
+                  : Border.all(color: AppColors.whiteAlpha(0.12)),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(icon, color: iconColor ?? foreground, size: 20),
+                const SizedBox(width: 8),
+                Text(
+                  label,
+                  style: TextStyle(
+                    color: foreground,
+                    fontSize: 15,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// The light of a page's cover: a wash of [color] glowing down from the top
+/// of the page, as Now Playing is lit by the track playing. Place it first
+/// in the page's [Stack]; it ignores touches.
+class CoverGlow extends StatelessWidget {
+  const CoverGlow({super.key, required this.color, this.height = 520});
+
+  final Color color;
+  final double height;
+
+  @override
+  Widget build(BuildContext context) {
+    return Positioned(
+      top: 0,
+      left: 0,
+      right: 0,
+      height: height,
+      child: IgnorePointer(
+        child: TweenAnimationBuilder<Color?>(
+          // The cover's colour is extracted asynchronously: ease into it
+          // rather than switching abruptly.
+          tween: ColorTween(end: color),
+          duration: const Duration(milliseconds: 500),
+          builder: (context, color, _) => DecoratedBox(
+            decoration: BoxDecoration(
+              gradient: RadialGradient(
+                center: const Alignment(0, -1.1),
+                radius: 1.15,
+                colors: [
+                  color!.withValues(alpha: 0.55),
+                  color.withValues(alpha: 0.18),
+                  color.withValues(alpha: 0),
+                ],
+                stops: const [0, 0.5, 1],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// The colour lighting a page for [song]'s cover: its dominant colour, or
+/// its placeholder gradient's while that is extracted or when it has none.
+Color coverLight(WidgetRef ref, Song song) =>
+    ref.watch(coverAccentProvider(song.coverKey)).asData?.value ??
+    song.artGradient.first;
+
+/// Opens the detail page of an album or artist.
+void openCollection(WidgetRef ref, MusicCollection collection) {
+  ref.read(selectedCollectionProvider.notifier).show(collection);
+  ref.read(navigationProvider.notifier).goTo(AppScreen.collection);
+}
+
+/// A titled, horizontally scrolling shelf of albums (square covers) or
+/// artists (round discs, like the record turning in Now Playing). Tapping
+/// one opens its page.
+class CollectionShelf extends ConsumerWidget {
+  const CollectionShelf({
+    super.key,
+    required this.title,
+    required this.collections,
+    this.padding = 22,
+  });
+
+  final String title;
+  final List<MusicCollection> collections;
+
+  /// The page's side margin: the shelf bleeds to the screen edges but its
+  /// first item and title line up with the page content.
+  final double padding;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    if (collections.isEmpty) return const SizedBox.shrink();
+    final artists = collections.first.isArtist;
+    final size = artists ? 96.0 : 132.0;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: EdgeInsets.symmetric(horizontal: padding),
+          child: SectionTitle(title),
+        ),
+        const SizedBox(height: 14),
+        SizedBox(
+          height: size + (artists ? 34 : 52),
+          child: ListView.separated(
+            scrollDirection: Axis.horizontal,
+            physics: const BouncingScrollPhysics(),
+            padding: EdgeInsets.symmetric(horizontal: padding),
+            itemCount: collections.length,
+            separatorBuilder: (_, _) => SizedBox(width: artists ? 18 : 16),
+            itemBuilder: (context, i) {
+              final collection = collections[i];
+              return GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: () => openCollection(ref, collection),
+                child: SizedBox(
+                  width: size,
+                  child: Column(
+                    crossAxisAlignment: artists
+                        ? CrossAxisAlignment.center
+                        : CrossAxisAlignment.start,
+                    children: [
+                      SongArtwork(
+                        song: collection.cover,
+                        size: size,
+                        radius: 18,
+                        circle: artists,
+                      ),
+                      const SizedBox(height: 10),
+                      Text(
+                        collection.title,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        textAlign: artists ? TextAlign.center : TextAlign.start,
+                        style: const TextStyle(
+                          color: AppColors.white,
+                          fontSize: 14,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      if (!artists) ...[
+                        const SizedBox(height: 2),
+                        Text(
+                          collection.subtitle,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            color: AppColors.whiteAlpha(0.5),
+                            fontSize: 12.5,
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+              );
+            },
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+/// The top of a detail page (album, artist, playlist, liked songs, a song):
+/// its cover lifted off the page, its name, a line or two about it and its
+/// actions, the first of which plays it.
+class PageHero extends StatelessWidget {
+  const PageHero({
+    super.key,
+    required this.cover,
+    required this.title,
+    this.subtitle,
+    this.meta,
+    this.actions = const [],
+    this.coverSize = 220,
+    this.circle = false,
+    this.coverRadius = 28,
+  });
+
+  /// The cover, drawn at [coverSize]; [circle] and [coverRadius] shape its
+  /// shadow to match.
+  final Widget cover;
+  final String title;
+
+  /// Who made it (an album's artist, a song's artist).
+  final String? subtitle;
+
+  /// Counts and length ("5 songs, 17 min").
+  final String? meta;
+  final List<Widget> actions;
+  final double coverSize;
+  final bool circle;
+  final double coverRadius;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        const SizedBox(height: 8),
+        Center(
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              shape: circle ? BoxShape.circle : BoxShape.rectangle,
+              borderRadius: circle ? null : BorderRadius.circular(coverRadius),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.45),
+                  blurRadius: 48,
+                  offset: const Offset(0, 22),
+                ),
+              ],
+            ),
+            child: SizedBox.square(dimension: coverSize, child: cover),
+          ),
+        ),
+        const SizedBox(height: 24),
+        Text(
+          title,
+          textAlign: TextAlign.center,
+          maxLines: 2,
+          overflow: TextOverflow.ellipsis,
+          style: const TextStyle(
+            color: AppColors.white,
+            fontSize: 26,
+            fontWeight: FontWeight.w800,
+            letterSpacing: -0.4,
+            height: 1.15,
+          ),
+        ),
+        if (subtitle != null) ...[
+          const SizedBox(height: 6),
+          Text(
+            subtitle!,
+            textAlign: TextAlign.center,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(color: AppColors.whiteAlpha(0.75), fontSize: 15),
+          ),
+        ],
+        if (meta != null) ...[
+          const SizedBox(height: 4),
+          Text(
+            meta!,
+            textAlign: TextAlign.center,
+            style: TextStyle(color: AppColors.whiteAlpha(0.5), fontSize: 13),
+          ),
+        ],
+        if (actions.isNotEmpty) ...[
+          const SizedBox(height: 22),
+          Wrap(
+            alignment: WrapAlignment.center,
+            spacing: 10,
+            runSpacing: 10,
+            children: actions,
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+/// "5 songs, 17 min": how many [songs] and how long they play.
+String songsSummary(List<Song> songs, {int? count}) {
+  final n = count ?? songs.length;
+  final label = '$n ${n == 1 ? 'song' : 'songs'}';
+  if (songs.isEmpty) return label;
+  final total = songs.fold(Duration.zero, (sum, s) => sum + s.duration);
+  if (total.inMinutes == 0) return label;
+  final hours = total.inHours;
+  final minutes = total.inMinutes % 60;
+  final length = hours == 0
+      ? '$minutes min'
+      : minutes == 0
+      ? '$hours h'
+      : '$hours h $minutes min';
+  return '$label, $length';
+}
+
+/// Plays [songs] in a random order from a random one of them, turning
+/// shuffle on.
+void playShuffled(WidgetRef ref, List<Song> songs) {
+  if (songs.isEmpty) return;
+  final playback = ref.read(playbackProvider.notifier);
+  if (!ref.read(playbackProvider).shuffle) playback.toggleShuffle();
+  playback.playSong(songs[Random().nextInt(songs.length)], context: songs);
+}
+
+/// The Play and Shuffle pair opening most detail pages.
+List<Widget> playActions(WidgetRef ref, List<Song> songs) => [
+  ActionPill(
+    icon: AppIcons.playFilled,
+    label: 'Play',
+    primary: true,
+    onTap: songs.isEmpty
+        ? null
+        : () => ref
+              .read(playbackProvider.notifier)
+              .playSong(songs.first, context: songs),
+  ),
+  ActionPill(
+    icon: AppIcons.shuffle,
+    label: 'Shuffle',
+    onTap: songs.isEmpty ? null : () => playShuffled(ref, songs),
+  ),
+];
+
+/// A section's title on a page ("Albums", "Songs").
+class SectionTitle extends StatelessWidget {
+  const SectionTitle(this.text, {super.key});
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    return Text(
+      text,
+      style: const TextStyle(
+        color: AppColors.white,
+        fontSize: 20,
+        fontWeight: FontWeight.w700,
+        letterSpacing: -0.2,
       ),
     );
   }
@@ -230,14 +644,16 @@ class SegmentedTabs extends StatelessWidget {
                           child: Center(
                             child: AnimatedDefaultTextStyle(
                               duration: const Duration(milliseconds: 200),
-                              style: TextStyle(
-                                color: i == selected
-                                    ? AppColors.white
-                                    : AppColors.whiteAlpha(0.6),
-                                fontSize: 13,
-                                fontWeight: i == selected
-                                    ? FontWeight.w700
-                                    : FontWeight.w600,
+                              style: DefaultTextStyle.of(context).style.merge(
+                                TextStyle(
+                                  color: i == selected
+                                      ? AppColors.white
+                                      : AppColors.whiteAlpha(0.6),
+                                  fontSize: 13,
+                                  fontWeight: i == selected
+                                      ? FontWeight.w700
+                                      : FontWeight.w600,
+                                ),
                               ),
                               child: Text(
                                 tabs[i],
@@ -270,6 +686,7 @@ class TrackRow extends ConsumerWidget {
     this.onTap,
     this.onLongPress,
     this.trailing,
+    this.leading,
   });
 
   final Song song;
@@ -277,15 +694,23 @@ class TrackRow extends ConsumerWidget {
   final VoidCallback? onLongPress;
   final Widget? trailing;
 
+  /// Replaces the cover, e.g. by the track number on an album's page, where
+  /// every row would repeat the same cover.
+  final Widget? leading;
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    // The track playing stands out in any list it shows up in.
+    final playing = ref.watch(
+      playbackProvider.select((p) => p.current?.id == song.id),
+    );
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
       onTap: onTap,
       onLongPress: onLongPress ?? () => showAddToPlaylistSheet(context, song),
       child: Row(
         children: [
-          SongArtwork(song: song),
+          leading ?? SongArtwork(song: song),
           const SizedBox(width: 14),
           Expanded(
             child: Column(
@@ -296,8 +721,8 @@ class TrackRow extends ConsumerWidget {
                   song.title,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    color: AppColors.white,
+                  style: TextStyle(
+                    color: playing ? AppColors.playing : AppColors.white,
                     fontSize: 16,
                     fontWeight: FontWeight.w700,
                   ),

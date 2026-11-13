@@ -3,7 +3,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../icons.dart';
 import '../models.dart';
-import '../providers/collection_provider.dart';
 import '../providers/library_provider.dart';
 import '../providers/my_music_provider.dart';
 import '../providers/navigation_provider.dart';
@@ -46,31 +45,15 @@ class _MyMusicScreenState extends ConsumerState<MyMusicScreen> {
               child: FrostedHeaderLayout(
                 header: Padding(
                   padding: const EdgeInsets.fromLTRB(24, 12, 24, 18),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      GlassIconButton(
-                        icon: AppIcons.back,
-                        size: 44,
-                        iconSize: 22,
-                        onTap: () =>
-                            ref.read(navigationProvider.notifier).back(),
-                      ),
-                      const Text(
-                        'My Music',
-                        style: TextStyle(
-                          color: AppColors.white,
-                          fontSize: 18,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                      GlassIconButton(
-                        icon: AppIcons.search,
-                        onTap: () => ref
-                            .read(navigationProvider.notifier)
-                            .goTo(AppScreen.search),
-                      ),
-                    ],
+                  child: PageHeader(
+                    title: 'My Music',
+                    trailing: GlassIconButton(
+                      icon: AppIcons.search,
+                      size: 44,
+                      onTap: () => ref
+                          .read(navigationProvider.notifier)
+                          .goTo(AppScreen.search),
+                    ),
                   ),
                 ),
                 body: (context, top) => !ready
@@ -177,10 +160,8 @@ class _MyMusicScreenState extends ConsumerState<MyMusicScreen> {
     return out.toString();
   }
 
-  void _openCollection(MusicCollection collection) {
-    ref.read(selectedCollectionProvider.notifier).show(collection);
-    ref.read(navigationProvider.notifier).goTo(AppScreen.collection);
-  }
+  void _openCollection(MusicCollection collection) =>
+      openCollection(ref, collection);
 
   Widget _songsList(List<Song> songs, double top) {
     // Fixed extent (56px row + 20px gap, split above/below the centred row) so

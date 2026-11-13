@@ -4,7 +4,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 
 import '../icons.dart';
-import '../providers/navigation_provider.dart';
 import '../providers/sync_providers.dart';
 import '../sync/sync_client.dart';
 import '../sync/sync_files.dart';
@@ -27,27 +26,8 @@ class SyncScreen extends ConsumerWidget {
         child: ListView(
           padding: const EdgeInsets.fromLTRB(24, 12, 24, 40),
           children: [
-            Row(
-              children: [
-                GlassIconButton(
-                  icon: AppIcons.back,
-                  size: 44,
-                  iconSize: 22,
-                  onTap: () => ref.read(navigationProvider.notifier).back(),
-                ),
-                const SizedBox(width: 12),
-                const Text(
-                  'Sync',
-                  style: TextStyle(
-                    color: AppColors.white,
-                    fontSize: 22,
-                    fontWeight: FontWeight.w800,
-                    letterSpacing: -0.3,
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 20),
+            const PageHeader(title: 'Sync'),
+            const SizedBox(height: 24),
             if (sync.error != null) ...[
               _Notice(sync.error!, error: true),
               const SizedBox(height: 16),

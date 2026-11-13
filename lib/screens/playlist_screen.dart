@@ -11,8 +11,8 @@ import '../providers/song_detail_provider.dart';
 import '../theme.dart';
 import '../widgets.dart';
 
-/// Detail view for a user playlist: a cover hero with Play / Add-songs actions
-/// over its track list. Each track's ⋮ button opens a popover menu (add to
+/// Detail view for a user playlist, lit by its cover: a cover hero with Play,
+/// Shuffle and Add songs over its track list. Each track's ⋮ button opens a popover menu (add to
 /// another playlist, remove); tracks can also be swiped away, and the handle
 /// drags them to reorder. The header's ⋯ button opens a popover to rename or
 /// delete the playlist. The playlist is read from [selectedPlaylistIdProvider].
@@ -28,49 +28,41 @@ class PlaylistScreen extends ConsumerWidget {
         : ref.watch(playlistSongsProvider(playlist.id));
     return DecoratedBox(
       decoration: const BoxDecoration(color: AppColors.musicBackground),
-      child: FrostedHeaderLayout(
-        header: Padding(
-          padding: const EdgeInsets.fromLTRB(24, 12, 24, 8),
-          child: Row(
-            children: [
-              GlassIconButton(
-                icon: AppIcons.back,
-                size: 44,
-                iconSize: 22,
-                onTap: () => ref.read(navigationProvider.notifier).back(),
-              ),
-              const SizedBox(width: 12),
-              const Expanded(
-                child: Text(
-                  'Playlist',
-                  style: TextStyle(
-                    color: AppColors.white,
-                    fontSize: 18,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-              ),
-              if (playlist != null)
-                Builder(
-                  builder: (buttonContext) => GlassIconButton(
-                    icon: AppIcons.moreHoriz,
-                    size: 44,
-                    iconSize: 22,
-                    onTap: () => _showMenu(buttonContext, ref, playlist),
-                  ),
-                ),
-            ],
+      child: Stack(
+        children: [
+          CoverGlow(
+            color: songs.isEmpty
+                ? AppColors.accentB
+                : coverLight(ref, songs.first),
           ),
-        ),
-        body: (context, top) => playlist == null
-            ? Padding(
-                padding: EdgeInsets.only(top: top),
-                child: Padding(
-                  padding: EdgeInsets.only(top: top),
-                  child: _empty(),
+          Positioned.fill(
+            child: FrostedHeaderLayout(
+              header: Padding(
+                padding: const EdgeInsets.fromLTRB(24, 12, 24, 8),
+                child: PageHeader(
+                  title: 'Playlist',
+                  trailing: playlist == null
+                      ? null
+                      : Builder(
+                          builder: (buttonContext) => GlassIconButton(
+                            icon: AppIcons.moreHoriz,
+                            size: 44,
+                            iconSize: 22,
+                            onTap: () =>
+                                _showMenu(buttonContext, ref, playlist),
+                          ),
+                        ),
                 ),
-              )
-            : _content(context, ref, playlist, songs, top),
+              ),
+              body: (context, top) => playlist == null
+                  ? Padding(
+                      padding: EdgeInsets.only(top: top),
+                      child: _empty(),
+                    )
+                  : _content(context, ref, playlist, songs, top),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -88,7 +80,7 @@ class PlaylistScreen extends ConsumerWidget {
         physics: const BouncingScrollPhysics(),
         children: [
           _hero(context, ref, playlist, songs),
-          const SizedBox(height: 24),
+          const SizedBox(height: 30),
           Padding(
             padding: const EdgeInsets.only(top: 30),
             child: Text(
@@ -114,7 +106,7 @@ class PlaylistScreen extends ConsumerWidget {
       header: Column(
         children: [
           _hero(context, ref, playlist, songs),
-          const SizedBox(height: 24),
+          const SizedBox(height: 30),
         ],
       ),
       itemCount: songs.length,
@@ -198,98 +190,18 @@ class PlaylistScreen extends ConsumerWidget {
     Playlist playlist,
     List<Song> songs,
   ) {
-    final count = playlist.songKeys.length;
-    return Column(
-      children: [
-        const SizedBox(height: 8),
-        PlaylistCover(songs: songs, size: 200, radius: 28),
-        const SizedBox(height: 20),
-        Text(
-          playlist.name,
-          textAlign: TextAlign.center,
-          maxLines: 2,
-          overflow: TextOverflow.ellipsis,
-          style: const TextStyle(
-            color: AppColors.white,
-            fontSize: 24,
-            fontWeight: FontWeight.w800,
-            letterSpacing: -0.3,
-          ),
-        ),
-        const SizedBox(height: 6),
-        Text(
-          '$count ${count == 1 ? 'song' : 'songs'}',
-          style: TextStyle(color: AppColors.whiteAlpha(0.55), fontSize: 14),
-        ),
-        const SizedBox(height: 20),
-        FittedBox(
-          fit: BoxFit.scaleDown,
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              _actionPill(
-                icon: AppIcons.playFilled,
-                label: 'Play',
-                filled: true,
-                onTap: songs.isEmpty
-                    ? null
-                    : () => ref
-                          .read(playbackProvider.notifier)
-                          .playSong(songs.first, context: songs),
-              ),
-              const SizedBox(width: 12),
-              _actionPill(
-                icon: AppIcons.add,
-                label: 'Add songs',
-                filled: false,
-                onTap: () => _showAddSongs(context, playlist.id),
-              ),
-            ],
-          ),
+    return PageHero(
+      cover: PlaylistCover(songs: songs, size: 220, radius: 28),
+      title: playlist.name,
+      meta: songsSummary(songs, count: playlist.songKeys.length),
+      actions: [
+        ...playActions(ref, songs),
+        ActionPill(
+          icon: AppIcons.add,
+          label: 'Add songs',
+          onTap: () => _showAddSongs(context, playlist.id),
         ),
       ],
-    );
-  }
-
-  Widget _actionPill({
-    required IconData icon,
-    required String label,
-    required bool filled,
-    required VoidCallback? onTap,
-  }) {
-    final enabled = onTap != null;
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onTap: onTap,
-      child: Opacity(
-        opacity: enabled ? 1 : 0.4,
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 26, vertical: 12),
-          decoration: BoxDecoration(
-            gradient: filled ? AppColors.accentGradient : null,
-            color: filled ? null : AppColors.whiteAlpha(0.06),
-            borderRadius: BorderRadius.circular(24),
-            border: filled
-                ? null
-                : Border.all(color: AppColors.whiteAlpha(0.1)),
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(icon, color: AppColors.white, size: 20),
-              const SizedBox(width: 6),
-              Text(
-                label,
-                style: const TextStyle(
-                  color: AppColors.white,
-                  fontSize: 14,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
     );
   }
 

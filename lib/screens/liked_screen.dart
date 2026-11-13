@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../icons.dart';
-import '../models.dart';
 import '../providers/library_provider.dart';
 import '../providers/liked_provider.dart';
 import '../providers/navigation_provider.dart';
@@ -10,7 +9,8 @@ import '../providers/playback_provider.dart';
 import '../theme.dart';
 import '../widgets.dart';
 
-/// The "Liked" library: liked-songs hero card + the list of liked tracks.
+/// The "Liked" library, lit in the heart's pink: a hero like a playlist's,
+/// with Play / Shuffle, over the list of liked tracks.
 class LikedScreen extends ConsumerStatefulWidget {
   const LikedScreen({super.key});
 
@@ -33,44 +33,34 @@ class _LikedScreenState extends ConsumerState<LikedScreen> {
       child: BackdropGroup(
         child: Stack(
           children: [
+            const CoverGlow(color: AppColors.liked),
             Positioned.fill(
               child: FrostedHeaderLayout(
                 header: Padding(
-                  padding: const EdgeInsets.fromLTRB(24, 12, 24, 18),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      GlassIconButton(
-                        icon: AppIcons.back,
-                        size: 44,
-                        iconSize: 22,
-                        onTap: () =>
-                            ref.read(navigationProvider.notifier).back(),
-                      ),
-                      const Text(
-                        'Liked',
-                        style: TextStyle(
-                          color: AppColors.white,
-                          fontSize: 18,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                      GlassIconButton(
-                        icon: AppIcons.search,
-                        size: 44,
-                        onTap: () => ref
-                            .read(navigationProvider.notifier)
-                            .goTo(AppScreen.search),
-                      ),
-                    ],
+                  padding: const EdgeInsets.fromLTRB(24, 12, 24, 8),
+                  child: PageHeader(
+                    title: 'Liked',
+                    trailing: GlassIconButton(
+                      icon: AppIcons.search,
+                      size: 44,
+                      onTap: () => ref
+                          .read(navigationProvider.notifier)
+                          .goTo(AppScreen.search),
+                    ),
                   ),
                 ),
                 body: (context, top) => ListView(
-                  padding: EdgeInsets.fromLTRB(24, top, 24, 170),
+                  padding: EdgeInsets.fromLTRB(24, top + 8, 24, 170),
                   physics: const BouncingScrollPhysics(),
                   children: [
-                    _likedCard(songs),
-                    const SizedBox(height: 26),
+                    PageHero(
+                      cover: const _HeartCover(),
+                      coverSize: 180,
+                      title: 'Liked Songs',
+                      meta: songsSummary(songs),
+                      actions: playActions(ref, songs),
+                    ),
+                    const SizedBox(height: 30),
                     if (songs.isEmpty)
                       _emptyState()
                     else
@@ -109,94 +99,11 @@ class _LikedScreenState extends ConsumerState<LikedScreen> {
     );
   }
 
-  Widget _likedCard(List<Song> songs) {
-    return GestureDetector(
-      onTap: () => songs.isEmpty
-          ? null
-          : ref
-                .read(playbackProvider.notifier)
-                .playSong(songs.first, context: songs),
-      child: Container(
-        padding: const EdgeInsets.all(20),
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(24),
-          gradient: const LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [Color(0xFFFF6F91), Color(0xFF8A4FFF)],
-          ),
-          boxShadow: [
-            BoxShadow(
-              color: const Color(0xFF8A4FFF).withValues(alpha: 0.3),
-              blurRadius: 36,
-              offset: const Offset(0, 16),
-            ),
-          ],
-        ),
-        child: Row(
-          children: [
-            Container(
-              width: 56,
-              height: 56,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: AppColors.whiteAlpha(0.18),
-              ),
-              child: const Icon(
-                AppIcons.heartFilled,
-                size: 26,
-                color: AppColors.white,
-              ),
-            ),
-            const SizedBox(width: 16),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const Text(
-                    'Liked Songs',
-                    style: TextStyle(
-                      color: AppColors.white,
-                      fontSize: 18,
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    '${songs.length} songs · Auto playlist',
-                    style: TextStyle(
-                      color: AppColors.whiteAlpha(0.85),
-                      fontSize: 13,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            Container(
-              width: 44,
-              height: 44,
-              decoration: const BoxDecoration(
-                shape: BoxShape.circle,
-                color: Color(0xFF0B1220),
-              ),
-              child: const Icon(
-                AppIcons.playFilled,
-                size: 20,
-                color: AppColors.white,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
   /// Shown when nothing has been liked yet — the list would otherwise be an
   /// empty gap under the hero card.
   Widget _emptyState() {
     return Padding(
-      padding: const EdgeInsets.only(top: 60),
+      padding: const EdgeInsets.only(top: 12),
       child: Column(
         children: [
           Icon(AppIcons.heart, size: 48, color: AppColors.whiteAlpha(0.3)),
@@ -212,6 +119,26 @@ class _LikedScreenState extends ConsumerState<LikedScreen> {
           ),
         ],
       ),
+    );
+  }
+}
+
+/// Liked Songs' cover: the heart, on the pink-to-violet of the likes.
+class _HeartCover extends StatelessWidget {
+  const _HeartCover();
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(28),
+        gradient: const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [AppColors.liked, Color(0xFF8A4FFF)],
+        ),
+      ),
+      child: const Icon(AppIcons.heartFilled, size: 64, color: AppColors.white),
     );
   }
 }
