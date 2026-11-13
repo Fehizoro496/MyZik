@@ -168,6 +168,10 @@ class _FakePlayer extends AudioPlayerPlatform {
   @override
   Future<SeekResponse> seek(SeekRequest request) async {
     if (request.index != null) index = request.index!;
+    // Seeking back from the end makes the track playable again.
+    if (processing == ProcessingStateMessage.completed) {
+      processing = ProcessingStateMessage.ready;
+    }
     _emit();
     return SeekResponse();
   }
@@ -376,6 +380,50 @@ void main() {
     await _settle();
     expect(player.uris, songs.map((s) => s.uri).toList());
     expect(player.loads, 1);
+  });
+
+  test('a track started over another one shows as playing', () async {
+    final (container, notifier, _, songs) = await _bootstrap();
+    await notifier.playSong(songs[0]);
+    await _settle();
+    expect(container.read(playbackProvider).playing, isTrue);
+
+    // The player is already playing: its play() emits nothing new.
+    await notifier.playSong(songs[2]);
+    await _settle();
+    expect(titleOf(container), 'C');
+    expect(container.read(playbackProvider).playing, isTrue);
+  });
+
+  test('the end of the queue shows play, which starts it over', () async {
+    final (container, notifier, platform, songs) = await _bootstrap();
+    notifier
+      ..cycleRepeatMode() // all -> one
+      ..cycleRepeatMode(); // one -> off
+    await notifier.playSong(songs[3]);
+    await _settle();
+
+    platform.player!.finishTrack(); // the last track ends: nothing plays
+    await _settle();
+    expect(container.read(playbackProvider).playing, isFalse);
+
+    await notifier.togglePlay();
+    await _settle();
+    expect(container.read(playbackProvider).playing, isTrue);
+    expect(platform.player!.currentUri, songs[0].uri);
+    expect(titleOf(container), 'A');
+  });
+
+  test('play/pause follows the player', () async {
+    final (container, notifier, _, songs) = await _bootstrap();
+    await notifier.playSong(songs[0]);
+    await _settle();
+    await notifier.togglePlay();
+    await _settle();
+    expect(container.read(playbackProvider).playing, isFalse);
+    await notifier.togglePlay();
+    await _settle();
+    expect(container.read(playbackProvider).playing, isTrue);
   });
 
   group('movesToMatch', () {

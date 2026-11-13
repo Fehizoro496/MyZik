@@ -139,8 +139,12 @@ class PlaybackNotifier extends Notifier<PlaybackState> {
       _player.dispose();
     });
 
-    _player.playingStream.listen((playing) {
-      state = state.copyWith(playing: playing);
+    // Whether sound is actually coming out: just_audio keeps `playing` on at
+    // the end of the queue (state completed), when nothing plays any more.
+    _player.playerStateStream.listen((_) {
+      if (state.playing != _isPlaying) {
+        state = state.copyWith(playing: _isPlaying);
+      }
     });
     _player.positionStream.listen((pos) {
       state = state.copyWith(position: pos);
@@ -233,6 +237,9 @@ class PlaybackNotifier extends Notifier<PlaybackState> {
       currentIndex: index,
       queue: queue,
       duration: song.duration,
+      // Carried over: when a track was already playing, the player's play()
+      // is a no-op that emits nothing, so nothing would set it back.
+      playing: _isPlaying,
       shuffle: state.shuffle,
       repeatMode: state.repeatMode,
     );
@@ -463,19 +470,32 @@ class PlaybackNotifier extends Notifier<PlaybackState> {
     });
   }
 
+  /// Whether the player is making sound, as the play/pause buttons show it.
+  bool get _isPlaying =>
+      _player.playing && _player.processingState != ProcessingState.completed;
+
   Future<void> togglePlay() async {
     if (state.current == null) return;
-    if (_player.playing) {
+    // Decided on what the button shows, so a tap always does what it says.
+    if (_isPlaying) {
       await pause();
     } else {
       await resume();
     }
   }
 
-  /// Resume the current track. Also the OS session's "play" action.
+  /// Resume the current track. Also the OS session's "play" action. At the
+  /// end of the queue, starts it over.
   Future<void> resume() async {
     if (state.current == null) return;
-    await _player.play();
+    if (_player.processingState == ProcessingState.completed) {
+      await _player.seek(
+        Duration.zero,
+        index: _player.effectiveIndices?.firstOrNull ?? 0,
+      );
+    }
+    // play()'s future completes when playback stops, not when it starts.
+    if (!_player.playing) unawaited(_player.play());
   }
 
   /// Pause the current track. Also the OS session's "pause" action.
