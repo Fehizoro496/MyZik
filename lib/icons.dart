@@ -72,6 +72,10 @@ class AppIcons {
   static const IconData checkCircle = CupertinoIcons.checkmark_circle_fill;
   static const IconData playlistAdd = CupertinoIcons.text_badge_plus;
   static const IconData playlistRemove = CupertinoIcons.text_badge_minus;
+
+  /// Track menu: queue a song after the current one, or at the end.
+  static const IconData playNext = CupertinoIcons.text_insert;
+  static const IconData addToQueue = CupertinoIcons.text_append;
   static const IconData info = CupertinoIcons.info_circle;
   static const IconData edit = CupertinoIcons.pencil;
   static const IconData delete = CupertinoIcons.trash;

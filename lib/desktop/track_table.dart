@@ -99,6 +99,7 @@ class _TrackTableState extends ConsumerState<TrackTable> {
           value: 'play',
           child: PopoverMenuRow(icon: AppIcons.playFilled, label: 'Play'),
         ),
+        ...queueMenuItems,
         const PopupMenuItem(
           value: 'playlist',
           child: PopoverMenuRow(
@@ -144,6 +145,7 @@ class _TrackTableState extends ConsumerState<TrackTable> {
       ],
     );
     if (!mounted) return;
+    if (handleQueueMenuChoice(context, ref, song, selected)) return;
     final library = ref.read(libraryProvider).songs;
     switch (selected) {
       case 'play':

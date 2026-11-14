@@ -360,6 +360,53 @@ void main() {
     expect(titleOf(container), 'D');
   });
 
+  test('play next queues a song right after the current one', () async {
+    final (container, notifier, platform, songs) = await _bootstrap();
+    await notifier.playSong(songs[2], context: songs.sublist(1, 3)); // B, C
+    await _settle();
+    final player = platform.player!;
+
+    await notifier.playNext(songs[0]);
+    await _settle();
+    final uris = ['B', 'C', 'A'].map((t) => 'file:///$t.mp3');
+    expect(player.uris, uris);
+    expect(player.currentUri, songs[2].uri); // C keeps playing
+    final state = container.read(playbackProvider);
+    expect(state.queue.map((s) => s.title), ['B', 'C', 'A']);
+    expect(state.currentIndex, 1);
+
+    player.finishTrack();
+    await _settle();
+    expect(titleOf(container), 'A');
+    expect(player.loads, 1);
+  });
+
+  test('a queued song is moved rather than repeated', () async {
+    final (container, notifier, platform, songs) = await _bootstrap();
+    await notifier.playSong(songs[0]);
+    await _settle();
+    final player = platform.player!;
+
+    await notifier.addToQueue(songs[1]); // B to the end
+    await _settle();
+    expect(player.uris, ['A', 'C', 'D', 'B'].map((t) => 'file:///$t.mp3'));
+
+    await notifier.playNext(songs[3]); // D back after A
+    await _settle();
+    expect(player.uris, ['A', 'D', 'C', 'B'].map((t) => 'file:///$t.mp3'));
+    expect(container.read(playbackProvider).queue.map((s) => s.title), [
+      'A',
+      'D',
+      'C',
+      'B',
+    ]);
+    expect(player.currentUri, songs[0].uri);
+
+    await notifier.addToQueue(songs[0]); // the current track stays put
+    await _settle();
+    expect(player.uris.first, songs[0].uri);
+  });
+
   test('shuffle re-deals the playlist around the current track', () async {
     final (container, notifier, platform, songs) = await _bootstrap();
     await notifier.playSong(songs[2]);

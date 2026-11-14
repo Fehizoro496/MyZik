@@ -363,6 +363,49 @@ class PlaybackNotifier extends Notifier<PlaybackState> {
     }
   }
 
+  /// Queue [song] right after the current track ("Play next").
+  Future<void> playNext(Song song) => _enqueue(song, next: true);
+
+  /// Queue [song] at the end of the queue ("Add to queue").
+  Future<void> addToQueue(Song song) => _enqueue(song, next: false);
+
+  /// Put [song] after the current track ([next]) or at the end of the queue,
+  /// without interrupting playback. A song already queued is moved rather
+  /// than repeated: the queue finds its tracks by identity. With nothing
+  /// loaded yet, [song] simply starts playing.
+  Future<void> _enqueue(Song song, {required bool next}) async {
+    final current = state.current;
+    if (current == null) return playSong(song, context: [song]);
+    bool same(Song s) => s.id == song.id && s.uri == song.uri;
+    if (same(current)) return;
+
+    final queue = [
+      for (final s in state.queue)
+        if (!same(s)) s,
+    ];
+    final at = next ? queue.indexOf(current) + 1 : queue.length;
+    queue.insert(at, song);
+    state = state.copyWith(queue: queue, currentIndex: queue.indexOf(current));
+    if (song.uri == null) return;
+
+    _mutate((playlist) async {
+      final order = List<Song>.of(_playOrder);
+      final old = order.indexWhere(same);
+      if (old != -1) {
+        await playlist.removeAt(old);
+        order.removeAt(old);
+        _playOrder = List<Song>.of(order);
+      }
+      // Read at mutation time: the player may have moved on meanwhile.
+      final playing = state.current;
+      final child = playing == null ? -1 : order.indexOf(playing);
+      final to = next && child != -1 ? child + 1 : order.length;
+      await playlist.insert(to, AudioSource.uri(Uri.parse(song.uri!)));
+      order.insert(to, song);
+      _playOrder = order;
+    });
+  }
+
   void _setCurrent(Song song, int index) {
     state = state.copyWith(
       current: song,

@@ -749,6 +749,47 @@ class TrackRow extends ConsumerWidget {
   }
 }
 
+/// The "Play next" / "Add to queue" entries of the track menus, handled by
+/// [handleQueueMenuChoice].
+const queueMenuItems = <PopupMenuEntry<String>>[
+  PopupMenuItem(
+    value: 'playNext',
+    child: PopoverMenuRow(icon: AppIcons.playNext, label: 'Play next'),
+  ),
+  PopupMenuItem(
+    value: 'addToQueue',
+    child: PopoverMenuRow(icon: AppIcons.addToQueue, label: 'Add to queue'),
+  ),
+];
+
+/// Queues [song] when [choice] is one of [queueMenuItems], confirming it with
+/// a snack bar. Returns whether [choice] was handled.
+bool handleQueueMenuChoice(
+  BuildContext context,
+  WidgetRef ref,
+  Song song,
+  String? choice,
+) {
+  final playback = ref.read(playbackProvider.notifier);
+  final String message;
+  switch (choice) {
+    case 'playNext':
+      playback.playNext(song);
+      message = '"${song.title}" will play next';
+    case 'addToQueue':
+      playback.addToQueue(song);
+      message = '"${song.title}" added to the queue';
+    default:
+      return false;
+  }
+  if (context.mounted) {
+    ScaffoldMessenger.maybeOf(context)
+      ?..hideCurrentSnackBar()
+      ..showSnackBar(SnackBar(content: Text(message)));
+  }
+  return true;
+}
+
 /// [TrackRow]'s default trailing button: a ⋮ that opens the track's popover menu
 /// (song details, add to playlist, like/unlike, delete).
 class _TrackMenuButton extends ConsumerWidget {
@@ -775,6 +816,7 @@ class _TrackMenuButton extends ConsumerWidget {
     final liked = ref.read(isLikedProvider(song.songKey));
     final deletable = canDeleteSong(ref, song);
     final selected = await showPopoverMenu<String>(buttonContext, [
+      ...queueMenuItems,
       const PopupMenuItem(
         value: 'details',
         child: PopoverMenuRow(icon: AppIcons.info, label: 'Song details'),
@@ -799,6 +841,10 @@ class _TrackMenuButton extends ConsumerWidget {
           child: PopoverMenuRow(icon: AppIcons.delete, label: 'Delete'),
         ),
     ]);
+    if (buttonContext.mounted &&
+        handleQueueMenuChoice(buttonContext, ref, song, selected)) {
+      return;
+    }
     switch (selected) {
       case 'details':
         ref.read(selectedSongProvider.notifier).state = song;
