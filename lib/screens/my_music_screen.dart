@@ -174,7 +174,10 @@ class _MyMusicScreenState extends ConsumerState<MyMusicScreen> {
       itemCount: songs.length,
       itemBuilder: (context, i) => TrackRow(
         song: songs[i],
-        onTap: () => ref.read(playbackProvider.notifier).playSong(songs[i]),
+        // The queue follows the list as sorted here, not the library's order.
+        onTap: () => ref
+            .read(playbackProvider.notifier)
+            .playSong(songs[i], context: songs),
       ),
     );
   }
