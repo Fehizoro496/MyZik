@@ -249,6 +249,7 @@ class PlaylistScreen extends ConsumerWidget {
     final nav = ref.read(navigationProvider.notifier);
     final deletable = canDeleteSong(ref, song);
     final selected = await showPopoverMenu<String>(buttonContext, [
+      ...queueMenuItems,
       const PopupMenuItem(
         value: 'details',
         child: PopoverMenuRow(icon: AppIcons.info, label: 'Song details'),
@@ -273,6 +274,10 @@ class PlaylistScreen extends ConsumerWidget {
           child: PopoverMenuRow(icon: AppIcons.delete, label: 'Delete'),
         ),
     ]);
+    if (buttonContext.mounted &&
+        handleQueueMenuChoice(buttonContext, ref, song, selected)) {
+      return;
+    }
     switch (selected) {
       case 'details':
         ref.read(selectedSongProvider.notifier).state = song;
